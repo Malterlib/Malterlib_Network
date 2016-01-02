@@ -1,0 +1,307 @@
+﻿
+#pragma once
+
+#include <Mib/Cryptography/Hashes/SHA>
+
+namespace NMib
+{
+	namespace NNet
+	{
+		struct CSSLSettings
+		{
+			enum EVerificationFlag
+			{
+				EVerificationFlag_None = 0
+				, EVerificationFlag_UserCanAcceptUntrusted				= DMibBit(0)
+				, EVerificationFlag_RememberTrustedCertificates			= DMibBit(1)
+				, EVerificationFlag_UseSpecificPeerCertificate			= DMibBit(2)
+				, EVerificationFlag_UseOSStoreIfNoCASpecified				= DMibBit(3)
+				, EVerificationFlag_VerifyHostnameMatches					= DMibBit(4)
+				, EVerificationFlag_UserCanIgnoreVerificationFailures		= DMibBit(5)
+				, EVerificationFlag_AllowInsecureSSL						= DMibBit(6)
+			};
+			
+			enum EProtocol
+			{
+				EProtocol_SSL,
+				EProtocol_TLS,
+			};
+
+			bool operator==(CSSLSettings const& _Other) const
+			{
+				return
+					m_PublicCertificateData == _Other.m_PublicCertificateData
+					&& m_PrivateKeyData == _Other.m_PrivateKeyData
+					&& m_CRLData == _Other.m_CRLData
+					&& m_CACertificateData == _Other.m_CACertificateData
+					&& m_CAStoreLocation == _Other.m_CAStoreLocation
+					&& m_PathToCRLs == _Other.m_PathToCRLs
+					&& m_VerificationFlags == _Other.m_VerificationFlags
+					&& m_VerificationDepth == _Other.m_VerificationDepth
+					&& m_LocalCertificateStore == _Other.m_LocalCertificateStore
+					&& m_Protocol == _Other.m_Protocol
+				;
+			}
+
+			void f_MarkAsDirty() { m_bDirty = true; }
+			void f_MarkAsClean() { m_bDirty = false; }
+			bool f_IsDirty() const { return m_bDirty; }
+
+			bool f_IsPeerCertificateVerified() const
+			{
+				return !m_CACertificateData.f_IsEmpty() || !m_CAStoreLocation.f_IsEmpty();
+			}
+
+			bool f_UserCanManageCertificates() const
+			{
+				return (m_VerificationFlags & EVerificationFlag_RememberTrustedCertificates) && (m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted);
+			}
+
+			bool f_UserCanIgnoreTrustFailures() const
+			{
+				return m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted;
+			}
+
+			bool f_UserCanIgnoreVerificationFailures() const
+			{
+				return m_VerificationFlags & EVerificationFlag_UserCanIgnoreVerificationFailures;
+			}
+			
+			bool f_CanConnectToInsecureSSL() const
+			{
+				return m_VerificationFlags & EVerificationFlag_AllowInsecureSSL;
+			}
+			
+			bool m_bDirty = false;
+
+			NContainer::TCVector<uint8> m_PublicCertificateData;
+			NContainer::TCVector<uint8> m_PrivateKeyData;
+			NContainer::TCVector<uint8> m_CRLData;
+			NContainer::TCVector<uint8> m_CACertificateData;
+
+			NStr::CStr m_CAStoreLocation;
+			NStr::CStr m_PathToCRLs;
+
+			EVerificationFlag m_VerificationFlags = EVerificationFlag_None;
+			int m_VerificationDepth = 9;
+
+			NContainer::TCVector<NContainer::TCVector<uint8>> m_LocalCertificateStore;
+			
+			EProtocol m_Protocol = EProtocol_TLS;
+
+		};
+
+		class CSSLConnectionResult
+		{
+		public:
+
+			enum EMiscError
+			{
+				EMiscError_HostnameMisMatch = 5000,
+				EMiscError_InvalidCertificateAuthorityLocation,
+				EMiscError_InvalidPublicCertificate,
+				EMiscError_InvalidPrivateKey,
+				EMiscError_CertificatePrivateKeyMisMatch,
+				EMiscError_InvalidCRLData,
+				EMiscError_InvalidCRLPath,
+				EMiscError_InvalidCertificateAuthorityData,
+			};
+
+			struct CCertificate
+			{
+				NContainer::TCVector<uint8> m_Data;
+				NContainer::TCMap<int,int> m_Errors;
+
+				bool operator==(CCertificate const& _Other) const
+				{
+					return m_Data == _Other.m_Data && m_Errors == _Other.m_Errors;
+				}
+			};
+
+			bool operator==(CSSLConnectionResult const& _Other) const
+			{
+				return (mp_Certificates == _Other.mp_Certificates &&
+					mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured &&
+					mp_bVerificationErrorsOccured == _Other.mp_bVerificationErrorsOccured &&
+					mp_MiscErrors == _Other.mp_MiscErrors &&
+					mp_SSLErrors == _Other.mp_SSLErrors);
+			}
+
+			NContainer::TCVector<uint8> f_GetPeerCertificate() const
+			{
+				if (!mp_Certificates.f_IsEmpty())
+					return mp_Certificates[0].m_Data;
+
+				return NContainer::TCVector<uint8>();
+			}
+
+			CSSLConnectionResult() : mp_bTrustErrorsOccured(false), mp_bVerificationErrorsOccured(false), mp_bConnectionRefused(false) {}
+			~CSSLConnectionResult() {}
+
+			void f_LogError(int _Depth, int _Error);
+			void f_LogMiscError(EMiscError _Error);
+			bool f_HasLoggedCertificateChain() const { return !mp_Certificates.f_IsEmpty(); }
+			void f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const& _Certificate);
+
+			NStr::CStr f_GetPeerCertificateName() const;
+			NStr::CStr f_GetPeerCertificateDescription() const;
+			NStr::CStr f_GetPeerCertificateInformation() const;
+
+			bool f_ContainsTrustErrors() const;
+			bool f_ContainsVerificationErrors() const;
+			bool f_ConnectionRefused() const;
+			bool f_ContainsInvalidContextErrors() const;
+			void f_SetConnectionRefused();
+			bool f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const& _SpecificCertificate) const;
+			bool f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const& _LocalStore) const;
+			void f_AddSSLError(NStr::CStr const& _SSLError);
+
+			enum EFormat
+			{
+				EHtml,
+				ECommaSeperated,
+			};
+
+			NStr::CStr f_GetErrorMessage(EFormat _Format = ECommaSeperated) const;
+
+		protected:
+
+			static bool fsp_IsTrustError(int _Error);
+			NStr::CStr fp_StringForError(int _Error) const;
+			NStr::CStr fp_GetLibraryStringForError(int _Error) const;
+
+			NContainer::TCMap<int,CCertificate> mp_Certificates;
+			NContainer::TCMap<EMiscError,int> mp_MiscErrors;
+			NStr::CStr mp_SSLErrors;
+			bool mp_bTrustErrorsOccured;
+			bool mp_bVerificationErrorsOccured;
+			bool mp_bConnectionRefused;
+
+		};
+
+		class CSSLContext;
+
+		class CSSLConnection
+		{
+		public:
+			class CInternal;
+
+			enum EAuthenticationResult
+			{
+				EAuthenticationResult_Success,
+				EAuthenticationResult_Failure,
+				EAuthenticationResult_SocketNotReady,
+			};
+
+			enum EState
+			{
+				EState_None,
+				EState_InvalidContext,
+				EState_RequiresUserDecisionOnTrust,
+				EState_ConnectionFailed,
+				EState_ConnectionShutdown,
+				EState_WriteFailed,
+				EState_ReadFailed,
+			};
+			
+			typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const& _ConnectionResult)> FAuthenticationResultCallback;
+			typedef NFunction::TCFunction<void (CSSLConnectionResult const& _ConnectionResult)> FUserTrustDecisionCallback;
+
+			CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustDecisionCallback);
+			~CSSLConnection();
+
+			bool f_GiveSocket(void* _pSocket);
+			void* f_GetSocket() const;
+			bool f_HasSocket() const;
+
+			void f_SetHostname(NStr::CStr const& _Hostname);
+			NStr::CStr f_GetHostname() const;
+			void f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult);
+
+			bool f_BrokenState() const;
+			bool f_Connected() const;
+
+			bool f_Connect();
+			bool f_Accept();
+			bool f_HandshakeInProgress() const;
+
+			mint f_Send(const void* _pData, mint _nLen);
+			mint f_Receive(void* _pData, mint _nLen);
+
+			bool f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len);
+
+			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
+			CSSLConnectionResult& f_GetConnectionResult() { return mp_Result; }
+			CSSLConnectionResult const& f_GetConnectionResult() const { return mp_Result; }
+			NDataProcessing::CHashDigest_SHA256 f_GetSessionKey() const;
+
+		protected:
+			NPtr::TCUniquePointer<CInternal> mp_pInternal;
+			CSSLConnectionResult mp_Result;
+		};
+
+		class CSSLContext
+		{
+		public:
+
+			enum EType
+			{
+				EType_Client,
+				EType_Server,
+			};
+
+			enum EState
+			{
+				EState_None = 0,
+				EState_InvalidCertificateAuthorityLocation = DMibBit(1),
+				EState_InvalidPublicCertificate = DMibBit(2),
+				EState_InvalidPrivateKey = DMibBit(3),
+				EState_CertificatePrivateKeyMisMatch = DMibBit(4),
+				EState_InvalidCRLData = DMibBit(5),
+				EState_InvalidCRLPath = DMibBit(6),
+				EState_InvalidCertificateAuthorityData = DMibBit(7),
+			};
+
+			CSSLContext(EType _Type, CSSLSettings const& _Settings);
+			~CSSLContext();
+
+			bool f_IsValid() const;
+			void f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const;
+
+			int f_GetExDataIndex() const;
+			bool f_IsClientContext() const;
+			bool f_IsServerContext() const;
+
+			CSSLSettings const& f_GetSettings() const;
+
+			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
+			bool f_CanAskUserToTrustServers() const;
+
+			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData);
+			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData);
+			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName = true);
+			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted);
+			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData);
+			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData);
+			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData);
+			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> const& _CertificateData);
+			static bool fs_GenerateSelfSignedCertAndKey(NStr::CStr const& _CertificateName, NContainer::TCVector<NStr::CStr> const& _Hostnames, NContainer::TCVector<uint8>& _CertData, NContainer::TCVector<uint8>& _KeyData, int _KeyLength = 2048, int _Serial = 0, int _Days = 365);
+
+		protected:
+			class CSession;
+			NPtr::TCUniquePointer<CSession> fp_CreateSession();
+
+			friend class CSSLConnectionResult;
+			friend class CSSLConnection::CInternal;
+			class CInternal;
+
+			NPtr::TCUniquePointer<CInternal> mp_pInternal;
+
+		};
+
+	}
+}
+
+#ifndef DMibPNoShortCuts
+	using namespace NMib::NNet;
+#endif

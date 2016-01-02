@@ -1,0 +1,55 @@
+// Copyright © 2015 Hansoft AB 
+// Distributed under the MIT license, see license text in LICENSE.Malterlib
+
+Import "../Core/Lib_Malterlib.MTarget"
+
+%Group "{Malterlib}/{Lib_Malterlib_Network}"
+{
+	%Group Network
+	{
+		%Group Include
+		{
+			Compile.Type "C++"
+			{
+				!!DocumentationEnabled true
+			}
+			%File "Include/Mib/Network/^*"
+		}
+		%File "Source/*"
+		%Group Documentation
+		{
+			%File "Documentation/*"
+		}
+	}
+}
+
+
+Property
+{
+	MalterlibLibrary_Network true
+	{
+		&
+		{
+			MalterlibLibrary_Network ""
+			MalterlibLibrary_All true
+		}
+	}
+	MalterlibSubLibraries "Network;@(MalterlibSubLibraries)"
+	{
+		!!MalterlibLibrary_Network true
+	}
+	MalterlibLibrarySeparate_Lib_Malterlib_Network true
+	MalterlibIncludeRoots "@('Include'->MakeAbsolute());@(MalterlibIncludeRoots)"
+	{
+		!!MalterlibLibrary_Network true
+	}
+}
+
+Property
+{
+	!!MalterlibEnableInternalTests true
+	
+	MalterlibTests "Malterlib_Network;@(MalterlibTests)"
+	MalterlibTestFiles_Malterlib_Network "@('Test/*'->MakeAbsolute())"
+}
+

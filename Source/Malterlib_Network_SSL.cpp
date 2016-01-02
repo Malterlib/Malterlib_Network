@@ -1,0 +1,2225 @@
+
+#include "Malterlib_Network_SSL.h"
+
+#include <Mib/Cryptography/Hashes/SHA>
+
+extern "C"
+{
+#	ifdef final
+#		undef final
+#	endif
+#	include <openssl/ssl.h>
+#	include <openssl/evp.h>
+#	include <openssl/aes.h>
+#	include <openssl/err.h>
+#	include <openssl/conf.h>
+#	include <openssl/engine.h>
+#	undef X509_NAME
+#	include <openssl/x509v3.h>
+
+#	ifndef final
+#		define final
+#	endif
+	
+#ifdef DPlatformFamily_OSX
+	#include <Security/Security.h>
+#endif
+
+};
+
+#if !defined(OPENSSL_THREADS)
+	#error Must use multithreaded openssl library!
+#endif
+
+#if defined(DPlatformFamily_Windows)
+	NMib::NStr::CFStr256 fg_Win32_GetLastErrorStr(uint32 _Error = 0);
+
+	static NMib::NStr::CStr fg_GetLastSystemError()
+	{
+		return fg_Win32_GetLastErrorStr();
+	}
+
+#else
+	// Unix
+	#include <Mib/Core/PlatformSpecific/PosixErrNo>
+
+	static NMib::NStr::CStr fg_GetLastSystemError()
+	{
+		return NMib::NPlatform::fg_FormatErrno("", errno);
+	}
+#endif
+
+namespace NMib
+{
+	namespace NNet
+	{
+		namespace
+		{
+			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line);
+
+			struct CSSLLowLevel
+			{
+
+				CSSLLowLevel()
+				{
+					SSL_library_init();
+					ENGINE_load_builtin_engines();
+
+					SSL_load_error_strings();
+
+					f_UseInThread();
+
+					mint nSSLLocks = CRYPTO_num_locks();
+					m_lLocks.f_SetLen(nSSLLocks);
+
+					CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
+				}
+
+				~CSSLLowLevel()
+				{
+					ERR_remove_state(0);
+
+					CONF_modules_finish();
+					CONF_modules_free();
+					CONF_modules_unload(1);
+
+					ERR_free_strings();
+
+					EVP_cleanup();
+
+					OBJ_cleanup();
+
+					CRYPTO_set_locking_callback(nullptr);
+
+					CRYPTO_cleanup_all_ex_data();
+
+					m_lLocks.f_Clear();
+				}
+
+				NContainer::TCVector<NIndirection::TCIndirection<NMib::NThread::CMutual>> m_lLocks;
+				NMib::NThread::CMutual m_ContextCreationLock;
+				
+				struct CThreadLocal
+				{
+					~CThreadLocal()
+					{
+						ERR_remove_thread_state(0);
+					}
+				};
+				NMib::NThread::TCThreadLocal<CThreadLocal> m_ThreadLocal;
+				
+				void f_UseInThread()
+				{
+					auto &Test = *m_ThreadLocal; // Make sure cleanup is done at thread exit
+					(void)Test;
+				}
+				
+			};
+
+			NAggregate::TCAggregate<CSSLLowLevel> g_SSLLowLevel = {DAggregateInit};
+
+			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line)
+			{
+				if (_Mode & CRYPTO_LOCK)
+				{
+					DMibCheck(g_SSLLowLevel->m_lLocks.f_IsPosValid(_Type));
+					g_SSLLowLevel->m_lLocks[_Type].f_Get().f_Lock();
+				}
+				else
+				{
+					DMibCheck(g_SSLLowLevel->m_lLocks.f_IsPosValid(_Type));
+					g_SSLLowLevel->m_lLocks[_Type].f_Get().f_Unlock();
+				}
+			}
+
+			SSL_CTX* fg_CreateSSLContext(SSL_METHOD const* _pMethod)
+			{
+				DMibLock(g_SSLLowLevel->m_ContextCreationLock);
+				return SSL_CTX_new(_pMethod);
+			}
+
+		}
+
+		// CSSLContext::CSession methods.
+		class CSSLContext::CSession
+		{
+		public:
+
+			CSession(SSL_CTX* _pContext)
+				: mp_pSSL(nullptr)
+				, mp_pContext(_pContext)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				mp_pSSL = SSL_new(_pContext);
+			}
+
+			~CSession()
+			{
+				if (mp_pSSL)
+				{
+					g_SSLLowLevel->f_UseInThread();
+					SSL_set_shutdown(mp_pSSL, SSL_RECEIVED_SHUTDOWN | SSL_SENT_SHUTDOWN);
+					auto pSession = SSL_get_session(mp_pSSL);
+					if (pSession)
+						SSL_CTX_remove_session(mp_pContext, pSession);
+					SSL_free(mp_pSSL);
+				}
+			}
+
+			SSL* f_GetSSL()
+			{
+				return mp_pSSL;
+			}
+
+		protected:
+
+			SSL_CTX* mp_pContext;
+			SSL* mp_pSSL;
+
+		};
+
+		// CSSLContext methods
+		class CSSLContext::CInternal
+		{
+		public:
+
+			CInternal(CSSLContext::EType _Type, CSSLSettings const& _Settings)
+				: mp_pContext(nullptr)
+				, mp_Type(_Type)
+				, mp_State(CSSLContext::EState_None)
+				, mp_Settings(_Settings)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
+				{
+					if (f_IsClientContext())
+						mp_pContext = fg_CreateSSLContext(TLSv1_2_client_method());
+					else
+						mp_pContext = fg_CreateSSLContext(TLSv1_2_server_method());
+				}
+				else
+				{
+					if (f_IsClientContext())
+						mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
+					else
+						mp_pContext = fg_CreateSSLContext(SSLv3_server_method());
+				}
+				
+				SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
+				SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
+				msp_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
+
+				fp_ProcessSettings();
+			}
+
+			~CInternal()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (mp_pContext)
+					SSL_CTX_free(mp_pContext);
+			}
+
+			bool f_IsServerContext() const
+			{
+				return mp_Type == CSSLContext::EType_Server;
+			}
+
+			bool f_IsClientContext() const
+			{
+				return mp_Type == CSSLContext::EType_Client;
+			}
+
+			NPtr::TCUniquePointer<CSSLContext::CSession> fp_CreateSession()
+			{
+				return fg_Construct(mp_pContext);
+			}
+
+			CSSLContext::EState f_GetState() const
+			{
+				return mp_State;
+			}
+
+			void f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const
+			{
+				if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityLocation)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityLocation);
+
+				if (mp_State & CSSLContext::EState_InvalidPublicCertificate)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPublicCertificate);
+
+				if (mp_State & CSSLContext::EState_InvalidPrivateKey)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPrivateKey);
+
+				if (mp_State & CSSLContext::EState_CertificatePrivateKeyMisMatch)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_CertificatePrivateKeyMisMatch);
+
+				if (mp_State & CSSLContext::EState_InvalidCRLData)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLData);
+
+				if (mp_State & CSSLContext::EState_InvalidCRLPath)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLPath);
+
+				if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityData)
+					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityData);
+			}
+
+			int f_GetExDataIndex() const
+			{
+				return msp_ExDataIndex;
+			}
+
+			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
+			{
+				return mp_Settings.m_VerificationFlags;
+			}
+
+			CSSLSettings const& f_GetSettings() const
+			{
+				return mp_Settings;
+			}
+			
+			static bool fs_VerifyHostname(NStr::CStr const& _Hostname, X509* _pCertificate)
+			{
+				NContainer::TCVector<uint8> CertData;
+				fs_ConvertX509ToBinary(_pCertificate, CertData);
+
+				NContainer::TCVector<NStr::CStr> lHostnames = fs_GetCertificateHostnames(CertData);
+				for (auto const& CertHostName : lHostnames)
+				{
+					if (_Hostname.f_CmpNoCase(CertHostName) == 0)
+						return true;
+					
+					// Alternatively, check for wildcard domain matching.
+					if (CertHostName.f_StartsWith("*."))
+					{
+						aint iFirstPos = CertHostName.f_Find(".");
+						aint iLastPos = CertHostName.f_FindReverse(".");
+						if (iFirstPos == iLastPos)
+							continue;
+						
+						aint iSubDomainPos = _Hostname.f_Find(".");
+						if (iSubDomainPos == -1 ||
+							iSubDomainPos == _Hostname.f_GetLen() - 1)
+							continue;
+						
+						NStr::CStr NonWildCardPart = CertHostName.f_Extract(2);
+						NStr::CStr HostnameAfterSubDomainLevel = _Hostname.f_Extract(iSubDomainPos + 1);
+						
+						if (NonWildCardPart.f_CmpNoCase(HostnameAfterSubDomainLevel) == 0)
+							return true;
+					}
+				}
+
+				return false;
+			}
+
+			static int fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX* _pStoreContext)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				int Error = X509_STORE_CTX_get_error(_pStoreContext);
+				int Depth = X509_STORE_CTX_get_error_depth(_pStoreContext);
+				
+				SSL* pSSL = (SSL*)X509_STORE_CTX_get_ex_data(_pStoreContext, SSL_get_ex_data_X509_STORE_CTX_idx());
+				if (!pSSL)
+					return 0;
+
+				CSSLConnection* pCSSL = (CSSLConnection*)SSL_get_ex_data(pSSL, msp_ExDataIndex);
+				if (!pCSSL)
+					return 0;
+
+				// Check for renegotiation and return the original result as we do not support our verification methods
+				// for renegotiations yet.
+				if (pCSSL->f_Connected())
+				{
+					return _PreVerifyOK;
+				}
+
+				if (_PreVerifyOK == 0)
+				{
+					if (Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH)
+					{
+						// Don't log these. And I quote:
+						// The presence of rejection messages does not itself imply that anything is wrong: during the normal verify process several rejections may take place.
+						// We must handle these because of our use of X509_V_FLAG_CB_ISSUER_CHECK:
+						// The X509_V_FLAG_CB_ISSUER_CHECK flag enables debugging of certificate issuer checks. 
+						// It is not needed unless you are logging certificate verification. 
+						// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard errors.
+						return 0;
+					}
+				}
+
+				CSSLConnectionResult& Result = pCSSL->f_GetConnectionResult();
+
+				// Update chain of certificates
+				if (!Result.f_HasLoggedCertificateChain())
+				{
+					int nCertsInChain = sk_X509_num(_pStoreContext->chain);
+					while (nCertsInChain)
+					{
+						X509* pCert = sk_X509_value(_pStoreContext->chain, nCertsInChain - 1);
+						NContainer::TCVector<uint8> CertData;
+						fs_ConvertX509ToBinary(pCert, CertData);
+
+						Result.f_LogCertificate(nCertsInChain - 1, CertData);
+						--nCertsInChain;
+
+						// Check the hostname on the peer certificate
+						if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
+						{
+							if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
+							{
+								Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
+							}
+						}
+					}
+				}
+
+				if (_PreVerifyOK == 0)
+				{
+					Result.f_LogError(Depth, Error);
+				}
+
+				return 1;
+			}
+
+			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				NStr::CStr CertificateDescription;
+				X509* pCertificate = fs_LoadCertificate(_CertificateData);
+				if (pCertificate)
+				{
+					BIO* pMemoryBio = BIO_new(BIO_s_mem());
+					BUF_MEM* pMemory = nullptr;
+
+					unsigned long NameOptions = 0;
+					unsigned long CertOptions = 0;
+
+					X509_print_ex(pMemoryBio, pCertificate, NameOptions, CertOptions); 
+					(void)BIO_flush(pMemoryBio);
+					BIO_get_mem_ptr(pMemoryBio, &pMemory);
+
+					NContainer::TCVector<uint8> RawData;
+					RawData.f_SetLen(pMemory->length);
+					NMem::fg_MemCopy(RawData.f_GetArray(), pMemory->data, pMemory->length - 1);
+
+					RawData[RawData.f_GetLen() - 1] = '\0';
+					CertificateDescription = NStr::CStr::CFormat("{}") << (char*)RawData.f_GetArray();
+
+					BIO_free_all(pMemoryBio);
+					X509_free(pCertificate);
+				}
+
+				return CertificateDescription;
+			}
+
+			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> _CertificateData)
+			{
+				if (!_CertificateData.f_IsEmpty())
+				{
+					_CertificateData[_CertificateData.f_GetLen() - 1] = '\0';
+					return NStr::CStr::CFormat("{}") << (char*)_CertificateData.f_GetArray();
+				}
+
+				return NStr::CStr();
+			}
+
+			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				NStr::CStr CertificateName;
+				X509* pCertificate = fs_LoadCertificate(_CertificateData);
+				if (pCertificate)
+				{
+					char Buffer[256];
+					X509_NAME_get_text_by_NID(X509_get_subject_name(pCertificate), NID_commonName, Buffer, 256);
+					CertificateName = Buffer;
+					X509_free(pCertificate);
+				}
+
+				return CertificateName;
+			}
+
+			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				NStr::CStr CertificateName;
+				X509* pCertificate = fs_LoadCertificate(_CertificateData);
+				if (pCertificate)
+				{
+					char Buffer[256];
+					X509_NAME_get_text_by_NID(X509_get_issuer_name(pCertificate), NID_commonName, Buffer, 256);
+					CertificateName = Buffer;
+					X509_free(pCertificate);
+				}
+
+				return CertificateName;
+			}
+
+			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				NStr::CStr Hostnames;
+				NContainer::TCVector<NStr::CStr> lHostNames = fs_GetCertificateHostnames(_CertificateData);
+				for (auto Iter = lHostNames.f_GetIterator(); Iter; ++Iter)
+				{
+					if (Hostnames.f_IsEmpty())
+						Hostnames = (*Iter);
+					else
+						Hostnames += ", " + (*Iter);
+				}
+
+				if (Hostnames.f_IsEmpty())
+					Hostnames = "-";
+
+				return Hostnames;
+			}
+
+			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName = true)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				NContainer::TCVector<NStr::CStr> lHostnames;
+
+				X509* pCertificate = fs_LoadCertificate(_CertificateData);
+				if (!pCertificate)
+					return lHostnames;
+
+				// First look at "subjectAltNames"
+				int Index = -1;
+				while(true)
+				{
+					GENERAL_NAMES* pSubjectAltNames = (GENERAL_NAMES*)X509_get_ext_d2i(pCertificate, NID_subject_alt_name, nullptr, &Index);
+					if (pSubjectAltNames)
+					{
+						int nAltEntries = sk_GENERAL_NAME_num(pSubjectAltNames);
+
+						for (int iEntry = 0; iEntry < nAltEntries; ++iEntry)
+						{
+							GENERAL_NAME const* pName = sk_GENERAL_NAME_value(pSubjectAltNames, iEntry);
+							if (!pName)
+								continue;
+
+							unsigned char* pBuffer = nullptr;
+
+							switch (pName->type)
+							{
+							case GEN_DNS:
+							case GEN_URI:
+							case GEN_EMAIL:
+								ASN1_STRING_to_UTF8((unsigned char**)&pBuffer, pName->d.ia5);
+								if (pBuffer)
+								{
+									lHostnames.f_Insert(NStr::CStr(pBuffer));
+									OPENSSL_free(pBuffer);
+								}
+								break;
+							case GEN_IPADD:
+								{
+									pBuffer = pName->d.ip->data;
+									NStr::CStr IPAddress;
+
+									if(pName->d.ip->length == 4)
+										IPAddress = NStr::CStr::CFormat("{}.{}.{}.{}") << pBuffer[0] << pBuffer[1] << pBuffer[2] << pBuffer[3];
+									else if(pName->d.ip->length == 16)
+									{
+										for (int i = 0; i < 8; ++i)
+										{
+											if (IPAddress.f_IsEmpty())
+												IPAddress += NStr::CStr::CFormat("{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
+											else
+												IPAddress += NStr::CStr::CFormat(":{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
+
+											pBuffer += 2;
+										}
+									}
+
+									if (!IPAddress.f_IsEmpty())
+										lHostnames.f_Insert(IPAddress);
+								}
+								break;
+							}
+						}
+						GENERAL_NAMES_free(pSubjectAltNames);
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				// Fallback on the common name of the certificate
+				if (_bCheckCommonName)
+				{
+					X509_NAME* pSubject = X509_get_subject_name(pCertificate);
+					if (pSubject)
+					{
+						char CommonName[256];
+						int Ret = X509_NAME_get_text_by_NID(pSubject, NID_commonName, CommonName, sizeof(CommonName));
+						if (Ret > 0)
+						{
+							CommonName[sizeof(CommonName) - 1] = '\0';
+							lHostnames.f_Insert(NStr::CStr(CommonName));
+						}
+					}
+				}
+
+				X509_free(pCertificate);
+				return lHostnames;
+			}
+
+			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted)
+			{
+				NContainer::TCVector<NStr::CStr> Sorted;
+				for (auto Iter = _Unsorted.f_GetIterator(); Iter; ++Iter)
+				{
+					if (Sorted.f_Contains(*Iter) == -1 && !(*Iter).f_IsEmpty())
+						Sorted.f_Insert(*Iter);
+				}
+
+				Sorted.f_Sort();
+				return Sorted;
+			}
+
+			static X509* fs_LoadCertificate(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (_CertificateData.f_IsEmpty())
+					return nullptr;
+
+				BIO* pMemoryBio = BIO_new_mem_buf( const_cast<void*>(static_cast<void const*>(_CertificateData.f_GetArray())), _CertificateData.f_GetLen());
+				if (!pMemoryBio)
+					return nullptr;
+
+				X509* pCertificate = nullptr;
+				pCertificate = PEM_read_bio_X509(pMemoryBio, nullptr, nullptr, nullptr);
+
+				BIO_free(pMemoryBio);
+				return pCertificate;
+			}
+
+			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				X509* pCertificate = fs_LoadCertificate(_CertificateData);
+				if (pCertificate)
+				{
+					NTime::CTime Time = NTime::CTime::fs_StartOfTime();
+
+					ASN1_TIME* pTime = X509_get_notAfter(pCertificate);
+					if (pTime->type == V_ASN1_UTCTIME)
+					{
+						if (pTime->length < 10)
+						{
+							X509_free(pCertificate);
+							return NTime::CTime::fs_StartOfTime();
+						}
+
+						const char* pData = (const char*)pTime->data;
+
+						for (int i = 0; i < 10; ++i)
+						{
+							if ((pData[i] > '9') || (pData[i] < '0'))
+							{
+								X509_free(pCertificate);
+								return NTime::CTime::fs_StartOfTime();
+							}
+						}
+
+						int Years = (pData[0]-'0')*10+(pData[1]-'0');
+						if (Years < 50) Years += 100;
+						Years += 1900;
+
+						int Months = (pData[2]-'0')*10+(pData[3]-'0');
+						if ((Months > 12) || (Months < 1))
+						{
+							X509_free(pCertificate);
+							return NTime::CTime::fs_StartOfTime();
+						}
+						
+						int Days = (pData[4]-'0')*10+(pData[5]-'0');
+						int Hours = (pData[6]-'0')*10+(pData[7]-'0');
+						int Minutes =  (pData[8]-'0')*10+(pData[9]-'0');
+						int Seconds = 0;
+
+						if (pTime->length >=12 &&
+							(pData[10] >= '0') && (pData[10] <= '9') &&
+							(pData[11] >= '0') && (pData[11] <= '9'))
+						{
+							Seconds = (pData[10]-'0')*10+(pData[11]-'0');
+						}
+
+						Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
+					}
+					else if (pTime->type == V_ASN1_GENERALIZEDTIME)
+					{
+						if (pTime->length < 12)
+						{
+							X509_free(pCertificate);
+							return NTime::CTime::fs_StartOfTime();
+						}
+
+						const char* pData = (const char*)pTime->data;
+
+						for (int i = 0; i < 12; ++i)
+						{
+							if ((pData[i] > '9') || (pData[i] < '0'))
+							{
+								X509_free(pCertificate);
+								return NTime::CTime::fs_StartOfTime();
+							}
+						}
+
+						int Years = (pData[0]-'0')*1000+(pData[1]-'0')*100 + (pData[2]-'0')*10+(pData[3]-'0');
+						int Months = (pData[4]-'0')*10+(pData[5]-'0');
+						if (Months > 12 || Months < 1)
+						{
+							X509_free(pCertificate);
+							return NTime::CTime::fs_StartOfTime();
+						}
+
+						int Days = (pData[6]-'0')*10+(pData[7]-'0');
+						int Hours = (pData[8]-'0')*10+(pData[9]-'0');
+						int Minutes =  (pData[10]-'0')*10+(pData[11]-'0');
+						int Seconds = 0;
+
+						if (pTime->length >= 14 &&
+							(pData[12] >= '0') && (pData[12] <= '9') &&
+							(pData[13] >= '0') && (pData[13] <= '9'))
+						{
+							Seconds = (pData[12]-'0')*10+(pData[13]-'0');
+						}
+
+						Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
+					}
+
+					X509_free(pCertificate);
+					return Time;
+				}
+
+				return NTime::CTime::fs_StartOfTime();
+			}
+
+			static bool fs_ConvertX509ToBinary(X509* _pCertificate, NContainer::TCVector<uint8>& _CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!_pCertificate)
+					return false;
+
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				if (!pMemoryBio)
+					return false;
+
+				bool bRet = false;
+
+				if (PEM_write_bio_X509(pMemoryBio, _pCertificate))
+				{
+					_CertificateData.f_SetLen(pMemoryBio->num_write);
+					if (BIO_read(pMemoryBio, _CertificateData.f_GetArray(), _CertificateData.f_GetLen()))
+						bRet = true;
+				}
+
+				BIO_free(pMemoryBio);
+				return bRet;
+			}
+
+			static bool fs_ConvertKeyToBinary(EVP_PKEY* _pKey, NContainer::TCVector<uint8>& _KeyData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!_pKey)
+					return false;
+
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				if (!pMemoryBio)
+					return false;
+
+				bool bRet = false;
+
+				if (PEM_write_bio_PrivateKey(pMemoryBio, _pKey, nullptr, nullptr, 0, nullptr, nullptr))
+				{
+					_KeyData.f_SetLen(pMemoryBio->num_write);
+					if (BIO_read(pMemoryBio, _KeyData.f_GetArray(), _KeyData.f_GetLen()))
+						bRet = true;
+				}
+
+				BIO_free(pMemoryBio);
+				return bRet;
+			}
+
+			static X509_CRL* fs_LoadCRL(NContainer::TCVector<uint8> const& _CRLData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
+				if (!pMemoryBio)
+					return nullptr;
+
+				X509_CRL* pCRL = nullptr;
+
+				pCRL = PEM_read_bio_X509_CRL(pMemoryBio, nullptr, nullptr, nullptr);
+
+				BIO_free(pMemoryBio);
+
+				return pCRL;
+			}
+
+		protected:
+
+			void fp_ProcessSettings()
+			{	
+				g_SSLLowLevel->f_UseInThread();
+				bool bSetClientFlags = false;
+				if (fp_LoadCertificateAuthority())
+				{
+					SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);		
+
+					if (f_IsServerContext())
+						SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+					else if (f_IsClientContext())
+						bSetClientFlags = true;
+				}
+				else if (f_IsClientContext() && mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified)
+				{
+					fp_LoadTrustedStoreFromOS();
+					bSetClientFlags = true;
+				}
+
+				if (bSetClientFlags)
+				{
+					SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER, fs_VerifyCallback);
+					X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), X509_V_FLAG_CB_ISSUER_CHECK|X509_V_FLAG_HANSOFT_CONTINUE_AFTER_VERIFY_LEAF_SIGNATURE_ERROR);
+				}
+
+				bool bVerifyCertAndKey = false;
+				if (fp_LoadPublicCertificate())
+					bVerifyCertAndKey = true;
+
+				if (fp_LoadPrivateKey())
+					bVerifyCertAndKey = true;
+
+				if (bVerifyCertAndKey)
+					fp_VerifyPublicCertAndPrivateKey();
+
+				fp_LoadCRLs();
+			}
+
+			bool fp_LoadCertificateAuthority()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				bool bUsingCertificateAuthority = false;
+
+				if (!mp_Settings.m_CAStoreLocation.f_IsEmpty())
+				{
+					X509_STORE* pStore = mp_pContext->cert_store;
+
+					if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
+						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+					else
+					try
+					{
+						NContainer::TCVector<NStr::CStr> lCertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
+
+						for (auto Iter = lCertificateFiles.f_GetIterator(); Iter; ++Iter)
+						{
+							bUsingCertificateAuthority = true;
+
+							NContainer::TCVector<uint8> CertificateData = NFile::CFile::fs_ReadFile(*Iter);
+							if (CertificateData.f_IsEmpty())
+								continue;
+
+							X509* pCertificate = fs_LoadCertificate(CertificateData);
+							if (!pCertificate)
+								mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+
+							if (!X509_STORE_add_cert(pStore, pCertificate))
+								mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+
+							X509_free(pCertificate);
+						}
+					}
+					catch (NFile::CExceptionFile const&)
+					{
+						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+					}	
+				}
+
+				if (!mp_Settings.m_CACertificateData.f_IsEmpty())
+				{
+					X509_STORE* pStore = mp_pContext->cert_store;
+					X509* pCertificate = fs_LoadCertificate(mp_Settings.m_CACertificateData);
+					if (!pCertificate)
+						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityData;
+
+					X509_STORE_add_cert(pStore, pCertificate);
+					X509_free(pCertificate);
+
+					bUsingCertificateAuthority = true;
+				}
+
+				return bUsingCertificateAuthority;
+			}
+
+			bool fp_LoadPublicCertificate()
+			{
+				if (mp_Settings.m_PublicCertificateData.f_IsEmpty())
+					return false;
+
+				g_SSLLowLevel->f_UseInThread();
+				X509* pCertificate = fs_LoadCertificate(mp_Settings.m_PublicCertificateData);
+				if (!pCertificate)
+				{
+					mp_State |= CSSLContext::EState_InvalidPublicCertificate;
+					return false;
+				}
+
+				if (SSL_CTX_use_certificate(mp_pContext, pCertificate) <= 0)
+				{	
+					X509_free(pCertificate);
+					mp_State |= CSSLContext::EState_InvalidPublicCertificate;
+					return false;
+				}
+
+				X509_free(pCertificate);
+				return true;
+			}
+
+			void fp_LoadCRLs()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!mp_Settings.m_CRLData.f_IsEmpty())
+				{
+					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+					if (!pStore)
+					{
+						mp_State |= CSSLContext::EState_InvalidCRLData;
+						return;
+					}
+
+					X509_LOOKUP* pLookup = X509_STORE_add_lookup(pStore, X509_LOOKUP_file());
+					if (!pLookup)
+					{
+						mp_State |= CSSLContext::EState_InvalidCRLData;
+					}
+					else
+					{
+						X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
+						if (!pCRL)
+							mp_State |= CSSLContext::EState_InvalidCRLData;
+
+						if (!X509_STORE_add_crl(pLookup->store_ctx, pCRL))
+							mp_State |= CSSLContext::EState_InvalidCRLData;
+
+						X509_CRL_free(pCRL);
+					}
+
+					X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
+				}
+				
+				if (!mp_Settings.m_PathToCRLs.f_IsEmpty())
+				{
+					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+					if (!pStore)
+					{
+						mp_State |= CSSLContext::EState_InvalidCRLPath;
+						return;
+					}
+
+					if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
+						mp_State |= CSSLContext::EState_InvalidCRLPath;
+					else
+					try
+					{
+						NContainer::TCVector<NStr::CStr> lCRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+
+						for (auto Iter = lCRLFiles.f_GetIterator(); Iter; ++Iter)
+						{
+							NContainer::TCVector<uint8> CRLData = NFile::CFile::fs_ReadFile(*Iter);
+							if (CRLData.f_IsEmpty())
+								continue;
+
+							X509_CRL* pCRL = fs_LoadCRL(CRLData);
+							if (!pCRL)
+								mp_State |= CSSLContext::EState_InvalidCRLPath;
+
+							if (!X509_STORE_add_crl(pStore, pCRL))
+								mp_State |= CSSLContext::EState_InvalidCRLPath;
+
+							X509_CRL_free(pCRL);
+						}
+
+						if (!lCRLFiles.f_IsEmpty())
+							X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
+					}
+					catch (NFile::CExceptionFile const&)
+					{
+						mp_State |= CSSLContext::EState_InvalidCRLPath;
+					}
+				}
+			}
+
+			bool fp_LoadPrivateKey()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
+					return false;
+
+				BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(mp_Settings.m_PrivateKeyData.f_GetArray())), mp_Settings.m_PrivateKeyData.f_GetLen());
+				if (!pMemoryBio)
+				{
+					mp_State |= CSSLContext::EState_InvalidPrivateKey;
+					return true;
+				}
+
+				EVP_PKEY* pKey = nullptr;
+				pKey = PEM_read_bio_PrivateKey(pMemoryBio, nullptr, nullptr, nullptr);
+
+				if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
+					mp_State |= CSSLContext::EState_InvalidPrivateKey;
+
+				EVP_PKEY_free(pKey);
+				BIO_free(pMemoryBio);
+				return true;
+			}
+
+			void fp_VerifyPublicCertAndPrivateKey()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!SSL_CTX_check_private_key(mp_pContext))
+					mp_State |= CSSLContext::EState_CertificatePrivateKeyMisMatch;
+			}
+
+			static NStr::CStr fsp_Base64Encode(unsigned char const* _pToEncode, mint _Len) 
+			{
+				g_SSLLowLevel->f_UseInThread();
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				BIO* pBase64Bio = BIO_new(BIO_f_base64());
+				BUF_MEM* pMemory = nullptr;
+
+				pBase64Bio = BIO_push(pBase64Bio, pMemoryBio);
+
+				BIO_write(pBase64Bio, _pToEncode, _Len);
+				(void)BIO_flush(pBase64Bio);
+				BIO_get_mem_ptr(pBase64Bio, &pMemory);
+
+				NContainer::TCVector<uint8> EncodedData;
+				EncodedData.f_SetLen(pMemory->length);
+				NMem::fg_MemCopy(EncodedData.f_GetArray(), pMemory->data, pMemory->length - 1);
+
+				EncodedData[EncodedData.f_GetLen() - 1] = '\0';
+				NStr::CStr EncodedString = NStr::CStr::CFormat("{}") << (char*)EncodedData.f_GetArray();
+
+				BIO_free_all(pBase64Bio);
+
+				return EncodedString;
+			}
+
+		#if defined(DPlatformFamily_Windows)
+
+			#include <Wincrypt.h>
+			#pragma comment(lib, "crypt32.lib")
+
+			void fp_LoadTrustedStoreFromOS()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				
+				X509_STORE* pStore = mp_pContext->cert_store;
+
+				auto fl_LoadFromStore = [&] (LPCWSTR _pStore)
+				{
+					HCERTSTORE hStore = CertOpenSystemStore(NULL, _pStore);
+					for (PCCERT_CONTEXT pCertContext = CertEnumCertificatesInStore(hStore, nullptr); pCertContext; pCertContext = CertEnumCertificatesInStore(hStore, pCertContext))
+					{
+						NStr::CStr OutputType = fsp_IsPKCS7(pCertContext->dwCertEncodingType) ? "PKCS7" : "CERTIFICATE";
+						NStr::CStr CertData = fsp_Base64Encode(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
+						NStr::CStr CertAsString = NStr::CStr::CFormat("-----BEGIN {}-----\n{}\n-----END {}-----\n") << OutputType << CertData << OutputType;
+
+						NContainer::TCVector<uint8> lCertData;
+						lCertData.f_SetLen(CertAsString.f_GetLen());
+						NMem::fg_MemCopy(lCertData.f_GetArray(), CertAsString.f_GetStr(), CertAsString.f_GetLen());
+
+						X509* pCertificate = fs_LoadCertificate(lCertData);
+						if (!pCertificate)
+							continue;
+
+						X509_STORE_add_cert(pStore, pCertificate);
+						X509_free(pCertificate);
+					}
+
+					CertCloseStore(hStore, 0);
+				};
+
+				fl_LoadFromStore(L"ROOT");
+				fl_LoadFromStore(L"CA");
+			}
+
+			static bool fsp_IsPKCS7(DWORD _EncodeType)
+			{
+				return ((_EncodeType & PKCS_7_ASN_ENCODING) == PKCS_7_ASN_ENCODING);
+			}
+
+		#elif defined(DPlatformFamily_OSX)
+			
+			void fp_LoadTrustedStoreFromOS()
+			{
+				g_SSLLowLevel->f_UseInThread();
+
+				X509_STORE* pStore = mp_pContext->cert_store;
+				
+				auto fAddTrustStore = [&](CFArrayRef pCerts)
+					{
+						for (int i = 0; i < CFArrayGetCount(pCerts); ++i)
+						{
+							SecCertificateRef CertRef = reinterpret_cast<SecCertificateRef>(const_cast<void*>(CFArrayGetValueAtIndex(pCerts, i)));
+							
+							X509 *pCertificate;
+			#if DPlatformVersionMax >= 1060
+							if (CSystem::ms_PlatformVersion >= 10'06'00)
+							{
+								CFDataRef DERCert = SecCertificateCopyData(CertRef);
+								if (!DERCert)
+									continue;
+								
+								unsigned const char *pDERCert = CFDataGetBytePtr(DERCert);
+								mint DataLength = CFDataGetLength(DERCert);
+								pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
+								CFRelease(DERCert);
+							}
+							else
+			#endif
+							{
+								DMibDeprecatedSupressStart;
+								// This code is not tested. Is it in the right format?
+								CSSM_DATA certCSSMData;
+								if (SecCertificateGetData(CertRef, &certCSSMData) != 0 || certCSSMData.Length == 0)
+									continue;
+								unsigned const char *pDERCert = certCSSMData.Data;
+								mint DataLength = certCSSMData.Length;
+								pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
+								DMibDeprecatedSupressStop;
+							}
+							
+							if (!pCertificate)
+								continue;
+
+							X509_STORE_add_cert(pStore, pCertificate);
+							X509_free(pCertificate);
+						}
+						CFRelease(pCerts);
+					}
+				;
+
+				if (CSystem::ms_PlatformVersion >= 10'05'00)
+				{
+					CFArrayRef pCerts;
+					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainSystem, &pCerts) == 0)
+						fAddTrustStore(pCerts);
+					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainAdmin, &pCerts) == 0)
+						fAddTrustStore(pCerts);
+					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainUser, &pCerts) == 0)
+						fAddTrustStore(pCerts);
+ 				}
+				else
+				{
+					CFArrayRef pCerts;
+					if (SecTrustCopyAnchorCertificates(&pCerts) == 0)
+						fAddTrustStore(pCerts);
+				}
+			}
+			
+		#else
+
+			void fp_LoadTrustedStoreFromOS()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				auto fl_LoadCerts =
+					[&](NStr::CStr const & _File) -> bool
+					{
+						try
+						{
+							if (!NFile::CFile::fs_FileExists(_File, NFile::EFileAttrib_File))
+							{
+								DMibLog(Debug, "Unable to find: {}", _File);
+								return false;
+							}
+						}
+						catch (NFile::CExceptionFile const & _Exception)
+						{
+							DMibLog(Debug, "Exception trying to check file exists on: {}. The error reported was {}", _File, _Exception.f_GetErrorStr());
+							return false;
+						}
+				
+						int Ret = SSL_CTX_load_verify_locations(mp_pContext, _File.f_GetStr(), nullptr);
+						if (Ret == 0)
+						{
+							NStr::CStr AllErrors;
+							
+							char SSLErrorBuf[120];
+							unsigned long SysError;
+							while( (SysError = ERR_get_error()) )
+							{
+								ERR_error_string(SysError, SSLErrorBuf);
+								AllErrors = NStr::CStr::CFormat("{}\n{}") << NStr::CStr(AllErrors) << SSLErrorBuf;
+							}
+							
+							DMibLog(Debug, "Failed to load SSL verify location: {}. The error reported was {}", _File, AllErrors);
+							return false;
+						}
+						else
+						{
+							DMibLog(Debug, "Successfully added {} to SSL verify locations", _File);
+							return true;
+						}
+					};
+				
+				if (fl_LoadCerts("/etc/ssl/certs/ca-certificates.crt"))
+					return;
+				else if (fl_LoadCerts("/etc/ssl/certs/ca-bundle.crt"))
+					return;
+			}
+
+		#endif
+
+			SSL_CTX* mp_pContext;
+			static int msp_ExDataIndex;
+
+			CSSLContext::EType mp_Type;
+			CSSLContext::EState mp_State;
+
+			CSSLSettings mp_Settings;
+
+		};
+
+		int CSSLContext::CInternal::msp_ExDataIndex = 0;
+
+		CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const& _Settings)
+			: mp_pInternal(nullptr)
+		{
+			mp_pInternal = fg_Construct(_Type, _Settings);
+		}
+
+		CSSLContext::~CSSLContext()
+		{
+			mp_pInternal = nullptr;
+		}
+
+		NPtr::TCUniquePointer<CSSLContext::CSession> CSSLContext::fp_CreateSession()
+		{
+			return mp_pInternal->fp_CreateSession();
+		}
+
+		bool CSSLContext::f_IsValid() const
+		{
+			return mp_pInternal->f_GetState() == CSSLContext::EState_None;
+		}
+
+		void CSSLContext::f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const
+		{
+			mp_pInternal->f_ReportInvalidContext(_ConnectionResult);
+		}
+
+		int CSSLContext::f_GetExDataIndex() const
+		{
+			return mp_pInternal->f_GetExDataIndex();
+		}
+
+		bool CSSLContext::f_IsClientContext() const
+		{
+			return mp_pInternal->f_IsClientContext();
+		}
+
+		bool CSSLContext::f_IsServerContext() const
+		{
+			return mp_pInternal->f_IsServerContext();
+		}
+
+		CSSLSettings::EVerificationFlag CSSLContext::f_GetVerificationFlags() const
+		{
+			return mp_pInternal->f_GetVerificationFlags();
+		}
+
+		CSSLSettings const& CSSLContext::f_GetSettings() const
+		{
+			return mp_pInternal->f_GetSettings();
+		}
+
+		bool CSSLContext::f_CanAskUserToTrustServers() const
+		{
+			return (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UserCanAcceptUntrusted);
+		}
+
+		NStr::CStr CSSLContext::fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
+		}
+
+		NStr::CStr CSSLContext::fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetIssuerName(_CertificateData);
+		}
+
+		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateHostnames(_CertificateData, _bCheckCommonName);
+		}
+
+		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted)
+		{
+			return CSSLContext::CInternal::fs_GetSortedHostnames(_Unsorted);
+		}
+
+		NStr::CStr CSSLContext::fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateHostnamesStr(_CertificateData);
+		}
+
+		NTime::CTime CSSLContext::fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateExpirationTime(_CertificateData);
+		}
+
+		NStr::CStr CSSLContext::fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateDescription(_CertificateData);
+		}
+
+		NStr::CStr CSSLContext::fs_GetCertificateInformation(NContainer::TCVector<uint8> const& _CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateInformation(_CertificateData);
+		}
+
+		bool CSSLContext::fs_GenerateSelfSignedCertAndKey(NStr::CStr const& _CertificateName, NContainer::TCVector<NStr::CStr> const& _Hostnames, NContainer::TCVector<uint8>& _CertData, NContainer::TCVector<uint8>& _KeyData, int _KeyLength, int _Serial, int _Days)
+		{
+			g_SSLLowLevel->f_UseInThread();
+			_CertData.f_Clear();
+			_KeyData.f_Clear();
+
+			X509* pCertificate = X509_new();
+			EVP_PKEY* pKey = EVP_PKEY_new();
+			RSA* pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+
+			auto fl_Cleanup = [&] ()
+			{
+				if (pCertificate)
+					X509_free(pCertificate);
+
+				if (pKey)
+					EVP_PKEY_free(pKey);
+			};
+
+			if (!pCertificate || !pKey || !pRSA)
+			{
+				fl_Cleanup();
+				return false;
+			}
+
+			if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+			{
+				fl_Cleanup();
+				return false;
+			}
+
+			pRSA = nullptr;
+
+			X509_set_version(pCertificate, 2);
+			ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial);
+			X509_gmtime_adj(X509_get_notBefore(pCertificate), 0);
+			X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days);
+			X509_set_pubkey(pCertificate, pKey);
+
+			X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_CertificateName.f_GetStr(), -1, -1, 0);
+			X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)); // Self signed.
+
+			auto fl_AddExt = [] (X509* _pCert, int _nID, char* _pValue)
+			{
+				X509V3_CTX ctx;
+				X509V3_set_ctx_nodb(&ctx);
+
+				X509V3_set_ctx(&ctx, _pCert, _pCert, nullptr, nullptr, 0);
+				X509_EXTENSION* pExtension = X509V3_EXT_conf_nid(nullptr, &ctx, _nID, _pValue);
+				if (!pExtension)
+					return;
+
+				X509_add_ext(_pCert,pExtension,-1);
+				X509_EXTENSION_free(pExtension);
+			};
+			
+			// Set the subjectAltName
+			{
+				NContainer::TCVector<NStr::CStr> SortedHosts = CSSLContext::fs_GetSortedHostnames(_Hostnames);
+
+				NStr::CStr Output;
+				for (auto Iter = SortedHosts.f_GetIterator(); Iter; ++Iter)
+				{
+					if (Output.f_IsEmpty())
+						Output = NStr::CStr::CFormat("DNS:{}") << (*Iter);
+					else
+						Output += NStr::CStr::CFormat(",DNS:{}") << (*Iter);
+				}
+
+				fl_AddExt(pCertificate, NID_subject_alt_name, Output.f_GetStrWritable());
+			}
+
+			if (!X509_sign(pCertificate, pKey, EVP_sha256()))
+			{
+				fl_Cleanup();
+				return false;
+			}
+
+			if (!CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate, _CertData))
+			{
+				fl_Cleanup();
+				return false;
+			}
+
+			if (!CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey, _KeyData))
+			{
+				fl_Cleanup();
+				return false;
+			}
+
+			fl_Cleanup();
+			return true;
+		}
+
+		// CSSLConnection methods.
+		class CSSLConnection::CInternal
+		{
+		public:
+
+			CInternal(CSSLConnection* _pSSL, NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustCallback)
+				: mp_pSSL(_pSSL)
+				, mp_pSession(nullptr)
+				, mp_pContext(_pContext)
+				, mp_State(EState_None)
+				, mp_bConnected(false)
+				, mp_AuthenticationResultCallback(fg_Move(_AuthenticationResultCallback))
+				, mp_UserTrustCallback(fg_Move(_UserTrustCallback))
+				, mp_bHandshakeInProgress(false)
+				, mp_bUsingTrustDecision(false)
+			{
+				mp_pSession = mp_pContext->fp_CreateSession();
+			}
+
+			~CInternal()
+			{
+				mp_pSession.f_Clear();
+			}
+
+			SSL* f_GetSSL() 
+			{
+				return mp_pSession->f_GetSSL();
+			}
+
+			EState f_GetState() const 
+			{
+				return mp_State;
+			}
+
+			void f_SetState(EState _State)
+			{
+				mp_State = _State;
+			}
+
+			bool f_Connected() const
+			{
+				return mp_bConnected;
+			}
+
+			void f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult)
+			{
+				mp_bUsingTrustDecision = true;
+				mp_ExpectedResultCallback = _ExpectedResult;
+			}
+
+			bool f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				NMem::fg_MemCopy(_pDataOut, _pDataIn, _Len);
+
+				EVP_DecryptInit(f_GetSSL()->enc_read_ctx, nullptr, nullptr, nullptr);
+
+				int Len = _Len;
+				EVP_DecryptUpdate(f_GetSSL()->enc_read_ctx, (unsigned char*)_pDataOut, &Len, (unsigned char*)_pDataIn, _Len);
+				return true;
+			} 
+
+			bool f_GiveSocket(void* _pSocket)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!SSL_set_fd(f_GetSSL(), (int)(mint)_pSocket))
+					return false;
+
+				return true;
+			}
+			
+			bool f_HasSocket() const
+			{
+				g_SSLLowLevel->f_UseInThread();
+				return SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL()) >= 0;
+			}
+
+			void* f_GetSocket() const
+			{
+				g_SSLLowLevel->f_UseInThread();
+				return (void*)(mint)SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL());
+			}
+
+			NDataProcessing::CHashDigest_SHA256 f_GetSessionKey()
+			{
+				DMibRequire(mp_bConnected);
+
+				NStr::CStr SessionMasterKeyStr;
+				SessionMasterKeyStr.f_AddStr(f_GetSSL()->session->master_key, f_GetSSL()->session->master_key_length);
+
+				return NDataProcessing::CHashDigest_SHA256::fs_FromString(SessionMasterKeyStr);
+			}
+
+			bool f_Connect()
+			{
+				return fp_Process(false);
+			}
+
+			bool f_Accept()
+			{
+				return fp_Process(true);
+			}
+
+			mint f_Send(const void* _pData, mint _nLen)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				DMibRequire(_nLen > 0);
+				DMibRequire(mp_bConnected);
+				DMibRequire(!mp_bHandshakeInProgress);
+				DMibRequire(mp_State == EState_None);
+
+				mint nBytesSent = 0;
+				int Ret = SSL_write(f_GetSSL(), _pData, (int)_nLen);
+				if (Ret <= 0)
+				{
+					// Write did not succeed.
+					int Error = SSL_get_error(f_GetSSL(), Ret);
+					if (Error == SSL_ERROR_ZERO_RETURN)
+					{
+						f_SetState(EState_ConnectionShutdown);
+					}
+					else if (Error == SSL_ERROR_SYSCALL)
+					{
+		#if defined(DPlatformFamily_Windows)
+						int Error = WSAGetLastError();
+						DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL), windows returned: {}") << fg_Win32_GetLastErrorStr(Error)).f_GetStr());
+		#else
+						// Unix
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("send (write to SSL socket)", errno));
+		#endif
+					}
+					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+					{
+						f_SetState(EState_WriteFailed);
+					}
+				}
+				else
+				{
+					// Write succeeded, return the number of bytes written.
+					nBytesSent = (mint)Ret;
+				}
+
+				return nBytesSent;
+			}
+
+			mint f_Receive(void* _pData, mint _nLen)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				DMibRequire(_nLen > 0);
+				DMibRequire(mp_bConnected);
+				DMibRequire(!mp_bHandshakeInProgress);
+				DMibRequire(mp_State == EState_None);
+
+				mint nBytesReceived = 0;
+				int Ret = SSL_read(f_GetSSL(), _pData, _nLen);
+				if (Ret <= 0)
+				{
+					// Read did not succeed.
+					int Error = SSL_get_error(f_GetSSL(), Ret);
+					if (Error == SSL_ERROR_ZERO_RETURN)
+					{
+						f_SetState(EState_ConnectionShutdown);
+					}
+					else if (Error == SSL_ERROR_SYSCALL)
+					{
+		#if defined(DPlatformFamily_Windows)
+						int Error = WSAGetLastError();
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL), windows returned: {}") << fg_Win32_GetLastErrorStr(Error)).f_GetStr());
+		#else
+						// Unix
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("recv (read from SSL socket)", errno));
+		#endif
+					}
+					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+					{
+		/*
+						const char * pFile = nullptr;
+						int Line;
+
+						int Err = ERR_get_error_line(&pFile, &Line);
+						while (Err)
+						{
+							DMibTrace("Error {}:{} : {}: {}\n", pFile << Line << Err << ERR_error_string(Err, nullptr));
+							Err = ERR_get_error_line(&pFile, &Line);
+						}
+		*/
+						f_SetState(EState_ReadFailed);
+					}
+				}
+				else
+				{
+					// Read succeeded, return the number of bytes read.
+					nBytesReceived = (mint)Ret;
+				}
+
+				return nBytesReceived;
+			}
+
+			bool f_GetHandshakeInProgress() const
+			{
+				return mp_bHandshakeInProgress;
+			}
+
+			void f_SetHostname(NStr::CStr const& _Hostname)
+			{
+				mp_Hostname = _Hostname;
+			}
+
+			NStr::CStr f_GetHostname() const
+			{
+				return mp_Hostname;
+			}
+
+			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
+			{
+				return mp_pContext->f_GetVerificationFlags();
+			}
+
+		protected:
+
+			CSSLConnection* mp_pSSL;
+			NPtr::TCUniquePointer<CSSLContext::CSession> mp_pSession;
+			NPtr::TCSharedPointer<CSSLContext> mp_pContext;
+
+			NStr::CStr mp_Hostname;
+			EState mp_State;
+			FAuthenticationResultCallback mp_AuthenticationResultCallback;
+			FUserTrustDecisionCallback mp_UserTrustCallback;
+
+			CSSLConnectionResult mp_ExpectedResultCallback;
+
+			bool mp_bConnected;
+			bool mp_bHandshakeInProgress;
+			bool mp_bUsingTrustDecision;
+
+			bool fp_Process(bool _bAccept)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				mp_bHandshakeInProgress = true;
+
+				EAuthenticationResult ResultForCallback = EAuthenticationResult_SocketNotReady;
+
+				if (!mp_pContext->f_IsValid())
+				{
+					ResultForCallback = EAuthenticationResult_Failure;
+					mp_State = EState_InvalidContext;
+					mp_pContext->f_ReportInvalidContext(mp_pSSL->f_GetConnectionResult());
+				}
+				else
+				{
+					SSL_set_ex_data(f_GetSSL(), mp_pContext->f_GetExDataIndex(), mp_pSSL);
+
+					ERR_clear_error();
+					int Ret = _bAccept ? SSL_accept(f_GetSSL()) : SSL_connect(f_GetSSL());
+
+					fp_ProcessConnection(Ret, !_bAccept, ResultForCallback);
+				}
+
+				if (mp_AuthenticationResultCallback)
+					mp_AuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
+				mp_bHandshakeInProgress = ResultForCallback == EAuthenticationResult_SocketNotReady;
+				return ResultForCallback == EAuthenticationResult_Success;
+			}
+
+			void fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult& _ResultForCallback)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				// OpenSSL has established a connection but we will fail it here if the CSSLConnectionResult does
+				// not satisfy our demands
+				if (_Ret == 1)
+				{
+					CSSLConnectionResult& Result = mp_pSSL->f_GetConnectionResult();
+					_ResultForCallback = EAuthenticationResult_Failure;
+
+					bool bCallTrustCallback = false;
+					bool bCanManageTrust = mp_pContext->f_GetSettings().f_UserCanIgnoreTrustFailures();
+					bool bCanManageVerification = mp_pContext->f_GetSettings().f_UserCanIgnoreVerificationFailures();
+
+					// We can only accept one specific peer certificate
+					if (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate)
+					{
+						if (!Result.f_ContainsVerificationErrors() &&
+							Result.f_PeerCertificatesMatchesSpecificCertificate(mp_pContext->f_GetSettings().m_CACertificateData))
+						{
+							_ResultForCallback = EAuthenticationResult_Success;
+						}
+					}
+					// This was a connection based on user trust/verification decision, ensure connection results match up.
+					else if (mp_bUsingTrustDecision)
+					{
+						if (mp_ExpectedResultCallback == mp_pSSL->f_GetConnectionResult())
+							_ResultForCallback = EAuthenticationResult_Success;
+					}
+					// The peer certificate matches a remembered certificate and does not contain any verification errors.
+					else if (!Result.f_ContainsVerificationErrors() && Result.f_ContainsTrustErrors() &&
+						Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
+					{
+						_ResultForCallback = EAuthenticationResult_Success;
+					}
+					// No errors were reported.
+					else if (!Result.f_ContainsTrustErrors() && !Result.f_ContainsVerificationErrors())
+					{
+						_ResultForCallback = EAuthenticationResult_Success;
+					}
+					// User can manage certificates but cannot ignore verification failures
+					else if (bCanManageTrust && !bCanManageVerification)
+					{
+						if (Result.f_ContainsTrustErrors() && !Result.f_ContainsVerificationErrors())
+							bCallTrustCallback = true;
+					}
+					// User cannot manage both
+					else if (bCanManageTrust && bCanManageVerification)
+					{
+						if (Result.f_ContainsTrustErrors() || Result.f_ContainsVerificationErrors())
+							bCallTrustCallback = true;
+					}
+					// User can only manage verification failures.
+					else if (!bCanManageTrust && bCanManageVerification)
+					{
+						if (!Result.f_ContainsTrustErrors() && Result.f_ContainsVerificationErrors())
+							bCallTrustCallback = true;
+					}
+
+					if (_ResultForCallback == EAuthenticationResult_Success)
+					{
+						mp_bConnected = true;
+					}
+					else
+					{
+						f_SetState(EState_ConnectionFailed);
+						if (bCallTrustCallback)
+						{
+							f_SetState(EState_RequiresUserDecisionOnTrust);
+							if (mp_UserTrustCallback)
+								mp_UserTrustCallback(mp_pSSL->f_GetConnectionResult());
+						}
+					}
+				}
+				else
+				{
+					NStr::CStr SystemErrors;
+					bool bConnectionRefused = false;
+					if (fp_GenerateSystemErrors(_Ret, _ResultForCallback, SystemErrors, bConnectionRefused))
+					{
+						CSSLConnectionResult& Result = mp_pSSL->f_GetConnectionResult();
+						Result.f_AddSSLError(SystemErrors);
+						if (bConnectionRefused)
+							Result.f_SetConnectionRefused();
+						f_SetState(EState_ConnectionFailed);
+					}
+				}
+			}
+
+			bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult& _Result, NStr::CStr& _SystemErrors, bool& _bConnectionRefused)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				unsigned long SysError;
+				NStr::CStr AllErrors;
+
+				if ((SysError=ERR_peek_error()) != 0)
+				{
+					char SSLErrorBuf[120];
+
+					while( (SysError = ERR_get_error()) )
+					{
+						ERR_error_string(SysError, SSLErrorBuf);
+						AllErrors += NStr::CStr::CFormat("\n{}") << SSLErrorBuf;
+					}
+
+					_Result = EAuthenticationResult_Failure;
+					_SystemErrors = AllErrors;
+					_bConnectionRefused = true;
+					return true;
+				}
+				else
+				{
+					int Error = SSL_get_error(f_GetSSL(), _Ret);
+					if (Error == SSL_ERROR_SYSCALL)
+					{
+						_Result = EAuthenticationResult_Failure;
+						_SystemErrors = fg_GetLastSystemError();
+						return true;
+					}
+					else if (Error != SSL_ERROR_WANT_WRITE && Error != SSL_ERROR_WANT_READ)
+					{
+						char SSLErrorBuf[120];
+						ERR_error_string(ERR_get_error(), SSLErrorBuf);
+
+						_Result = EAuthenticationResult_Failure;
+						_bConnectionRefused = true;
+						_SystemErrors = SSLErrorBuf;
+						return true;
+					}
+				}
+
+				return false;
+			}
+
+		};
+
+		CSSLConnection::CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustDecisionCallback)
+			: mp_pInternal(nullptr)
+		{
+			mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback));
+		}
+
+		CSSLConnection::~CSSLConnection()
+		{
+		}
+
+		bool CSSLConnection::f_BrokenState() const
+		{
+			return mp_pInternal->f_GetState() != EState_None;
+		}
+
+		void CSSLConnection::f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult)
+		{
+			mp_pInternal->f_SetExpectedConnectionResult(_ExpectedResult);
+		}
+
+		bool CSSLConnection::f_Connected() const
+		{
+			return mp_pInternal->f_Connected();
+		}
+
+		bool CSSLConnection::f_HandshakeInProgress() const
+		{
+			return mp_pInternal->f_GetHandshakeInProgress();
+		}
+
+		bool CSSLConnection::f_GiveSocket(void* _pSocket)
+		{
+			return mp_pInternal->f_GiveSocket(_pSocket);
+		}
+
+		void* CSSLConnection::f_GetSocket() const
+		{
+			return mp_pInternal->f_GetSocket();
+		}
+
+		bool CSSLConnection::f_HasSocket() const
+		{
+			return mp_pInternal->f_HasSocket();
+		}
+
+		void CSSLConnection::f_SetHostname(NStr::CStr const& _Hostname)
+		{
+			mp_pInternal->f_SetHostname(_Hostname);
+		}
+
+		NStr::CStr CSSLConnection::f_GetHostname() const
+		{
+			return mp_pInternal->f_GetHostname();
+		}
+
+		CSSLSettings::EVerificationFlag CSSLConnection::f_GetVerificationFlags() const
+		{
+			return mp_pInternal->f_GetVerificationFlags();
+		}
+
+		bool CSSLConnection::f_Connect()
+		{
+			return mp_pInternal->f_Connect();
+		}
+
+		bool CSSLConnection::f_Accept()
+		{
+			return mp_pInternal->f_Accept();
+		}
+
+		mint CSSLConnection::f_Send(const void* _pData, mint _nLen)
+		{
+			return mp_pInternal->f_Send(_pData, _nLen);
+		}
+
+		mint CSSLConnection::f_Receive(void* _pData, mint _nLen)
+		{
+			return mp_pInternal->f_Receive(_pData, _nLen);
+		}
+
+		bool CSSLConnection::f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len)
+		{
+			return mp_pInternal->f_Decrypt(_pDataIn, _pDataOut, _Len);
+		}
+
+		NDataProcessing::CHashDigest_SHA256 CSSLConnection::f_GetSessionKey() const
+		{
+			return mp_pInternal->f_GetSessionKey();
+		}
+
+
+		// CSSLConnectionResult
+
+		void CSSLConnectionResult::f_LogError(int _Depth, int _Error)
+		{
+			bint bCreated = false;
+			CCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
+			DMibSafeCheck(!bCreated, "Cert chain should have been logged before error logging.");
+
+			bCreated = false;
+			int& Error = Certificate.m_Errors.f_Map(_Error, bCreated);
+			if (bCreated)
+				Error = 0;
+			++Error;
+
+			if (fsp_IsTrustError(_Error))
+				mp_bTrustErrorsOccured = true;
+			else
+				mp_bVerificationErrorsOccured = true;
+
+		}
+
+		void CSSLConnectionResult::f_LogMiscError(EMiscError _Error)
+		{
+			bint bCreated = false;
+			int& Error = mp_MiscErrors.f_Map(_Error, bCreated);
+			if (bCreated)
+				Error = 0;
+
+			++Error;
+
+			if (_Error == EMiscError_HostnameMisMatch)
+				mp_bVerificationErrorsOccured = true;
+		}
+
+		void CSSLConnectionResult::f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const& _Certificate)
+		{
+			bint bCreated = false;
+			CCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
+			Certificate.m_Data = _Certificate;
+		}
+
+		bool CSSLConnectionResult::f_ContainsTrustErrors() const
+		{
+			return mp_bTrustErrorsOccured;
+		}
+
+		bool CSSLConnectionResult::f_ContainsVerificationErrors() const
+		{
+			return mp_bVerificationErrorsOccured;
+		}
+
+		bool CSSLConnectionResult::f_ConnectionRefused() const
+		{
+			return mp_bConnectionRefused;
+		}
+
+		void CSSLConnectionResult::f_SetConnectionRefused()
+		{
+			mp_bConnectionRefused = true;
+		}
+
+		bool CSSLConnectionResult::f_ContainsInvalidContextErrors() const
+		{
+			for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
+			{
+				if (Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation ||
+					Iter.f_GetKey() == EMiscError_InvalidPublicCertificate ||
+					Iter.f_GetKey() == EMiscError_InvalidPrivateKey ||
+					Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch ||
+					Iter.f_GetKey() == EMiscError_InvalidCRLData ||
+					Iter.f_GetKey() == EMiscError_InvalidCRLPath || 
+					Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		void CSSLConnectionResult::f_AddSSLError(NStr::CStr const& _SSLError)
+		{
+			mp_SSLErrors = _SSLError;
+		}
+
+		bool CSSLConnectionResult::f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const& _LocalStore) const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return false;
+
+			auto fl_VerifyAgainstLocalTrust = [=] (NContainer::TCVector<uint8> const& _Certificate) -> bool
+			{
+				if (_Certificate.f_IsEmpty())
+					return false;
+
+				return (mp_Certificates[0].m_Data == _Certificate);
+			};
+
+			for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
+			{
+				if (fl_VerifyAgainstLocalTrust(*Iter))
+					return true;
+			}
+
+			return false;
+		}
+
+		bool CSSLConnectionResult::f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const& _SpecificCertificate) const
+		{
+			g_SSLLowLevel->f_UseInThread();
+			if (_SpecificCertificate.f_IsEmpty())
+				return false;
+
+			if (mp_Certificates.f_IsEmpty())
+				return false;
+
+			X509* pPeerCertificate = CSSLContext::CInternal::fs_LoadCertificate(_SpecificCertificate);
+			if (!pPeerCertificate)
+				return false;
+
+			NContainer::TCVector<uint8> ConvertedCert;
+			{
+				CSSLContext::CInternal::fs_ConvertX509ToBinary(pPeerCertificate, ConvertedCert);
+				X509_free(pPeerCertificate);
+			}
+			
+			bool bMatches = (mp_Certificates[0].m_Data == ConvertedCert);
+			return bMatches;
+		}
+
+		NStr::CStr CSSLConnectionResult::f_GetErrorMessage(EFormat _Format) const
+		{
+			NStr::CStr ErrorMessage;
+
+			auto fl_AppendError = [&] (NStr::CStr const& _Error)
+			{
+				if (_Format == ECommaSeperated)
+				{
+					if (!ErrorMessage.f_IsEmpty())
+						ErrorMessage += NStr::CStr::CFormat(", {}") << _Error;
+					else
+						ErrorMessage = _Error;
+				}
+				else if (_Format == EHtml)
+				{
+					if (!ErrorMessage.f_IsEmpty())
+						ErrorMessage += NStr::CStr::CFormat("<li>{}</li>") << _Error;
+					else
+						ErrorMessage = NStr::CStr::CFormat("<ul><li>{}</li>") << _Error;
+				}
+			};
+
+			// Add errors generated for each level of certificate chain.
+			for (auto Iter = mp_Certificates.f_GetIterator(); Iter; ++Iter)
+			{
+				CCertificate const& Certificate = (*Iter);
+				for (auto EIter = Certificate.m_Errors.f_GetIterator(); EIter; ++EIter)
+				{
+					fl_AppendError(fp_StringForError(EIter.f_GetKey()));
+				}
+			}
+
+			// Add misc errors.
+			for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
+				fl_AppendError(fp_StringForError(Iter.f_GetKey()));
+
+			// Add system errors.
+			if (!mp_SSLErrors.f_IsEmpty())
+				fl_AppendError(mp_SSLErrors);
+
+			if (_Format == EHtml)
+				ErrorMessage += "</ul>";
+
+			return ErrorMessage;
+		}
+
+		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateDescription() const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return NStr::CStr();
+
+			return CSSLContext::CInternal::fs_GetCertificateDescription(mp_Certificates[0].m_Data);
+		}
+
+		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateInformation() const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return NStr::CStr();
+
+			return CSSLContext::CInternal::fs_GetCertificateInformation(mp_Certificates[0].m_Data);
+		}
+
+		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateName() const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return NStr::CStr();
+
+			return CSSLContext::fs_GetIssuerName(mp_Certificates[0].m_Data);
+		}
+
+		NStr::CStr CSSLConnectionResult::fp_GetLibraryStringForError(int _Error) const
+		{
+			g_SSLLowLevel->f_UseInThread();
+			if (_Error == EMiscError_HostnameMisMatch)
+				return (NStr::CStr::CFormat("Hostname mismatch (valid hostnames in certificate: {})") << CSSLContext::fs_GetCertificateHostnamesStr(f_GetPeerCertificate())).f_GetStr();
+			else
+				return X509_verify_cert_error_string(_Error);
+		}
+
+		NStr::CStr CSSLConnectionResult::fp_StringForError(int _Error) const
+		{
+			switch (_Error)
+			{
+			case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+				return "Unable to get issuer certificate";
+			case X509_V_ERR_UNABLE_TO_GET_CRL:
+				return "Unable to get CRL";
+			case X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE:
+				return "Unable to decrypt certificate signature";
+			case X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE:
+				return "Unable to decrypt CRL signature";
+			case X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY:
+				return "Unable to decode issuer public key";
+			case X509_V_ERR_CERT_SIGNATURE_FAILURE:
+				return "Certificate signature failure";
+			case X509_V_ERR_CRL_SIGNATURE_FAILURE:
+				return "CRL signature failure";
+			case X509_V_ERR_CERT_NOT_YET_VALID:
+				return "Certificate is not yet valid (notBefore date is after current time)";
+			case X509_V_ERR_CERT_HAS_EXPIRED:
+				return "Certificate has expired (notAfter date is before the current time)";
+			case X509_V_ERR_CRL_NOT_YET_VALID:
+				return "CRL not yet valid";
+			case X509_V_ERR_CRL_HAS_EXPIRED:
+				return "CRL has expired";
+			case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:
+				return "Format error in certificate notBefore field";
+			case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
+				return "Format error in certificate notAfter field";
+			case X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD:
+				return "Format error in CRL lastUpdate field";
+			case X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD:
+				return "Format error in CRL nextUpdate field";
+			case X509_V_ERR_OUT_OF_MEM:
+				return "Out of memory";
+			case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
+				return "The certificate is self signed and cannot be found in the list of trusted certificates";
+			case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+				return "Self signed certificate in chain";
+			case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+				return "Unable to get issuer certificate locally";
+			case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
+				return "Unable to verify leaf signature (the chain contains only one certificate and it is not self signed)";
+			case X509_V_ERR_CERT_CHAIN_TOO_LONG:
+				return "Certificate chain too long";
+			case X509_V_ERR_CERT_REVOKED:
+				return "Certificate is revoked";
+			case X509_V_ERR_INVALID_CA:
+				return "Invalid certificate authority";
+			case X509_V_ERR_PATH_LENGTH_EXCEEDED:
+				return "Path length exceeded";
+			case X509_V_ERR_INVALID_PURPOSE:
+				return "Unsupported certificate purpose";
+			case X509_V_ERR_CERT_UNTRUSTED:
+				return "Certificate untrusted (the root CA is not marked as trusted for the specified purpose)";
+			case X509_V_ERR_CERT_REJECTED:
+				return "Certificate rejected (the root CA is marked to reject the specified purpose)";
+			case X509_V_ERR_SUBJECT_ISSUER_MISMATCH:
+				return "Subject issuer mismatch";
+			case X509_V_ERR_AKID_SKID_MISMATCH:
+				return "Authority and subject key identifier mismatch";
+			case X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH:
+				return "Authority and issuer serial number mismatch";
+			case X509_V_ERR_KEYUSAGE_NO_CERTSIGN:
+				return "Key usage does not include certificate signing";
+			case X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER:
+				return "Key usage does not include certificate signing";
+			case X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION:
+				return "Key usage does not include certificate signing";
+			case X509_V_ERR_KEYUSAGE_NO_CRL_SIGN:
+				return "No CRL signature";
+			case X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION:
+				return "Unhandled critical CRL extension";
+			case X509_V_ERR_INVALID_NON_CA:
+				return "Invalid non certificate authority";
+			case X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED:
+				return "Proxy path length exceeded";
+			case X509_V_ERR_KEYUSAGE_NO_DIGITAL_SIGNATURE:
+				return "Key usage - no digital signature";
+			case X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED:
+				return "Proxy certificate are not allowed";
+			case X509_V_ERR_INVALID_EXTENSION:
+				return "Invalid or inconsistent certificate extension";
+			case X509_V_ERR_INVALID_POLICY_EXTENSION:
+				return "Invalid or inconsistent certificate policy extension";
+			case X509_V_ERR_NO_EXPLICIT_POLICY:
+				return "The verification flags were set to require an explicit policy but none was present";
+			case X509_V_ERR_DIFFERENT_CRL_SCOPE:
+				return "Different CRL scope";
+			case X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE:
+				return "Unsupported extension feature";
+			case X509_V_ERR_UNNESTED_RESOURCE:
+				return "Unnested resource";
+			case X509_V_ERR_PERMITTED_VIOLATION:
+				return "Permitted subtree violation";
+			case X509_V_ERR_EXCLUDED_VIOLATION:
+				return "Excluded subtree violation";
+			case X509_V_ERR_SUBTREE_MINMAX:
+				return "Name constraints minimum and maximum not supported";
+			case X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE:
+				return "Unsupported or invalid name constraint type";
+			case X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX:
+				return "Unsupported or invalid name constraint type";
+			case X509_V_ERR_UNSUPPORTED_NAME_SYNTAX:
+				return "Unsupported or invalid name constraint type";
+			case X509_V_ERR_CRL_PATH_VALIDATION_ERROR:
+				return "CRL path validation error";
+			case EMiscError_HostnameMisMatch:
+				return NStr::CStr::CFormat("Hostname mismatch (valid hostnames in certificate: {0})") << CSSLContext::fs_GetCertificateHostnamesStr(f_GetPeerCertificate());
+			case EMiscError_InvalidCertificateAuthorityLocation:
+				return "Invalid certificate authority certificate location";
+			case EMiscError_InvalidPublicCertificate:
+				return "Invalid public certificate"	;
+			case EMiscError_InvalidPrivateKey:
+				return "Invalid private key";
+			case EMiscError_CertificatePrivateKeyMisMatch:
+				return "Public & Private key mismatch error.";
+			case EMiscError_InvalidCRLData:
+				return "Invalid certificate revocation list";
+			case EMiscError_InvalidCRLPath:
+				return "Invalid certificate revocation list path";
+			case EMiscError_InvalidCertificateAuthorityData:
+				return "Invalid certificate authority certificate";
+			}
+
+			return NStr::CStr::CFormat("Unknown error: {}") << _Error;
+		}
+
+		bool CSSLConnectionResult::fsp_IsTrustError(int _Error)
+		{
+			if (_Error == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
+				_Error == X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE ||
+				_Error == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
+				_Error == X509_V_ERR_CERT_UNTRUSTED ||
+				_Error == X509_V_ERR_UNABLE_TO_GET_CRL)
+			{
+				return true;
+			}
+
+			return false;
+		}
+	}
+}
+
