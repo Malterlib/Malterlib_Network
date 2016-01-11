@@ -97,6 +97,8 @@ namespace NMib
 			NPtr::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_AuthenticationResultCallback, mp_UserTrustDecisionCallback);
 			pSocket->mp_OnStateChange = fg_Move(_OnStateChange);
 			pSocket->mp_Socket.f_Accept(&mp_Socket, pSocket->fp_SharedOnStateChange());
+			if (!pSocket->mp_Socket.f_IsValid())
+				return nullptr;
 			pSocket->mp_State = EState_Accept;
 			pSocket->mp_SSLConnection.f_GiveSocket(pSocket->mp_Socket.f_GetOSSocket());
 			pSocket->fp_HandleHandshake();

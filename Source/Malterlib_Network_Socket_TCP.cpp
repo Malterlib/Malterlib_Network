@@ -58,6 +58,8 @@ namespace NMib
 		{
 			NPtr::TCUniquePointer<CSocket_TCP> pSocket = fg_Construct();
 			pSocket->mp_Socket.f_Accept(&mp_Socket, fg_Move(_OnStateChange));
+			if (!pSocket->mp_Socket.f_IsValid())
+				return nullptr;
 			return fg_Move(pSocket);
 		}
 
