@@ -2,6 +2,7 @@
 #include "Malterlib_Network_SSL.h"
 
 #include <Mib/Cryptography/Hashes/SHA>
+#include <Mib/Storage/LazyInit>
 
 extern "C"
 {
@@ -32,11 +33,11 @@ extern "C"
 #endif
 
 #if defined(DPlatformFamily_Windows)
-	NMib::NStr::CFStr256 fg_Win32_GetLastErrorStr(uint32 _Error = 0);
+#include <Mib/Core/PlatformSpecific/WindowsError>
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
 	{
-		return fg_Win32_GetLastErrorStr();
+		return NMib::NPlatform::fg_Win32_GetLastErrorStr();
 	}
 
 #else
@@ -62,8 +63,11 @@ namespace NMib
 
 				CSSLLowLevel()
 				{
+					m_pThreadLocal = fg_Construct();
+
 					SSL_library_init();
 					ENGINE_load_builtin_engines();
+					ENGINE_register_all_complete();
 
 					SSL_load_error_strings();
 
@@ -71,13 +75,12 @@ namespace NMib
 
 					mint nSSLLocks = CRYPTO_num_locks();
 					m_lLocks.f_SetLen(nSSLLocks);
-
 					CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
 				}
 
 				~CSSLLowLevel()
 				{
-					ERR_remove_state(0);
+					m_pThreadLocal.f_Clear();
 
 					CONF_modules_finish();
 					CONF_modules_free();
@@ -93,6 +96,8 @@ namespace NMib
 
 					CRYPTO_cleanup_all_ex_data();
 
+					ENGINE_cleanup();
+					
 					m_lLocks.f_Clear();
 				}
 
@@ -101,16 +106,22 @@ namespace NMib
 				
 				struct CThreadLocal
 				{
+					CRYPTO_THREADID m_ThreadID;
+					CThreadLocal()
+					{
+					    CRYPTO_THREADID_current(&m_ThreadID);
+					}
 					~CThreadLocal()
 					{
-						ERR_remove_thread_state(0);
+						ERR_remove_thread_state(&m_ThreadID);
 					}
 				};
-				NMib::NThread::TCThreadLocal<CThreadLocal> m_ThreadLocal;
+				NPtr::TCUniquePointer<NMib::NThread::TCThreadLocal<CThreadLocal>> m_pThreadLocal;
 				
 				void f_UseInThread()
 				{
-					auto &Test = *m_ThreadLocal; // Make sure cleanup is done at thread exit
+					auto &Test = **m_pThreadLocal; // Make sure cleanup is done at thread exit
+
 					(void)Test;
 				}
 				
@@ -1503,7 +1514,7 @@ namespace NMib
 					{
 		#if defined(DPlatformFamily_Windows)
 						int Error = WSAGetLastError();
-						DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL), windows returned: {}") << fg_Win32_GetLastErrorStr(Error)).f_GetStr());
+						DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
 		#else
 						// Unix
 						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("send (write to SSL socket)", errno));
@@ -1545,7 +1556,7 @@ namespace NMib
 					{
 		#if defined(DPlatformFamily_Windows)
 						int Error = WSAGetLastError();
-						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL), windows returned: {}") << fg_Win32_GetLastErrorStr(Error)).f_GetStr());
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
 		#else
 						// Unix
 						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("recv (read from SSL socket)", errno));
