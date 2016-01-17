@@ -278,11 +278,15 @@ namespace
 		
 		~CLoopbackServer()
 		{
+			m_pThread->f_Stop();
 			for (auto &Socket : m_ConnectedSockets)
 				(*Socket)->f_Close();
 			m_ConnectedSockets.f_Clear();
 			m_pThread = nullptr;
 			m_DispatchQueue.f_Clear();
+			for (auto &Socket : m_ConnectedSockets)
+				(*Socket)->f_Close();
+			m_ConnectedSockets.f_Clear();
 		}
 	};
 	
