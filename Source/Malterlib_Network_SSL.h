@@ -2,11 +2,18 @@
 #pragma once
 
 #include <Mib/Cryptography/Hashes/SHA>
+#include "Malterlib_Network_Exception.h"
 
 namespace NMib
 {
 	namespace NNet
 	{
+		DMibImpErrorClass(CExceptionNetSSL, CExceptionNet);
+#		define DMibErrorNetSSL(_Description) DMibImpError(NMib::NNet::CExceptionNetSSL, _Description)
+
+#		ifndef DMibPNoShortCuts
+#			define DErrorNetSSL(_Description) DMibErrorNetSSL(_Description)
+#		endif
 		struct CSSLSettings
 		{
 			enum EVerificationFlag
@@ -27,7 +34,7 @@ namespace NMib
 				EProtocol_TLS,
 			};
 
-			bool operator==(CSSLSettings const& _Other) const
+			bool operator==(CSSLSettings const &_Other) const
 			{
 				return
 					m_PublicCertificateData == _Other.m_PublicCertificateData
@@ -105,6 +112,7 @@ namespace NMib
 				EMiscError_InvalidCRLData,
 				EMiscError_InvalidCRLPath,
 				EMiscError_InvalidCertificateAuthorityData,
+				EMiscError_InternalError,
 			};
 
 			struct CCertificate
@@ -112,13 +120,13 @@ namespace NMib
 				NContainer::TCVector<uint8> m_Data;
 				NContainer::TCMap<int,int> m_Errors;
 
-				bool operator==(CCertificate const& _Other) const
+				bool operator==(CCertificate const &_Other) const
 				{
 					return m_Data == _Other.m_Data && m_Errors == _Other.m_Errors;
 				}
 			};
 
-			bool operator==(CSSLConnectionResult const& _Other) const
+			bool operator==(CSSLConnectionResult const &_Other) const
 			{
 				return (mp_Certificates == _Other.mp_Certificates &&
 					mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured &&
@@ -141,7 +149,7 @@ namespace NMib
 			void f_LogError(int _Depth, int _Error);
 			void f_LogMiscError(EMiscError _Error);
 			bool f_HasLoggedCertificateChain() const { return !mp_Certificates.f_IsEmpty(); }
-			void f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const& _Certificate);
+			void f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const &_Certificate);
 
 			NStr::CStr f_GetPeerCertificateName() const;
 			NStr::CStr f_GetPeerCertificateDescription() const;
@@ -152,9 +160,9 @@ namespace NMib
 			bool f_ConnectionRefused() const;
 			bool f_ContainsInvalidContextErrors() const;
 			void f_SetConnectionRefused();
-			bool f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const& _SpecificCertificate) const;
-			bool f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const& _LocalStore) const;
-			void f_AddSSLError(NStr::CStr const& _SSLError);
+			bool f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const &_SpecificCertificate) const;
+			bool f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const &_LocalStore) const;
+			void f_AddSSLError(NStr::CStr const &_SSLError);
 
 			enum EFormat
 			{
@@ -204,20 +212,21 @@ namespace NMib
 				EState_ReadFailed,
 			};
 			
-			typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const& _ConnectionResult)> FAuthenticationResultCallback;
-			typedef NFunction::TCFunction<void (CSSLConnectionResult const& _ConnectionResult)> FUserTrustDecisionCallback;
+			typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)> FAuthenticationResultCallback;
+			typedef NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)> FUserTrustDecisionCallback;
 
-			CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustDecisionCallback);
+			CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustDecisionCallback);
 			~CSSLConnection();
 
-			bool f_GiveSocket(void* _pSocket);
+			bool f_GiveSocket(void *_pSocket);
 			void* f_GetSocket() const;
 			bool f_HasSocket() const;
 
-			void f_SetHostname(NStr::CStr const& _Hostname);
+			void f_SetHostname(NStr::CStr const &_Hostname);
 			NStr::CStr f_GetHostname() const;
-			void f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult);
+			void f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult);
 
+			NStr::CStr f_GetLastError() const;
 			bool f_BrokenState() const;
 			bool f_Connected() const;
 
@@ -225,10 +234,10 @@ namespace NMib
 			bool f_Accept();
 			bool f_HandshakeInProgress() const;
 
-			mint f_Send(const void* _pData, mint _nLen);
-			mint f_Receive(void* _pData, mint _nLen);
+			mint f_Send(const void *_pData, mint _nLen);
+			mint f_Receive(void *_pData, mint _nLen);
 
-			bool f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len);
+			bool f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len);
 
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 			CSSLConnectionResult& f_GetConnectionResult() { return mp_Result; }
@@ -262,11 +271,11 @@ namespace NMib
 				EState_InvalidCertificateAuthorityData = DMibBit(7),
 			};
 
-			CSSLContext(EType _Type, CSSLSettings const& _Settings);
+			CSSLContext(EType _Type, CSSLSettings const &_Settings);
 			~CSSLContext();
 
 			bool f_IsValid() const;
-			void f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const;
+			void f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const;
 
 			int f_GetExDataIndex() const;
 			bool f_IsClientContext() const;
@@ -277,15 +286,43 @@ namespace NMib
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 			bool f_CanAskUserToTrustServers() const;
 
-			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData);
-			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData);
-			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName = true);
-			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted);
-			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData);
-			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData);
-			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData);
-			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> const& _CertificateData);
-			static bool fs_GenerateSelfSignedCertAndKey(NStr::CStr const& _CertificateName, NContainer::TCVector<NStr::CStr> const& _Hostnames, NContainer::TCVector<uint8>& _CertData, NContainer::TCVector<uint8>& _KeyData, int _KeyLength = 2048, int _Serial = 0, int _Days = 365);
+			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData);
+			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData);
+			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName = true);
+			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted);
+			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData);
+			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const &_CertificateData);
+			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const &_CertificateData);
+			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> const &_CertificateData);
+			static void fs_GenerateSelfSignedCertAndKey
+				(
+					NStr::CStr const &_CertificateName
+					, NContainer::TCVector<NStr::CStr> const &_Hostnames
+					, NContainer::TCVector<uint8> &o_CertData
+					, NContainer::TCVector<uint8> &_KeyData
+					, int _KeyLength = 2048
+					, int _Serial = 0
+					, int _Days = 365
+				)
+			;
+			static void fs_GenerateClientCertificateRequest
+				(
+					NStr::CStr const &_Subject
+					, NContainer::TCVector<uint8> &o_CertRequestData
+					, NContainer::TCVector<uint8> &o_KeyData
+					, int _KeyLength = 2048
+				)
+			;
+			static void fs_SignClientCertificate
+				(
+					NContainer::TCVector<uint8> const &_CACertificate
+					, NContainer::TCVector<uint8> const &_CAKey
+					, NContainer::TCVector<uint8> const &_CertRequestData
+					, NContainer::TCVector<uint8> &o_SignedCertificateData
+					, int _Serial = 0
+					, int _Days = 365
+				)
+			;
 
 		protected:
 			class CSession;

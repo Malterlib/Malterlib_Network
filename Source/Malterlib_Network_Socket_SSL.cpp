@@ -148,6 +148,10 @@ namespace NMib
 			if (!SSLErrors.f_IsEmpty())
 				NStr::fg_AddStrSep(Ret, SSLErrors, ", ");
 			
+			NStr::CStr LastError = mp_SSLConnection.f_GetLastError();
+			if (!LastError.f_IsEmpty())
+				NStr::fg_AddStrSep(Ret, LastError, ", ");
+			
 			return Ret;
 		}
 		

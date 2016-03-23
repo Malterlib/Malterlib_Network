@@ -958,7 +958,6 @@ public:
 				f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20677);
 			};
 
-
 			DMibTestSuite("Connect_TCPv6")
 			{
 				f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20677);
@@ -974,18 +973,15 @@ public:
 				f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20678, 20680);
 			};
 
-
 			DMibTestSuite("ConnectReportTo_TCPv4")
 			{
 				f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
 			};
 
-
 			DMibTestSuite("ConnectReportTo_TCPv6")
 			{
 				f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20679);
 			};
-
 
 			DMibTestSuite("ConnectListenReportTo_TCPv4")
 			{

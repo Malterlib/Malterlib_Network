@@ -3,6 +3,7 @@
 
 #include <Mib/Cryptography/Hashes/SHA>
 #include <Mib/Storage/LazyInit>
+#include <Mib/Encoding/Base64>
 
 extern "C"
 {
@@ -143,12 +144,44 @@ namespace NMib
 				}
 			}
 
-			SSL_CTX* fg_CreateSSLContext(SSL_METHOD const* _pMethod)
+			SSL_CTX* fg_CreateSSLContext(SSL_METHOD const *_pMethod)
 			{
 				DMibLock(g_SSLLowLevel->m_ContextCreationLock);
 				return SSL_CTX_new(_pMethod);
 			}
 
+			NStr::CStr fg_GetErrors()
+			{
+				NStr::CStr Errors;
+				auto fAddError = [&](char const *_pError, size_t _StringLength)
+					{
+						NStr::fg_AddStrSep(Errors, NStr::CStr(_pError, _StringLength), DMibNewLine);
+					}
+				;
+
+				ERR_print_errors_cb
+					(
+						[](char const *_pError, size_t _StringLength, void *_pContext) -> int
+						{
+							(*((decltype(fAddError) *)_pContext))(_pError, _StringLength);
+							return 1;
+						}
+						, &fAddError 
+					)
+				;
+				
+				return Errors;
+			}
+
+			NStr::CStr fg_GetExceptionStr(NStr::CStr const &_Description)
+			{
+				NStr::CStr Errors = fg_GetErrors();
+				
+				if (Errors.f_IsEmpty())
+					return _Description;
+				
+				return fg_Format("{}: {}", _Description, Errors);
+			}
 		}
 
 		// CSSLContext::CSession methods.
@@ -156,7 +189,7 @@ namespace NMib
 		{
 		public:
 
-			CSession(SSL_CTX* _pContext)
+			CSession(SSL_CTX *_pContext)
 				: mp_pSSL(nullptr)
 				, mp_pContext(_pContext)
 			{
@@ -194,7 +227,7 @@ namespace NMib
 		{
 		public:
 
-			CInternal(CSSLContext::EType _Type, CSSLSettings const& _Settings)
+			CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 				: mp_pContext(nullptr)
 				, mp_Type(_Type)
 				, mp_State(CSSLContext::EState_None)
@@ -250,7 +283,7 @@ namespace NMib
 				return mp_State;
 			}
 
-			void f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const
+			void f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const
 			{
 				if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityLocation)
 					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityLocation);
@@ -288,11 +321,10 @@ namespace NMib
 			{
 				return mp_Settings;
 			}
-			
-			static bool fs_VerifyHostname(NStr::CStr const& _Hostname, X509* _pCertificate)
+
+			static bool fs_VerifyHostname(NStr::CStr const &_Hostname, X509 *_pCertificate)
 			{
-				NContainer::TCVector<uint8> CertData;
-				fs_ConvertX509ToBinary(_pCertificate, CertData);
+				NContainer::TCVector<uint8> CertData = fs_ConvertX509ToBinary(_pCertificate);
 
 				NContainer::TCVector<NStr::CStr> lHostnames = fs_GetCertificateHostnames(CertData);
 				for (auto const& CertHostName : lHostnames)
@@ -324,7 +356,7 @@ namespace NMib
 				return false;
 			}
 
-			static int fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX* _pStoreContext)
+			static int fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX *_pStoreContext)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				int Error = X509_STORE_CTX_get_error(_pStoreContext);
@@ -369,18 +401,26 @@ namespace NMib
 					{
 						X509* pCert = sk_X509_value(_pStoreContext->chain, nCertsInChain - 1);
 						NContainer::TCVector<uint8> CertData;
-						fs_ConvertX509ToBinary(pCert, CertData);
-
-						Result.f_LogCertificate(nCertsInChain - 1, CertData);
-						--nCertsInChain;
-
-						// Check the hostname on the peer certificate
-						if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
+						try
 						{
-							if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
+							CertData = fs_ConvertX509ToBinary(pCert);
+
+							Result.f_LogCertificate(nCertsInChain - 1, CertData);
+							--nCertsInChain;
+
+							// Check the hostname on the peer certificate
+							if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
 							{
-								Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
+								if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
+								{
+									Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
+								}
 							}
+						}
+						catch (CExceptionNetSSL const &_Exception)
+						{
+							Result.f_LogMiscError(CSSLConnectionResult::EMiscError_InternalError);
+							Result.f_AddSSLError(_Exception.f_GetErrorStr());
 						}
 					}
 				}
@@ -393,35 +433,45 @@ namespace NMib
 				return 1;
 			}
 
-			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData)
+			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				NStr::CStr CertificateDescription;
-				X509* pCertificate = fs_LoadCertificate(_CertificateData);
-				if (pCertificate)
-				{
-					BIO* pMemoryBio = BIO_new(BIO_s_mem());
-					BUF_MEM* pMemory = nullptr;
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+					
+				ERR_clear_error();
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				if (!pMemoryBio)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create BIO"));
+				auto Cleanup1 = g_OnScopeExit > [&]
+					{
+						BIO_free_all(pMemoryBio);
+					}
+				;
 
-					unsigned long NameOptions = 0;
-					unsigned long CertOptions = 0;
+				BUF_MEM* pMemory = nullptr;
 
-					X509_print_ex(pMemoryBio, pCertificate, NameOptions, CertOptions); 
-					(void)BIO_flush(pMemoryBio);
-					BIO_get_mem_ptr(pMemoryBio, &pMemory);
+				unsigned long NameOptions = 0;
+				unsigned long CertOptions = 0;
 
-					NContainer::TCVector<uint8> RawData;
-					RawData.f_SetLen(pMemory->length);
-					NMem::fg_MemCopy(RawData.f_GetArray(), pMemory->data, pMemory->length - 1);
+				ERR_clear_error();
+				if (!X509_print_ex(pMemoryBio, pCertificate, NameOptions, CertOptions))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to print x509 description"));
+					
+				(void)BIO_flush(pMemoryBio);
+				BIO_get_mem_ptr(pMemoryBio, &pMemory);
 
-					RawData[RawData.f_GetLen() - 1] = '\0';
-					CertificateDescription = NStr::CStr::CFormat("{}") << (char*)RawData.f_GetArray();
+				NContainer::TCVector<uint8> RawData;
+				RawData.f_SetLen(pMemory->length);
+				NMem::fg_MemCopy(RawData.f_GetArray(), pMemory->data, pMemory->length - 1);
 
-					BIO_free_all(pMemoryBio);
-					X509_free(pCertificate);
-				}
-
-				return CertificateDescription;
+				RawData[RawData.f_GetLen() - 1] = '\0';
+				return NStr::CStr((ch8 const *)RawData.f_GetArray());
 			}
 
 			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> _CertificateData)
@@ -429,45 +479,49 @@ namespace NMib
 				if (!_CertificateData.f_IsEmpty())
 				{
 					_CertificateData[_CertificateData.f_GetLen() - 1] = '\0';
-					return NStr::CStr::CFormat("{}") << (char*)_CertificateData.f_GetArray();
+					return NStr::CStr((ch8 const *)_CertificateData.f_GetArray());
 				}
 
 				return NStr::CStr();
 			}
 
-			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData)
+			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+				
+				char Buffer[256];
+				ERR_clear_error();
+				int nChars = X509_NAME_get_text_by_NID(X509_get_subject_name(pCertificate), NID_commonName, Buffer, 256); 
+				if (nChars < 0)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to read certificate name"));
+				return NStr::CStr(Buffer, nChars);
+			}
+
+			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				NStr::CStr CertificateName;
-				X509* pCertificate = fs_LoadCertificate(_CertificateData);
-				if (pCertificate)
-				{
-					char Buffer[256];
-					X509_NAME_get_text_by_NID(X509_get_subject_name(pCertificate), NID_commonName, Buffer, 256);
-					CertificateName = Buffer;
-					X509_free(pCertificate);
-				}
-
-				return CertificateName;
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+				char Buffer[256];
+				ERR_clear_error();
+				int nChars = X509_NAME_get_text_by_NID(X509_get_issuer_name(pCertificate), NID_commonName, Buffer, 256);
+				if (nChars < 0)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to read certificate issuen name"));
+				return NStr::CStr(Buffer);
 			}
 
-			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData)
-			{
-				g_SSLLowLevel->f_UseInThread();
-				NStr::CStr CertificateName;
-				X509* pCertificate = fs_LoadCertificate(_CertificateData);
-				if (pCertificate)
-				{
-					char Buffer[256];
-					X509_NAME_get_text_by_NID(X509_get_issuer_name(pCertificate), NID_commonName, Buffer, 256);
-					CertificateName = Buffer;
-					X509_free(pCertificate);
-				}
-
-				return CertificateName;
-			}
-
-			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData)
+			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				NStr::CStr Hostnames;
 				NContainer::TCVector<NStr::CStr> lHostNames = fs_GetCertificateHostnames(_CertificateData);
@@ -485,75 +539,81 @@ namespace NMib
 				return Hostnames;
 			}
 
-			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName = true)
+			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName = true)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				NContainer::TCVector<NStr::CStr> lHostnames;
 
-				X509* pCertificate = fs_LoadCertificate(_CertificateData);
-				if (!pCertificate)
-					return lHostnames;
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
 
 				// First look at "subjectAltNames"
 				int Index = -1;
 				while(true)
 				{
 					GENERAL_NAMES* pSubjectAltNames = (GENERAL_NAMES*)X509_get_ext_d2i(pCertificate, NID_subject_alt_name, nullptr, &Index);
-					if (pSubjectAltNames)
-					{
-						int nAltEntries = sk_GENERAL_NAME_num(pSubjectAltNames);
-
-						for (int iEntry = 0; iEntry < nAltEntries; ++iEntry)
-						{
-							GENERAL_NAME const* pName = sk_GENERAL_NAME_value(pSubjectAltNames, iEntry);
-							if (!pName)
-								continue;
-
-							unsigned char* pBuffer = nullptr;
-
-							switch (pName->type)
-							{
-							case GEN_DNS:
-							case GEN_URI:
-							case GEN_EMAIL:
-								ASN1_STRING_to_UTF8((unsigned char**)&pBuffer, pName->d.ia5);
-								if (pBuffer)
-								{
-									lHostnames.f_Insert(NStr::CStr(pBuffer));
-									OPENSSL_free(pBuffer);
-								}
-								break;
-							case GEN_IPADD:
-								{
-									pBuffer = pName->d.ip->data;
-									NStr::CStr IPAddress;
-
-									if(pName->d.ip->length == 4)
-										IPAddress = NStr::CStr::CFormat("{}.{}.{}.{}") << pBuffer[0] << pBuffer[1] << pBuffer[2] << pBuffer[3];
-									else if(pName->d.ip->length == 16)
-									{
-										for (int i = 0; i < 8; ++i)
-										{
-											if (IPAddress.f_IsEmpty())
-												IPAddress += NStr::CStr::CFormat("{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
-											else
-												IPAddress += NStr::CStr::CFormat(":{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
-
-											pBuffer += 2;
-										}
-									}
-
-									if (!IPAddress.f_IsEmpty())
-										lHostnames.f_Insert(IPAddress);
-								}
-								break;
-							}
-						}
-						GENERAL_NAMES_free(pSubjectAltNames);
-					}
-					else
-					{
+					if (!pSubjectAltNames)
 						break;
+					auto Cleanup = g_OnScopeExit > [&]
+						{
+							GENERAL_NAMES_free(pSubjectAltNames);
+						}
+					;
+					int nAltEntries = sk_GENERAL_NAME_num(pSubjectAltNames);
+
+					for (int iEntry = 0; iEntry < nAltEntries; ++iEntry)
+					{
+						GENERAL_NAME const* pName = sk_GENERAL_NAME_value(pSubjectAltNames, iEntry);
+						if (!pName)
+							continue;
+
+						unsigned char* pBuffer = nullptr;
+
+						switch (pName->type)
+						{
+						case GEN_DNS:
+						case GEN_URI:
+						case GEN_EMAIL:
+							ASN1_STRING_to_UTF8((unsigned char**)&pBuffer, pName->d.ia5);
+							if (pBuffer)
+							{
+								auto Cleanup = g_OnScopeExit > [&]
+									{
+										OPENSSL_free(pBuffer);
+									}
+								;
+								lHostnames.f_Insert(NStr::CStr(pBuffer));
+							}
+							break;
+						case GEN_IPADD:
+							{
+								pBuffer = pName->d.ip->data;
+								NStr::CStr IPAddress;
+
+								if (pName->d.ip->length == 4)
+									IPAddress = NStr::CStr::CFormat("{}.{}.{}.{}") << pBuffer[0] << pBuffer[1] << pBuffer[2] << pBuffer[3];
+								else if (pName->d.ip->length == 16)
+								{
+									for (int i = 0; i < 8; ++i)
+									{
+										if (IPAddress.f_IsEmpty())
+											IPAddress += NStr::CStr::CFormat("{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
+										else
+											IPAddress += NStr::CStr::CFormat(":{nfh,sj8,sf0}") << (pBuffer[0] << 8 | pBuffer[1]);
+
+										pBuffer += 2;
+									}
+								}
+
+								if (!IPAddress.f_IsEmpty())
+									lHostnames.f_Insert(IPAddress);
+							}
+							break;
+						}
 					}
 				}
 
@@ -564,20 +624,16 @@ namespace NMib
 					if (pSubject)
 					{
 						char CommonName[256];
-						int Ret = X509_NAME_get_text_by_NID(pSubject, NID_commonName, CommonName, sizeof(CommonName));
-						if (Ret > 0)
-						{
-							CommonName[sizeof(CommonName) - 1] = '\0';
-							lHostnames.f_Insert(NStr::CStr(CommonName));
-						}
+						int nChars = X509_NAME_get_text_by_NID(pSubject, NID_commonName, CommonName, sizeof(CommonName));
+						if (nChars > 0)
+							lHostnames.f_Insert(NStr::CStr(CommonName, nChars));
 					}
 				}
 
-				X509_free(pCertificate);
 				return lHostnames;
 			}
 
-			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted)
+			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 			{
 				NContainer::TCVector<NStr::CStr> Sorted;
 				for (auto Iter = _Unsorted.f_GetIterator(); Iter; ++Iter)
@@ -590,183 +646,270 @@ namespace NMib
 				return Sorted;
 			}
 
-			static X509* fs_LoadCertificate(NContainer::TCVector<uint8> const& _CertificateData)
+			static X509 *fs_LoadCertificate(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (_CertificateData.f_IsEmpty())
-					return nullptr;
+					DMibErrorNetSSL("Empty certificate data");
 
-				BIO* pMemoryBio = BIO_new_mem_buf( const_cast<void*>(static_cast<void const*>(_CertificateData.f_GetArray())), _CertificateData.f_GetLen());
+				ERR_clear_error();
+				BIO* pMemoryBio = BIO_new_mem_buf( const_cast<void *>(static_cast<void const *>(_CertificateData.f_GetArray())), _CertificateData.f_GetLen());
 				if (!pMemoryBio)
-					return nullptr;
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO buffer"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
 
-				X509* pCertificate = nullptr;
-				pCertificate = PEM_read_bio_X509(pMemoryBio, nullptr, nullptr, nullptr);
+				ERR_clear_error();
+				X509 *pCertificate = PEM_read_bio_X509(pMemoryBio, nullptr, nullptr, nullptr);;
+				if (!pCertificate)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading x509 certificate"));
 
-				BIO_free(pMemoryBio);
 				return pCertificate;
 			}
-
-			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData)
+			
+			static X509_REQ *fs_LoadCertificateRequest(NContainer::TCVector<uint8> const &_CertificateRequestData)
 			{
 				g_SSLLowLevel->f_UseInThread();
-				X509* pCertificate = fs_LoadCertificate(_CertificateData);
-				if (pCertificate)
-				{
-					NTime::CTime Time = NTime::CTime::fs_StartOfTime();
+				if (_CertificateRequestData.f_IsEmpty())
+					DMibErrorNetSSL("Empty certificate request data");
 
-					ASN1_TIME* pTime = X509_get_notAfter(pCertificate);
-					if (pTime->type == V_ASN1_UTCTIME)
+				ERR_clear_error();
+				BIO* pMemoryBio = BIO_new_mem_buf( const_cast<void*>(static_cast<void const *>(_CertificateRequestData.f_GetArray())), _CertificateRequestData.f_GetLen());
+				if (!pMemoryBio)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO buffer"));
+				auto Cleanup = g_OnScopeExit > [&]
 					{
-						if (pTime->length < 10)
-						{
-							X509_free(pCertificate);
-							return NTime::CTime::fs_StartOfTime();
-						}
-
-						const char* pData = (const char*)pTime->data;
-
-						for (int i = 0; i < 10; ++i)
-						{
-							if ((pData[i] > '9') || (pData[i] < '0'))
-							{
-								X509_free(pCertificate);
-								return NTime::CTime::fs_StartOfTime();
-							}
-						}
-
-						int Years = (pData[0]-'0')*10+(pData[1]-'0');
-						if (Years < 50) Years += 100;
-						Years += 1900;
-
-						int Months = (pData[2]-'0')*10+(pData[3]-'0');
-						if ((Months > 12) || (Months < 1))
-						{
-							X509_free(pCertificate);
-							return NTime::CTime::fs_StartOfTime();
-						}
-						
-						int Days = (pData[4]-'0')*10+(pData[5]-'0');
-						int Hours = (pData[6]-'0')*10+(pData[7]-'0');
-						int Minutes =  (pData[8]-'0')*10+(pData[9]-'0');
-						int Seconds = 0;
-
-						if (pTime->length >=12 &&
-							(pData[10] >= '0') && (pData[10] <= '9') &&
-							(pData[11] >= '0') && (pData[11] <= '9'))
-						{
-							Seconds = (pData[10]-'0')*10+(pData[11]-'0');
-						}
-
-						Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
+						BIO_free(pMemoryBio);
 					}
-					else if (pTime->type == V_ASN1_GENERALIZEDTIME)
-					{
-						if (pTime->length < 12)
-						{
-							X509_free(pCertificate);
-							return NTime::CTime::fs_StartOfTime();
-						}
+				;
 
-						const char* pData = (const char*)pTime->data;
+				X509_REQ *pCertificateRequest = nullptr;
+				ERR_clear_error();
+				pCertificateRequest = PEM_read_bio_X509_REQ(pMemoryBio, nullptr, nullptr, nullptr);
+				if (!pCertificateRequest)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading x509 certificate request"));
 
-						for (int i = 0; i < 12; ++i)
-						{
-							if ((pData[i] > '9') || (pData[i] < '0'))
-							{
-								X509_free(pCertificate);
-								return NTime::CTime::fs_StartOfTime();
-							}
-						}
-
-						int Years = (pData[0]-'0')*1000+(pData[1]-'0')*100 + (pData[2]-'0')*10+(pData[3]-'0');
-						int Months = (pData[4]-'0')*10+(pData[5]-'0');
-						if (Months > 12 || Months < 1)
-						{
-							X509_free(pCertificate);
-							return NTime::CTime::fs_StartOfTime();
-						}
-
-						int Days = (pData[6]-'0')*10+(pData[7]-'0');
-						int Hours = (pData[8]-'0')*10+(pData[9]-'0');
-						int Minutes =  (pData[10]-'0')*10+(pData[11]-'0');
-						int Seconds = 0;
-
-						if (pTime->length >= 14 &&
-							(pData[12] >= '0') && (pData[12] <= '9') &&
-							(pData[13] >= '0') && (pData[13] <= '9'))
-						{
-							Seconds = (pData[12]-'0')*10+(pData[13]-'0');
-						}
-
-						Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
-					}
-
-					X509_free(pCertificate);
-					return Time;
-				}
-
-				return NTime::CTime::fs_StartOfTime();
+				return pCertificateRequest;
 			}
 
-			static bool fs_ConvertX509ToBinary(X509* _pCertificate, NContainer::TCVector<uint8>& _CertificateData)
+			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const &_CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+				NTime::CTime Time = NTime::CTime::fs_StartOfTime();
+
+				ASN1_TIME* pTime = X509_get_notAfter(pCertificate);
+				if (!pTime)
+					return Time;
+				if (pTime->type == V_ASN1_UTCTIME)
+				{
+					if (pTime->length < 10)
+						return NTime::CTime::fs_StartOfTime();
+
+					const char* pData = (const char*)pTime->data;
+
+					for (int i = 0; i < 10; ++i)
+					{
+						if ((pData[i] > '9') || (pData[i] < '0'))
+							return NTime::CTime::fs_StartOfTime();
+					}
+
+					int Years = (pData[0]-'0')*10+(pData[1]-'0');
+					if (Years < 50) Years += 100;
+					Years += 1900;
+
+					int Months = (pData[2]-'0')*10+(pData[3]-'0');
+					if ((Months > 12) || (Months < 1))
+						return NTime::CTime::fs_StartOfTime();
+					
+					int Days = (pData[4]-'0')*10+(pData[5]-'0');
+					int Hours = (pData[6]-'0')*10+(pData[7]-'0');
+					int Minutes =  (pData[8]-'0')*10+(pData[9]-'0');
+					int Seconds = 0;
+
+					if 
+						(
+							pTime->length >=12
+							&& (pData[10] >= '0') && (pData[10] <= '9')
+							&& (pData[11] >= '0') && (pData[11] <= '9')
+						)
+					{
+						Seconds = (pData[10]-'0')*10+(pData[11]-'0');
+					}
+
+					Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
+				}
+				else if (pTime->type == V_ASN1_GENERALIZEDTIME)
+				{
+					if (pTime->length < 12)
+						return NTime::CTime::fs_StartOfTime();
+
+					const char* pData = (const char*)pTime->data;
+
+					for (int i = 0; i < 12; ++i)
+					{
+						if ((pData[i] > '9') || (pData[i] < '0'))
+							return NTime::CTime::fs_StartOfTime();
+					}
+
+					int Years = (pData[0]-'0')*1000+(pData[1]-'0')*100 + (pData[2]-'0')*10+(pData[3]-'0');
+					int Months = (pData[4]-'0')*10+(pData[5]-'0');
+					if (Months > 12 || Months < 1)
+						return NTime::CTime::fs_StartOfTime();
+
+					int Days = (pData[6]-'0')*10+(pData[7]-'0');
+					int Hours = (pData[8]-'0')*10+(pData[9]-'0');
+					int Minutes =  (pData[10]-'0')*10+(pData[11]-'0');
+					int Seconds = 0;
+
+					if 
+						(
+							pTime->length >= 14
+							&& (pData[12] >= '0') && (pData[12] <= '9')
+							&& (pData[13] >= '0') && (pData[13] <= '9')
+						)
+					{
+						Seconds = (pData[12]-'0')*10+(pData[13]-'0');
+					}
+
+					Time = NTime::CTimeConvert::fs_CreateTime(Years, Months, Days, Hours, Minutes, Seconds);
+				}
+
+				return Time;
+			}
+
+			static NContainer::TCVector<uint8> fs_ConvertX509ToBinary(X509 *_pCertificate)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (!_pCertificate)
-					return false;
+					DMibErrorNetSSL("x509 certificate in nullptr");
 
+				ERR_clear_error();
 				BIO* pMemoryBio = BIO_new(BIO_s_mem());
 				if (!pMemoryBio)
-					return false;
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
 
-				bool bRet = false;
-
-				if (PEM_write_bio_X509(pMemoryBio, _pCertificate))
-				{
-					_CertificateData.f_SetLen(pMemoryBio->num_write);
-					if (BIO_read(pMemoryBio, _CertificateData.f_GetArray(), _CertificateData.f_GetLen()))
-						bRet = true;
-				}
-
-				BIO_free(pMemoryBio);
-				return bRet;
+				ERR_clear_error();
+				if (!PEM_write_bio_X509(pMemoryBio, _pCertificate))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error writing certificate to BIO"));
+				
+				NContainer::TCVector<uint8> Return;
+				Return.f_SetLen(pMemoryBio->num_write);
+				ERR_clear_error();
+				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading certificate from BIO"));
+				return Return;
 			}
 
-			static bool fs_ConvertKeyToBinary(EVP_PKEY* _pKey, NContainer::TCVector<uint8>& _KeyData)
+			static NContainer::TCVector<uint8> fs_ConvertX509RequestToBinary(X509_REQ *_pCertificateRequest)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				if (!_pCertificateRequest)
+					DMibErrorNetSSL("x509 certificate request in nullptr");
+
+				ERR_clear_error();
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				if (!pMemoryBio)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
+
+				ERR_clear_error();
+				if (!PEM_write_bio_X509_REQ(pMemoryBio, _pCertificateRequest))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error writing request to BIO"));
+				
+				NContainer::TCVector<uint8> Return;
+				Return.f_SetLen(pMemoryBio->num_write);
+				ERR_clear_error();
+				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading request from BIO"));
+				return Return;
+			}
+
+			static NContainer::TCVector<uint8> fs_ConvertKeyToBinary(EVP_PKEY *_pKey)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (!_pKey)
-					return false;
+					DMibErrorNetSSL("Key in nullptr");
 
+				ERR_clear_error();
 				BIO* pMemoryBio = BIO_new(BIO_s_mem());
 				if (!pMemoryBio)
-					return false;
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
 
-				bool bRet = false;
-
-				if (PEM_write_bio_PrivateKey(pMemoryBio, _pKey, nullptr, nullptr, 0, nullptr, nullptr))
-				{
-					_KeyData.f_SetLen(pMemoryBio->num_write);
-					if (BIO_read(pMemoryBio, _KeyData.f_GetArray(), _KeyData.f_GetLen()))
-						bRet = true;
-				}
-
-				BIO_free(pMemoryBio);
-				return bRet;
+				ERR_clear_error();
+				if (!PEM_write_bio_PrivateKey(pMemoryBio, _pKey, nullptr, nullptr, 0, nullptr, nullptr))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error writing private key to BIO"));
+				
+				NContainer::TCVector<uint8> Return;
+				Return.f_SetLen(pMemoryBio->num_write);
+				ERR_clear_error();
+				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading private key from BIO"));
+				return Return;
 			}
 
-			static X509_CRL* fs_LoadCRL(NContainer::TCVector<uint8> const& _CRLData)
+			static EVP_PKEY *fs_LoadPrivateKey(NContainer::TCVector<uint8> const &_Data)
 			{
 				g_SSLLowLevel->f_UseInThread();
+				ERR_clear_error();
+
+				BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(_Data.f_GetArray())), _Data.f_GetLen());
+				if (!pMemoryBio)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create BIO buffer"));
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
+
+				ERR_clear_error();
+				EVP_PKEY* pKey = PEM_read_bio_PrivateKey(pMemoryBio, nullptr, nullptr, nullptr);
+				if (!pKey)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to read private key"));
+				
+				return pKey;
+			}
+
+			
+			static X509_CRL* fs_LoadCRL(NContainer::TCVector<uint8> const &_CRLData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				ERR_clear_error();
 				BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
 				if (!pMemoryBio)
-					return nullptr;
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
 
-				X509_CRL* pCRL = nullptr;
-
-				pCRL = PEM_read_bio_X509_CRL(pMemoryBio, nullptr, nullptr, nullptr);
-
-				BIO_free(pMemoryBio);
+				ERR_clear_error();
+				X509_CRL *pCRL = PEM_read_bio_X509_CRL(pMemoryBio, nullptr, nullptr, nullptr);
+				if (!pCRL)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error reading x509 certificate revocation list from BIO"));
 
 				return pCRL;
 			}
@@ -821,45 +964,52 @@ namespace NMib
 					X509_STORE* pStore = mp_pContext->cert_store;
 
 					if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
-						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+						DMibErrorNetSSL(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
 					else
-					try
 					{
 						NContainer::TCVector<NStr::CStr> lCertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
+						
+						if (lCertificateFiles.f_IsEmpty())
+							DMibErrorNetSSL(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
 
 						for (auto Iter = lCertificateFiles.f_GetIterator(); Iter; ++Iter)
 						{
-							bUsingCertificateAuthority = true;
-
 							NContainer::TCVector<uint8> CertificateData = NFile::CFile::fs_ReadFile(*Iter);
 							if (CertificateData.f_IsEmpty())
 								continue;
 
-							X509* pCertificate = fs_LoadCertificate(CertificateData);
-							if (!pCertificate)
-								mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
+							bUsingCertificateAuthority = true;
 
+							X509 *pCertificate = fs_LoadCertificate(CertificateData);
+							auto Cleanup0 = g_OnScopeExit > [&]
+								{
+									X509_free(pCertificate);
+								}
+							;
+
+							ERR_clear_error();
 							if (!X509_STORE_add_cert(pStore, pCertificate))
-								mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
-
-							X509_free(pCertificate);
+								DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Failed to add certificate '{}' to store", *Iter)));
 						}
+						
+						if (!bUsingCertificateAuthority)
+							DMibErrorNetSSL(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
 					}
-					catch (NFile::CExceptionFile const&)
-					{
-						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityLocation;
-					}	
 				}
 
 				if (!mp_Settings.m_CACertificateData.f_IsEmpty())
 				{
 					X509_STORE* pStore = mp_pContext->cert_store;
-					X509* pCertificate = fs_LoadCertificate(mp_Settings.m_CACertificateData);
-					if (!pCertificate)
-						mp_State |= CSSLContext::EState_InvalidCertificateAuthorityData;
+					X509 *pCertificate = fs_LoadCertificate(mp_Settings.m_CACertificateData);
+					auto Cleanup0 = g_OnScopeExit > [&]
+						{
+							X509_free(pCertificate);
+						}
+					;
 
-					X509_STORE_add_cert(pStore, pCertificate);
-					X509_free(pCertificate);
+					ERR_clear_error();
+					if (!X509_STORE_add_cert(pStore, pCertificate))
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
 
 					bUsingCertificateAuthority = true;
 				}
@@ -873,21 +1023,17 @@ namespace NMib
 					return false;
 
 				g_SSLLowLevel->f_UseInThread();
-				X509* pCertificate = fs_LoadCertificate(mp_Settings.m_PublicCertificateData);
-				if (!pCertificate)
-				{
-					mp_State |= CSSLContext::EState_InvalidPublicCertificate;
-					return false;
-				}
+				X509 *pCertificate = fs_LoadCertificate(mp_Settings.m_PublicCertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
 
+				ERR_clear_error();
 				if (SSL_CTX_use_certificate(mp_pContext, pCertificate) <= 0)
-				{	
-					X509_free(pCertificate);
-					mp_State |= CSSLContext::EState_InvalidPublicCertificate;
-					return false;
-				}
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
 
-				X509_free(pCertificate);
 				return true;
 			}
 
@@ -896,72 +1042,67 @@ namespace NMib
 				g_SSLLowLevel->f_UseInThread();
 				if (!mp_Settings.m_CRLData.f_IsEmpty())
 				{
+					ERR_clear_error();
 					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 					if (!pStore)
-					{
-						mp_State |= CSSLContext::EState_InvalidCRLData;
-						return;
-					}
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to get cert store"));
 
+					ERR_clear_error();
 					X509_LOOKUP* pLookup = X509_STORE_add_lookup(pStore, X509_LOOKUP_file());
 					if (!pLookup)
-					{
-						mp_State |= CSSLContext::EState_InvalidCRLData;
-					}
-					else
-					{
-						X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
-						if (!pCRL)
-							mp_State |= CSSLContext::EState_InvalidCRLData;
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to add lookup file to store"));
 
-						if (!X509_STORE_add_crl(pLookup->store_ctx, pCRL))
-							mp_State |= CSSLContext::EState_InvalidCRLData;
+					X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
+					
+					auto Cleanup = g_OnScopeExit > [&]
+						{
+							X509_CRL_free(pCRL);
+						}
+					;
 
-						X509_CRL_free(pCRL);
-					}
+					ERR_clear_error();
+					if (!X509_STORE_add_crl(pLookup->store_ctx, pCRL))
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
 
-					X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
+					ERR_clear_error();
+					if (!X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL))
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to set store flags"));
 				}
 				
 				if (!mp_Settings.m_PathToCRLs.f_IsEmpty())
 				{
+					ERR_clear_error();
 					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 					if (!pStore)
-					{
-						mp_State |= CSSLContext::EState_InvalidCRLPath;
-						return;
-					}
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to get cert store"));
 
 					if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
-						mp_State |= CSSLContext::EState_InvalidCRLPath;
-					else
-					try
+						DMibErrorNetSSL(fg_Format("CRL path '{}' does not exist", mp_Settings.m_PathToCRLs));
+					
+					NContainer::TCVector<NStr::CStr> lCRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+
+					bool bAdded = false;
+					for (auto Iter = lCRLFiles.f_GetIterator(); Iter; ++Iter)
 					{
-						NContainer::TCVector<NStr::CStr> lCRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+						NContainer::TCVector<uint8> CRLData = NFile::CFile::fs_ReadFile(*Iter);
+						if (CRLData.f_IsEmpty())
+							continue;
 
-						for (auto Iter = lCRLFiles.f_GetIterator(); Iter; ++Iter)
-						{
-							NContainer::TCVector<uint8> CRLData = NFile::CFile::fs_ReadFile(*Iter);
-							if (CRLData.f_IsEmpty())
-								continue;
+						X509_CRL* pCRL = fs_LoadCRL(CRLData);
+						auto Cleanup = g_OnScopeExit > [&]
+							{
+								X509_CRL_free(pCRL);
+							}
+						;
 
-							X509_CRL* pCRL = fs_LoadCRL(CRLData);
-							if (!pCRL)
-								mp_State |= CSSLContext::EState_InvalidCRLPath;
-
-							if (!X509_STORE_add_crl(pStore, pCRL))
-								mp_State |= CSSLContext::EState_InvalidCRLPath;
-
-							X509_CRL_free(pCRL);
-						}
-
-						if (!lCRLFiles.f_IsEmpty())
-							X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
+						ERR_clear_error();
+						if (!X509_STORE_add_crl(pStore, pCRL))
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
+						bAdded = true;
 					}
-					catch (NFile::CExceptionFile const&)
-					{
-						mp_State |= CSSLContext::EState_InvalidCRLPath;
-					}
+
+					if (bAdded)
+						X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
 				}
 			}
 
@@ -971,54 +1112,26 @@ namespace NMib
 				if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
 					return false;
 
-				BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(mp_Settings.m_PrivateKeyData.f_GetArray())), mp_Settings.m_PrivateKeyData.f_GetLen());
-				if (!pMemoryBio)
-				{
-					mp_State |= CSSLContext::EState_InvalidPrivateKey;
-					return true;
-				}
-
-				EVP_PKEY* pKey = nullptr;
-				pKey = PEM_read_bio_PrivateKey(pMemoryBio, nullptr, nullptr, nullptr);
-
+				EVP_PKEY* pKey = fs_LoadPrivateKey(mp_Settings.m_PrivateKeyData); 
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						EVP_PKEY_free(pKey);
+					}
+				;
+				
+				ERR_clear_error();
 				if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
-					mp_State |= CSSLContext::EState_InvalidPrivateKey;
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to use private key in SSL context"));
 
-				EVP_PKEY_free(pKey);
-				BIO_free(pMemoryBio);
 				return true;
 			}
 
 			void fp_VerifyPublicCertAndPrivateKey()
 			{
 				g_SSLLowLevel->f_UseInThread();
+				ERR_clear_error();
 				if (!SSL_CTX_check_private_key(mp_pContext))
-					mp_State |= CSSLContext::EState_CertificatePrivateKeyMisMatch;
-			}
-
-			static NStr::CStr fsp_Base64Encode(unsigned char const* _pToEncode, mint _Len) 
-			{
-				g_SSLLowLevel->f_UseInThread();
-				BIO* pMemoryBio = BIO_new(BIO_s_mem());
-				BIO* pBase64Bio = BIO_new(BIO_f_base64());
-				BUF_MEM* pMemory = nullptr;
-
-				pBase64Bio = BIO_push(pBase64Bio, pMemoryBio);
-
-				BIO_write(pBase64Bio, _pToEncode, _Len);
-				(void)BIO_flush(pBase64Bio);
-				BIO_get_mem_ptr(pBase64Bio, &pMemory);
-
-				NContainer::TCVector<uint8> EncodedData;
-				EncodedData.f_SetLen(pMemory->length);
-				NMem::fg_MemCopy(EncodedData.f_GetArray(), pMemory->data, pMemory->length - 1);
-
-				EncodedData[EncodedData.f_GetLen() - 1] = '\0';
-				NStr::CStr EncodedString = NStr::CStr::CFormat("{}") << (char*)EncodedData.f_GetArray();
-
-				BIO_free_all(pBase64Bio);
-
-				return EncodedString;
+					DMibErrorNetSSL(fg_GetExceptionStr("Certificate private and public key verfication failed"));
 			}
 
 		#if defined(DPlatformFamily_Windows)
@@ -1038,19 +1151,33 @@ namespace NMib
 					for (PCCERT_CONTEXT pCertContext = CertEnumCertificatesInStore(hStore, nullptr); pCertContext; pCertContext = CertEnumCertificatesInStore(hStore, pCertContext))
 					{
 						NStr::CStr OutputType = fsp_IsPKCS7(pCertContext->dwCertEncodingType) ? "PKCS7" : "CERTIFICATE";
-						NStr::CStr CertData = fsp_Base64Encode(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
+						TCVector<uint8> Data;
+						Data.f_Insert(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
+						NStr::CStr CertData = NDataProcessing::fg_Base64Encode(Data);
 						NStr::CStr CertAsString = NStr::CStr::CFormat("-----BEGIN {}-----\n{}\n-----END {}-----\n") << OutputType << CertData << OutputType;
 
 						NContainer::TCVector<uint8> lCertData;
 						lCertData.f_SetLen(CertAsString.f_GetLen());
 						NMem::fg_MemCopy(lCertData.f_GetArray(), CertAsString.f_GetStr(), CertAsString.f_GetLen());
 
-						X509* pCertificate = fs_LoadCertificate(lCertData);
-						if (!pCertificate)
+						X509 *pCertificate;
+						try
+						{
+							pCertificate = fs_LoadCertificate(lCertData);
+						}
+						catch (CExceptionNetSSL const &)
+						{
 							continue;
+						}
+						auto Cleanup0 = g_OnScopeExit > [&]
+							{
+								X509_free(pCertificate);
+							}
+						;
 
-						X509_STORE_add_cert(pStore, pCertificate);
-						X509_free(pCertificate);
+						ERR_clear_error();
+						if (!X509_STORE_add_cert(pStore, pCertificate))
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate to store"));
 					}
 
 					CertCloseStore(hStore, 0);
@@ -1108,9 +1235,17 @@ namespace NMib
 							
 							if (!pCertificate)
 								continue;
+							
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									X509_free(pCertificate);
+								}
+							;
 
-							X509_STORE_add_cert(pStore, pCertificate);
-							X509_free(pCertificate);
+							ERR_clear_error();
+							if (!X509_STORE_add_cert(pStore, pCertificate))
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
+								
 						}
 						CFRelease(pCerts);
 					}
@@ -1140,7 +1275,7 @@ namespace NMib
 			{
 				g_SSLLowLevel->f_UseInThread();
 				auto fl_LoadCerts =
-					[&](NStr::CStr const & _File) -> bool
+					[&](NStr::CStr const  &_File) -> bool
 					{
 						try
 						{
@@ -1150,7 +1285,7 @@ namespace NMib
 								return false;
 							}
 						}
-						catch (NFile::CExceptionFile const & _Exception)
+						catch (NFile::CExceptionFile const  &_Exception)
 						{
 							DMibLog(Debug, "Exception trying to check file exists on: {}. The error reported was {}", _File, _Exception.f_GetErrorStr());
 							return false;
@@ -1159,17 +1294,7 @@ namespace NMib
 						int Ret = SSL_CTX_load_verify_locations(mp_pContext, _File.f_GetStr(), nullptr);
 						if (Ret == 0)
 						{
-							NStr::CStr AllErrors;
-							
-							char SSLErrorBuf[120];
-							unsigned long SysError;
-							while( (SysError = ERR_get_error()) )
-							{
-								ERR_error_string(SysError, SSLErrorBuf);
-								AllErrors = NStr::CStr::CFormat("{}\n{}") << NStr::CStr(AllErrors) << SSLErrorBuf;
-							}
-							
-							DMibLog(Debug, "Failed to load SSL verify location: {}. The error reported was {}", _File, AllErrors);
+							DMibLog(Debug, "Failed to load SSL verify location: {}. The error reported was {}", _File, fg_GetErrors());
 							return false;
 						}
 						else
@@ -1199,7 +1324,7 @@ namespace NMib
 
 		int CSSLContext::CInternal::msp_ExDataIndex = 0;
 
-		CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const& _Settings)
+		CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 			: mp_pInternal(nullptr)
 		{
 			mp_pInternal = fg_Construct(_Type, _Settings);
@@ -1220,7 +1345,7 @@ namespace NMib
 			return mp_pInternal->f_GetState() == CSSLContext::EState_None;
 		}
 
-		void CSSLContext::f_ReportInvalidContext(CSSLConnectionResult& _ConnectionResult) const
+		void CSSLContext::f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const
 		{
 			mp_pInternal->f_ReportInvalidContext(_ConnectionResult);
 		}
@@ -1255,101 +1380,342 @@ namespace NMib
 			return (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UserCanAcceptUntrusted);
 		}
 
-		NStr::CStr CSSLContext::fs_GetCertificateName(NContainer::TCVector<uint8> const& _CertificateData)
+		NStr::CStr CSSLContext::fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
 		}
 
-		NStr::CStr CSSLContext::fs_GetIssuerName(NContainer::TCVector<uint8> const& _CertificateData)
+		NStr::CStr CSSLContext::fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetIssuerName(_CertificateData);
 		}
 
-		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetCertificateHostnames(NContainer::TCVector<uint8> const& _CertificateData, bool _bCheckCommonName)
+		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateHostnames(_CertificateData, _bCheckCommonName);
 		}
 
-		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const& _Unsorted)
+		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 		{
 			return CSSLContext::CInternal::fs_GetSortedHostnames(_Unsorted);
 		}
 
-		NStr::CStr CSSLContext::fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const& _CertificateData)
+		NStr::CStr CSSLContext::fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateHostnamesStr(_CertificateData);
 		}
 
-		NTime::CTime CSSLContext::fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const& _CertificateData)
+		NTime::CTime CSSLContext::fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateExpirationTime(_CertificateData);
 		}
 
-		NStr::CStr CSSLContext::fs_GetCertificateDescription(NContainer::TCVector<uint8> const& _CertificateData)
+		NStr::CStr CSSLContext::fs_GetCertificateDescription(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateDescription(_CertificateData);
 		}
 
-		NStr::CStr CSSLContext::fs_GetCertificateInformation(NContainer::TCVector<uint8> const& _CertificateData)
+		NStr::CStr CSSLContext::fs_GetCertificateInformation(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateInformation(_CertificateData);
 		}
-
-		bool CSSLContext::fs_GenerateSelfSignedCertAndKey(NStr::CStr const& _CertificateName, NContainer::TCVector<NStr::CStr> const& _Hostnames, NContainer::TCVector<uint8>& _CertData, NContainer::TCVector<uint8>& _KeyData, int _KeyLength, int _Serial, int _Days)
+		
+		// openssl genrsa -des3 -out client.key 4096
+		// openssl req -new -key client.key -out client.csr
+		void CSSLContext::fs_GenerateClientCertificateRequest
+			(
+				NStr::CStr const &_Subject
+				, NContainer::TCVector<uint8> &o_CertRequestData
+				, NContainer::TCVector<uint8> &o_KeyData
+				, int _KeyLength
+			)
 		{
 			g_SSLLowLevel->f_UseInThread();
-			_CertData.f_Clear();
-			_KeyData.f_Clear();
+			o_CertRequestData.f_Clear();
+			o_KeyData.f_Clear();
 
-			X509* pCertificate = X509_new();
-			EVP_PKEY* pKey = EVP_PKEY_new();
-			RSA* pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
-
-			auto fl_Cleanup = [&] ()
-			{
-				if (pCertificate)
-					X509_free(pCertificate);
-
-				if (pKey)
+			ERR_clear_error();
+			EVP_PKEY *pKey = EVP_PKEY_new();
+			if (!pKey)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+			auto Cleanup0 = g_OnScopeExit > [&] ()
+				{
 					EVP_PKEY_free(pKey);
-			};
+				}
+			;
+			
+			ERR_clear_error();
+            X509_REQ *pCertificateRequest = X509_REQ_new();
+			if (!pCertificateRequest)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate request"));
+			auto Cleanup1 = g_OnScopeExit > [&] ()
+				{
+					X509_REQ_free(pCertificateRequest);
+				}
+			;
 
-			if (!pCertificate || !pKey || !pRSA)
-			{
-				fl_Cleanup();
-				return false;
-			}
-
+			ERR_clear_error();
+			RSA *pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+			if (!pRSA)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+			ERR_clear_error();
 			if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
+			pRSA = nullptr;
+			
+			ERR_clear_error();
+			if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Subject.f_GetStr(), -1, -1, 0))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
+
+			ERR_clear_error();
+			if (!X509_REQ_set_pubkey(pCertificateRequest, pKey))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting request public key"));
+
+			ERR_clear_error();
+			if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha256()))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
+
+			o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
+			o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
+		}
+		
+		// openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
+
+		void CSSLContext::fs_SignClientCertificate
+			(
+				NContainer::TCVector<uint8> const &_CACertificate
+				, NContainer::TCVector<uint8> const &_CAKey
+				, NContainer::TCVector<uint8> const &_CertRequestData
+				, NContainer::TCVector<uint8> &o_SignedCertificateData
+				, int _Serial
+				, int _Days
+			)
+		{
+			g_SSLLowLevel->f_UseInThread();
+			o_SignedCertificateData.f_Clear();
+
+			X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
+			auto Cleanup0 = g_OnScopeExit > [&] ()
+				{
+					X509_REQ_free(pCertificateRequest);
+				}
+			;
+			
+			EVP_PKEY *pCAKey = CSSLContext::CInternal::fs_LoadPrivateKey(_CAKey);
+			auto Cleanup2 = g_OnScopeExit > [&] ()
+				{
+					EVP_PKEY_free(pCAKey);
+				}
+			;
+
+			X509 *pCACertificate = CSSLContext::CInternal::fs_LoadCertificate(_CACertificate);
+			auto Cleanup3 = g_OnScopeExit > [&] ()
+				{
+					X509_free(pCACertificate);
+				}
+			;
+
+			ERR_clear_error();
+			X509 *pCertificate = X509_new();
+			if (!pCertificate)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
+			auto Cleanup1 = g_OnScopeExit > [&] ()
+				{
+					X509_free(pCertificate);
+				}
+			;
+			
 			{
-				fl_Cleanup();
-				return false;
+		        if 
+					(
+						(!pCertificateRequest->req_info)
+						|| (!pCertificateRequest->req_info->pubkey)
+						|| (!pCertificateRequest->req_info->pubkey->public_key)
+						|| (!pCertificateRequest->req_info->pubkey->public_key->data)
+					) 
+				{
+					DMibErrorNetSSL("The certificate request does not contain a public key");
+				}
+				ERR_clear_error();
+				EVP_PKEY *pPublicKey = X509_REQ_get_pubkey(pCertificateRequest); 
+				if (!pPublicKey)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error unpacking public key"));
+				
+				auto Cleanup = g_OnScopeExit > [&] ()
+					{
+						EVP_PKEY_free(pPublicKey);
+					}
+				;
+				ERR_clear_error();
+				int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
+				if (VerifyResult < 0)
+					DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
+				else if (VerifyResult == 0)
+					DMibErrorNetSSL("Certificate request signature mismatch");
+			}
+			
+			ERR_clear_error();
+			if (!X509_set_version(pCertificate, 2))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
+
+			ERR_clear_error();
+			if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
+				
+			ERR_clear_error();
+			if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
+				
+			ERR_clear_error();
+			if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
+
+			ERR_clear_error();
+			if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCACertificate)))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
+			
+			ERR_clear_error();
+			if (!X509_set_subject_name(pCertificate, pCertificateRequest->req_info->subject))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 subject name"));
+
+			{
+				ERR_clear_error();
+				auto pPublicKey = X509_REQ_get_pubkey(pCertificateRequest);
+				if (!pPublicKey)
+					DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						EVP_PKEY_free(pPublicKey);
+					}
+				;
+				
+				ERR_clear_error();
+				if (!X509_set_pubkey(pCertificate, pPublicKey))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
 			}
 
+			{
+				ERR_clear_error();
+				auto pCAPublicKey = X509_get_pubkey(pCACertificate);
+				if (!pCAPublicKey)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error getting CA certificate public key"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						EVP_PKEY_free(pCAPublicKey);
+					}
+				;
+				
+				EVP_PKEY_copy_parameters(pCAPublicKey, pCAKey);
+			}
+			
+			ERR_clear_error();
+			if (!X509_check_private_key(pCACertificate, pCAKey))
+				DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
+
+			ERR_clear_error();
+			if (!X509_sign(pCertificate, pCAKey, EVP_sha256()))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error signing certificate request"));
+
+			o_SignedCertificateData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
+		}
+		
+		// openssl genrsa -des3 -out ca.key 4096
+		// openssl req -new -x509 -days 365 -key ca.key -out ca.crt
+		
+		void CSSLContext::fs_GenerateSelfSignedCertAndKey
+			(
+				NStr::CStr const &_CertificateName
+				, NContainer::TCVector<NStr::CStr> const &_Hostnames
+				, NContainer::TCVector<uint8> &o_CertData
+				, NContainer::TCVector<uint8> &o_KeyData
+				, int _KeyLength
+				, int _Serial
+				, int _Days
+			)
+		{
+			g_SSLLowLevel->f_UseInThread();
+			o_CertData.f_Clear();
+			o_KeyData.f_Clear();
+
+			ERR_clear_error();
+			X509 *pCertificate = X509_new();
+			if (!pCertificate)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
+			auto Cleanup0 = g_OnScopeExit > [&] ()
+				{
+					X509_free(pCertificate);
+				}
+			;
+			ERR_clear_error();
+			EVP_PKEY* pKey = EVP_PKEY_new();
+			if (!pKey)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+			auto Cleanup1 = g_OnScopeExit > [&] ()
+				{
+					EVP_PKEY_free(pKey);
+				}
+			;
+			ERR_clear_error();
+			RSA* pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+			if (!pRSA)
+				DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+
+			ERR_clear_error();
+			if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
 			pRSA = nullptr;
 
-			X509_set_version(pCertificate, 2);
-			ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial);
-			X509_gmtime_adj(X509_get_notBefore(pCertificate), 0);
-			X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days);
-			X509_set_pubkey(pCertificate, pKey);
+			ERR_clear_error();
+			if (!X509_set_version(pCertificate, 2))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
 
-			X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_CertificateName.f_GetStr(), -1, -1, 0);
-			X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)); // Self signed.
+			ERR_clear_error();
+			if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
+				
+			ERR_clear_error();
+			if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
+				
+			ERR_clear_error();
+			if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
 
-			auto fl_AddExt = [] (X509* _pCert, int _nID, char* _pValue)
-			{
-				X509V3_CTX ctx;
-				X509V3_set_ctx_nodb(&ctx);
+			ERR_clear_error();
+			if (!X509_set_pubkey(pCertificate, pKey))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
+				
+			ERR_clear_error();
+			if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_CertificateName.f_GetStr(), -1, -1, 0))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 CN"));
+				
+			// Self signed.
+			ERR_clear_error();
+			if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
 
-				X509V3_set_ctx(&ctx, _pCert, _pCert, nullptr, nullptr, 0);
-				X509_EXTENSION* pExtension = X509V3_EXT_conf_nid(nullptr, &ctx, _nID, _pValue);
-				if (!pExtension)
-					return;
+			auto fAddExt = [] (X509 *_pCert, int _nID, char *_pValue)
+				{
+					X509V3_CTX ctx;
+					X509V3_set_ctx_nodb(&ctx);
 
-				X509_add_ext(_pCert,pExtension,-1);
-				X509_EXTENSION_free(pExtension);
-			};
+					X509V3_set_ctx(&ctx, _pCert, _pCert, nullptr, nullptr, 0);
+					ERR_clear_error();
+					X509_EXTENSION* pExtension = X509V3_EXT_conf_nid(nullptr, &ctx, _nID, _pValue);
+					if (!pExtension)
+						DMibErrorNetSSL(fg_GetExceptionStr("Invalid x509 extension"));
+					
+					auto Cleanup = g_OnScopeExit > [&]
+						{
+							X509_EXTENSION_free(pExtension);
+						}
+					;
+					
+					ERR_clear_error();
+					if (!X509_add_ext(_pCert,pExtension,-1))
+						DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 extension"));
+				}
+			;
 			
 			// Set the subjectAltName
 			{
@@ -1364,29 +1730,15 @@ namespace NMib
 						Output += NStr::CStr::CFormat(",DNS:{}") << (*Iter);
 				}
 
-				fl_AddExt(pCertificate, NID_subject_alt_name, Output.f_GetStrWritable());
+				fAddExt(pCertificate, NID_subject_alt_name, Output.f_GetStrWritable());
 			}
 
+			ERR_clear_error();
 			if (!X509_sign(pCertificate, pKey, EVP_sha256()))
-			{
-				fl_Cleanup();
-				return false;
-			}
+				DMibErrorNetSSL(fg_GetExceptionStr("Error signing selfsigned certificate"));
 
-			if (!CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate, _CertData))
-			{
-				fl_Cleanup();
-				return false;
-			}
-
-			if (!CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey, _KeyData))
-			{
-				fl_Cleanup();
-				return false;
-			}
-
-			fl_Cleanup();
-			return true;
+			o_CertData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
+			o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
 		}
 
 		// CSSLConnection methods.
@@ -1394,7 +1746,7 @@ namespace NMib
 		{
 		public:
 
-			CInternal(CSSLConnection* _pSSL, NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustCallback)
+			CInternal(CSSLConnection *_pSSL, NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustCallback)
 				: mp_pSSL(_pSSL)
 				, mp_pSession(nullptr)
 				, mp_pContext(_pContext)
@@ -1433,13 +1785,13 @@ namespace NMib
 				return mp_bConnected;
 			}
 
-			void f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult)
+			void f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult)
 			{
 				mp_bUsingTrustDecision = true;
 				mp_ExpectedResultCallback = _ExpectedResult;
 			}
 
-			bool f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len)
+			bool f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				NMem::fg_MemCopy(_pDataOut, _pDataIn, _Len);
@@ -1451,7 +1803,7 @@ namespace NMib
 				return true;
 			} 
 
-			bool f_GiveSocket(void* _pSocket)
+			bool f_GiveSocket(void *_pSocket)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (!SSL_set_fd(f_GetSSL(), (int)(mint)_pSocket))
@@ -1492,7 +1844,7 @@ namespace NMib
 				return fp_Process(true);
 			}
 
-			mint f_Send(const void* _pData, mint _nLen)
+			mint f_Send(const void *_pData, mint _nLen)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				DMibRequire(_nLen > 0);
@@ -1522,6 +1874,7 @@ namespace NMib
 					}
 					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 					{
+						mp_LastError = fg_GetErrors();
 						f_SetState(EState_WriteFailed);
 					}
 				}
@@ -1534,7 +1887,7 @@ namespace NMib
 				return nBytesSent;
 			}
 
-			mint f_Receive(void* _pData, mint _nLen)
+			mint f_Receive(void *_pData, mint _nLen)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				DMibRequire(_nLen > 0);
@@ -1564,17 +1917,7 @@ namespace NMib
 					}
 					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 					{
-		/*
-						const char * pFile = nullptr;
-						int Line;
-
-						int Err = ERR_get_error_line(&pFile, &Line);
-						while (Err)
-						{
-							DMibTrace("Error {}:{} : {}: {}\n", pFile << Line << Err << ERR_error_string(Err, nullptr));
-							Err = ERR_get_error_line(&pFile, &Line);
-						}
-		*/
+						mp_LastError = fg_GetErrors();
 						f_SetState(EState_ReadFailed);
 					}
 				}
@@ -1592,7 +1935,7 @@ namespace NMib
 				return mp_bHandshakeInProgress;
 			}
 
-			void f_SetHostname(NStr::CStr const& _Hostname)
+			void f_SetHostname(NStr::CStr const &_Hostname)
 			{
 				mp_Hostname = _Hostname;
 			}
@@ -1600,6 +1943,11 @@ namespace NMib
 			NStr::CStr f_GetHostname() const
 			{
 				return mp_Hostname;
+			}
+			
+			NStr::CStr f_GetLastError() const
+			{
+				return mp_LastError;
 			}
 
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
@@ -1614,6 +1962,7 @@ namespace NMib
 			NPtr::TCSharedPointer<CSSLContext> mp_pContext;
 
 			NStr::CStr mp_Hostname;
+			NStr::CStr mp_LastError;
 			EState mp_State;
 			FAuthenticationResultCallback mp_AuthenticationResultCallback;
 			FUserTrustDecisionCallback mp_UserTrustCallback;
@@ -1623,7 +1972,7 @@ namespace NMib
 			bool mp_bConnected;
 			bool mp_bHandshakeInProgress;
 			bool mp_bUsingTrustDecision;
-
+			
 			bool fp_Process(bool _bAccept)
 			{
 				g_SSLLowLevel->f_UseInThread();
@@ -1653,7 +2002,7 @@ namespace NMib
 				return ResultForCallback == EAuthenticationResult_Success;
 			}
 
-			void fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult& _ResultForCallback)
+			void fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult &_ResultForCallback)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				// OpenSSL has established a connection but we will fail it here if the CSSLConnectionResult does
@@ -1742,7 +2091,7 @@ namespace NMib
 				}
 			}
 
-			bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult& _Result, NStr::CStr& _SystemErrors, bool& _bConnectionRefused)
+			bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult &_Result, NStr::CStr &_SystemErrors, bool &_bConnectionRefused)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				unsigned long SysError;
@@ -1789,7 +2138,7 @@ namespace NMib
 
 		};
 
-		CSSLConnection::CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const& _pContext, FAuthenticationResultCallback&& _AuthenticationResultCallback, FUserTrustDecisionCallback&& _UserTrustDecisionCallback)
+		CSSLConnection::CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustDecisionCallback)
 			: mp_pInternal(nullptr)
 		{
 			mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback));
@@ -1803,8 +2152,13 @@ namespace NMib
 		{
 			return mp_pInternal->f_GetState() != EState_None;
 		}
-
-		void CSSLConnection::f_SetExpectedConnectionResult(CSSLConnectionResult const& _ExpectedResult)
+		
+		NStr::CStr CSSLConnection::f_GetLastError() const
+		{
+			return mp_pInternal->f_GetLastError();
+		}
+		
+		void CSSLConnection::f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult)
 		{
 			mp_pInternal->f_SetExpectedConnectionResult(_ExpectedResult);
 		}
@@ -1819,7 +2173,7 @@ namespace NMib
 			return mp_pInternal->f_GetHandshakeInProgress();
 		}
 
-		bool CSSLConnection::f_GiveSocket(void* _pSocket)
+		bool CSSLConnection::f_GiveSocket(void *_pSocket)
 		{
 			return mp_pInternal->f_GiveSocket(_pSocket);
 		}
@@ -1834,7 +2188,7 @@ namespace NMib
 			return mp_pInternal->f_HasSocket();
 		}
 
-		void CSSLConnection::f_SetHostname(NStr::CStr const& _Hostname)
+		void CSSLConnection::f_SetHostname(NStr::CStr const &_Hostname)
 		{
 			mp_pInternal->f_SetHostname(_Hostname);
 		}
@@ -1859,17 +2213,17 @@ namespace NMib
 			return mp_pInternal->f_Accept();
 		}
 
-		mint CSSLConnection::f_Send(const void* _pData, mint _nLen)
+		mint CSSLConnection::f_Send(const void *_pData, mint _nLen)
 		{
 			return mp_pInternal->f_Send(_pData, _nLen);
 		}
 
-		mint CSSLConnection::f_Receive(void* _pData, mint _nLen)
+		mint CSSLConnection::f_Receive(void *_pData, mint _nLen)
 		{
 			return mp_pInternal->f_Receive(_pData, _nLen);
 		}
 
-		bool CSSLConnection::f_Decrypt(const void* _pDataIn, void* _pDataOut, int _Len)
+		bool CSSLConnection::f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len)
 		{
 			return mp_pInternal->f_Decrypt(_pDataIn, _pDataOut, _Len);
 		}
@@ -1914,7 +2268,7 @@ namespace NMib
 				mp_bVerificationErrorsOccured = true;
 		}
 
-		void CSSLConnectionResult::f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const& _Certificate)
+		void CSSLConnectionResult::f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const &_Certificate)
 		{
 			bint bCreated = false;
 			CCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
@@ -1945,13 +2299,17 @@ namespace NMib
 		{
 			for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
 			{
-				if (Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation ||
-					Iter.f_GetKey() == EMiscError_InvalidPublicCertificate ||
-					Iter.f_GetKey() == EMiscError_InvalidPrivateKey ||
-					Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch ||
-					Iter.f_GetKey() == EMiscError_InvalidCRLData ||
-					Iter.f_GetKey() == EMiscError_InvalidCRLPath || 
-					Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData)
+				if 
+					(
+						Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation
+						|| Iter.f_GetKey() == EMiscError_InvalidPublicCertificate
+						|| Iter.f_GetKey() == EMiscError_InvalidPrivateKey
+						|| Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch
+						|| Iter.f_GetKey() == EMiscError_InvalidCRLData
+						|| Iter.f_GetKey() == EMiscError_InvalidCRLPath 
+						|| Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
+						|| Iter.f_GetKey() == EMiscError_InternalError
+					)
 				{
 					return true;
 				}
@@ -1960,17 +2318,17 @@ namespace NMib
 			return false;
 		}
 
-		void CSSLConnectionResult::f_AddSSLError(NStr::CStr const& _SSLError)
+		void CSSLConnectionResult::f_AddSSLError(NStr::CStr const &_SSLError)
 		{
 			mp_SSLErrors = _SSLError;
 		}
 
-		bool CSSLConnectionResult::f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const& _LocalStore) const
+		bool CSSLConnectionResult::f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::TCVector<uint8>> const &_LocalStore) const
 		{
 			if (mp_Certificates.f_IsEmpty())
 				return false;
 
-			auto fl_VerifyAgainstLocalTrust = [=] (NContainer::TCVector<uint8> const& _Certificate) -> bool
+			auto fl_VerifyAgainstLocalTrust = [=] (NContainer::TCVector<uint8> const &_Certificate) -> bool
 			{
 				if (_Certificate.f_IsEmpty())
 					return false;
@@ -1987,7 +2345,7 @@ namespace NMib
 			return false;
 		}
 
-		bool CSSLConnectionResult::f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const& _SpecificCertificate) const
+		bool CSSLConnectionResult::f_PeerCertificatesMatchesSpecificCertificate(NContainer::TCVector<uint8> const &_SpecificCertificate) const
 		{
 			g_SSLLowLevel->f_UseInThread();
 			if (_SpecificCertificate.f_IsEmpty())
@@ -1997,14 +2355,13 @@ namespace NMib
 				return false;
 
 			X509* pPeerCertificate = CSSLContext::CInternal::fs_LoadCertificate(_SpecificCertificate);
-			if (!pPeerCertificate)
-				return false;
+			auto Cleanup0 = g_OnScopeExit > [&]
+				{
+					X509_free(pPeerCertificate);
+				}
+			;
 
-			NContainer::TCVector<uint8> ConvertedCert;
-			{
-				CSSLContext::CInternal::fs_ConvertX509ToBinary(pPeerCertificate, ConvertedCert);
-				X509_free(pPeerCertificate);
-			}
+			NContainer::TCVector<uint8> ConvertedCert = CSSLContext::CInternal::fs_ConvertX509ToBinary(pPeerCertificate);
 			
 			bool bMatches = (mp_Certificates[0].m_Data == ConvertedCert);
 			return bMatches;
@@ -2014,7 +2371,7 @@ namespace NMib
 		{
 			NStr::CStr ErrorMessage;
 
-			auto fl_AppendError = [&] (NStr::CStr const& _Error)
+			auto fl_AppendError = [&] (NStr::CStr const &_Error)
 			{
 				if (_Format == ECommaSeperated)
 				{
@@ -2213,6 +2570,8 @@ namespace NMib
 				return "Invalid certificate revocation list path";
 			case EMiscError_InvalidCertificateAuthorityData:
 				return "Invalid certificate authority certificate";
+			case EMiscError_InternalError:
+				return "Internal error";
 			}
 
 			return NStr::CStr::CFormat("Unknown error: {}") << _Error;

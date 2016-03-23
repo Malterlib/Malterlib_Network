@@ -87,7 +87,7 @@
 
 
 #include <Mib/Core/Platform>
-
+#include "Malterlib_Network_Exception.h"
 
 namespace NMib
 {
@@ -569,17 +569,6 @@ namespace NMib
 
 
 		};
-
-		/*¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯*\
-		|	Class:				A file exception										|
-		\*_____________________________________________________________________________*/
-		DMibImpErrorClass(CExceptionNet, NException::CException);
-
-#		define DMibErrorNet(d_Description) DMibImpError(NMib::NNet::CExceptionNet, d_Description)
-
-#		ifndef DMibPNoShortCuts
-#			define DErrorNet DMibErrorNet
-#		endif
 
 		class CAsyncResolver
 		{
