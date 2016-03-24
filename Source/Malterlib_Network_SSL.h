@@ -3,6 +3,7 @@
 
 #include <Mib/Cryptography/Hashes/SHA>
 #include "Malterlib_Network_Exception.h"
+#include <Mib/Memory/Allocators/Secure>
 
 namespace NMib
 {
@@ -14,6 +15,7 @@ namespace NMib
 #		ifndef DMibPNoShortCuts
 #			define DErrorNetSSL(_Description) DMibErrorNetSSL(_Description)
 #		endif
+		
 		struct CSSLSettings
 		{
 			enum EVerificationFlag
@@ -82,7 +84,7 @@ namespace NMib
 			bool m_bDirty = false;
 
 			NContainer::TCVector<uint8> m_PublicCertificateData;
-			NContainer::TCVector<uint8> m_PrivateKeyData;
+			NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> m_PrivateKeyData;
 			NContainer::TCVector<uint8> m_CRLData;
 			NContainer::TCVector<uint8> m_CACertificateData;
 
@@ -299,7 +301,7 @@ namespace NMib
 					NStr::CStr const &_CertificateName
 					, NContainer::TCVector<NStr::CStr> const &_Hostnames
 					, NContainer::TCVector<uint8> &o_CertData
-					, NContainer::TCVector<uint8> &_KeyData
+					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
 					, int _KeyLength = 2048
 					, int _Serial = 0
 					, int _Days = 365
@@ -309,14 +311,14 @@ namespace NMib
 				(
 					NStr::CStr const &_Subject
 					, NContainer::TCVector<uint8> &o_CertRequestData
-					, NContainer::TCVector<uint8> &o_KeyData
+					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
 					, int _KeyLength = 2048
 				)
 			;
 			static void fs_SignClientCertificate
 				(
 					NContainer::TCVector<uint8> const &_CACertificate
-					, NContainer::TCVector<uint8> const &_CAKey
+					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
 					, NContainer::TCVector<uint8> const &_CertRequestData
 					, NContainer::TCVector<uint8> &o_SignedCertificateData
 					, int _Serial = 0

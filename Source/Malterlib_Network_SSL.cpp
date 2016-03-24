@@ -842,7 +842,7 @@ namespace NMib
 				return Return;
 			}
 
-			static NContainer::TCVector<uint8> fs_ConvertKeyToBinary(EVP_PKEY *_pKey)
+			static NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> fs_ConvertKeyToBinary(EVP_PKEY *_pKey)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (!_pKey)
@@ -862,7 +862,7 @@ namespace NMib
 				if (!PEM_write_bio_PrivateKey(pMemoryBio, _pKey, nullptr, nullptr, 0, nullptr, nullptr))
 					DMibErrorNetSSL(fg_GetExceptionStr("Error writing private key to BIO"));
 				
-				NContainer::TCVector<uint8> Return;
+				NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> Return;
 				Return.f_SetLen(pMemoryBio->num_write);
 				ERR_clear_error();
 				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
@@ -870,7 +870,7 @@ namespace NMib
 				return Return;
 			}
 
-			static EVP_PKEY *fs_LoadPrivateKey(NContainer::TCVector<uint8> const &_Data)
+			static EVP_PKEY *fs_LoadPrivateKey(NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Data)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				ERR_clear_error();
@@ -1426,7 +1426,7 @@ namespace NMib
 			(
 				NStr::CStr const &_Subject
 				, NContainer::TCVector<uint8> &o_CertRequestData
-				, NContainer::TCVector<uint8> &o_KeyData
+				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
 				, int _KeyLength
 			)
 		{
@@ -1484,7 +1484,7 @@ namespace NMib
 		void CSSLContext::fs_SignClientCertificate
 			(
 				NContainer::TCVector<uint8> const &_CACertificate
-				, NContainer::TCVector<uint8> const &_CAKey
+				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
 				, NContainer::TCVector<uint8> const &_CertRequestData
 				, NContainer::TCVector<uint8> &o_SignedCertificateData
 				, int _Serial
@@ -1627,7 +1627,7 @@ namespace NMib
 				NStr::CStr const &_CertificateName
 				, NContainer::TCVector<NStr::CStr> const &_Hostnames
 				, NContainer::TCVector<uint8> &o_CertData
-				, NContainer::TCVector<uint8> &o_KeyData
+				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
 				, int _KeyLength
 				, int _Serial
 				, int _Days
