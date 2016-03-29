@@ -34,6 +34,11 @@ namespace NMib
 			return mp_Socket.f_Close();
 		}
 
+		void CSocket_TCP::f_Shutdown()
+		{
+			return mp_Socket.f_Shutdown();
+		}
+
 		void CSocket_TCP::f_Connect(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::CNetAddress const &_BindAddress)
 		{
 			return mp_Socket.f_Connect(_Address, fg_Move(_OnStateChange), _BindAddress);

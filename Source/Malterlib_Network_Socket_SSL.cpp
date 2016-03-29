@@ -32,6 +32,11 @@ namespace NMib
 			return mp_Socket.f_Close();
 		}
 
+		void CSocket_SSL::f_Shutdown()
+		{
+			return mp_Socket.f_Shutdown();
+		}
+
 		NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> CSocket_SSL::fp_SharedOnStateChange()
 		{
 			return [this](ENetTCPState _StateAdded)

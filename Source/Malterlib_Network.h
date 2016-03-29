@@ -332,6 +332,8 @@ namespace NMib
 				void *fg_ListenDatagram(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange); // Report to the supplied event when new data is received or when we are ready to send new data
 				void *fg_Accept(void *_pSocket, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange); // Report to the supplied event when new data is received or when we are ready to send new data
 
+				void fg_Shutdown(void *_pSocket); // Closes the socket and connection
+			
 				void fg_Close(void *_pSocket); // Closes the socket and connection
 
 				mint fg_Receive(void *_pSocket, void *_pData, mint _DataLen); // Returns bytes received
@@ -785,6 +787,13 @@ namespace NMib
 				NMib::NSys::NNet::fg_SetOnStateChange(mp_pSocket, fg_Move(_OnStateChange));
 			}
 
+			void f_Shutdown()
+			{
+				fp_CheckSocket();
+
+				return NMib::NSys::NNet::fg_Shutdown(mp_pSocket);
+			}
+			
 			ENetTCPState f_GetState()
 			{
 				fp_CheckSocket();
