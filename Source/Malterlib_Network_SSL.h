@@ -1,4 +1,4 @@
-﻿
+
 #pragma once
 
 #include <Mib/Cryptography/Hashes/SHA>
@@ -28,6 +28,7 @@ namespace NMib
 				, EVerificationFlag_VerifyHostnameMatches					= DMibBit(4)
 				, EVerificationFlag_UserCanIgnoreVerificationFailures		= DMibBit(5)
 				, EVerificationFlag_AllowInsecureSSL						= DMibBit(6)
+				, EVerificationFlag_AllowNonMatchingPeerCertificate			= DMibBit(7)
 			};
 			
 			enum EProtocol
@@ -103,7 +104,6 @@ namespace NMib
 		class CSSLConnectionResult
 		{
 		public:
-
 			enum EMiscError
 			{
 				EMiscError_HostnameMisMatch = 5000,
@@ -115,6 +115,7 @@ namespace NMib
 				EMiscError_InvalidCRLPath,
 				EMiscError_InvalidCertificateAuthorityData,
 				EMiscError_InternalError,
+				EMiscError_MismatchingSpecificCertificate,
 			};
 
 			struct CCertificate

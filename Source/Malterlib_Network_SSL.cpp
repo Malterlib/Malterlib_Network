@@ -925,7 +925,7 @@ namespace NMib
 					SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);		
 
 					if (f_IsServerContext())
-						SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+						SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, fs_VerifyCallback);
 					else if (f_IsClientContext())
 						bSetClientFlags = true;
 				}
@@ -1175,9 +1175,7 @@ namespace NMib
 							}
 						;
 
-						ERR_clear_error();
-						if (!X509_STORE_add_cert(pStore, pCertificate))
-							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate to store"));
+						X509_STORE_add_cert(pStore, pCertificate);
 					}
 
 					CertCloseStore(hStore, 0);
@@ -1242,10 +1240,7 @@ namespace NMib
 								}
 							;
 
-							ERR_clear_error();
-							if (!X509_STORE_add_cert(pStore, pCertificate))
-								DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
-								
+							X509_STORE_add_cert(pStore, pCertificate);
 						}
 						CFRelease(pCerts);
 					}
@@ -2021,7 +2016,7 @@ namespace NMib
 				// not satisfy our demands
 				if (_Ret == 1)
 				{
-					CSSLConnectionResult& Result = mp_pSSL->f_GetConnectionResult();
+					CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
 					_ResultForCallback = EAuthenticationResult_Failure;
 
 					bool bCallTrustCallback = false;
@@ -2031,10 +2026,12 @@ namespace NMib
 					// We can only accept one specific peer certificate
 					if (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate)
 					{
-						if (!Result.f_ContainsVerificationErrors() &&
-							Result.f_PeerCertificatesMatchesSpecificCertificate(mp_pContext->f_GetSettings().m_CACertificateData))
+						if (!Result.f_ContainsVerificationErrors())
 						{
-							_ResultForCallback = EAuthenticationResult_Success;
+							if (Result.f_PeerCertificatesMatchesSpecificCertificate(mp_pContext->f_GetSettings().m_CACertificateData))
+								_ResultForCallback = EAuthenticationResult_Success;
+							else
+								Result.f_LogMiscError(CSSLConnectionResult::EMiscError_MismatchingSpecificCertificate);
 						}
 					}
 					// This was a connection based on user trust/verification decision, ensure connection results match up.
@@ -2321,6 +2318,7 @@ namespace NMib
 						|| Iter.f_GetKey() == EMiscError_InvalidCRLPath 
 						|| Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
 						|| Iter.f_GetKey() == EMiscError_InternalError
+						|| Iter.f_GetKey() == EMiscError_MismatchingSpecificCertificate
 					)
 				{
 					return true;
@@ -2584,6 +2582,8 @@ namespace NMib
 				return "Invalid certificate authority certificate";
 			case EMiscError_InternalError:
 				return "Internal error";
+			case EMiscError_MismatchingSpecificCertificate:
+				return "Mismatching specific certificate";
 			}
 
 			return NStr::CStr::CFormat("Unknown error: {}") << _Error;
