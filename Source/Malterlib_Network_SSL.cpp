@@ -1432,12 +1432,20 @@ namespace NMib
 		{
 			g_SSLLowLevel->f_UseInThread();
 			o_CertRequestData.f_Clear();
-			o_KeyData.f_Clear();
+			
+			bool bGenerateNewKey = o_KeyData.f_IsEmpty(); 
 
-			ERR_clear_error();
-			EVP_PKEY *pKey = EVP_PKEY_new();
-			if (!pKey)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+			EVP_PKEY *pKey;
+			if (bGenerateNewKey)
+			{
+				ERR_clear_error();
+				pKey = EVP_PKEY_new();
+				if (!pKey)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+			}
+			else
+				pKey = CSSLContext::CInternal::fs_LoadPrivateKey(o_KeyData);
+			
 			auto Cleanup0 = g_OnScopeExit > [&] ()
 				{
 					EVP_PKEY_free(pKey);
@@ -1454,14 +1462,17 @@ namespace NMib
 				}
 			;
 
-			ERR_clear_error();
-			RSA *pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
-			if (!pRSA)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
-			ERR_clear_error();
-			if (!EVP_PKEY_assign_RSA(pKey, pRSA))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
-			pRSA = nullptr;
+			if (bGenerateNewKey)
+			{
+				ERR_clear_error();
+				RSA *pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+				if (!pRSA)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+				ERR_clear_error();
+				if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
+				pRSA = nullptr;
+			}
 			
 			ERR_clear_error();
 			if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Subject.f_GetStr(), -1, -1, 0))
@@ -1476,7 +1487,8 @@ namespace NMib
 				DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
 
 			o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
-			o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
+			if (bGenerateNewKey)
+				o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
 		}
 		
 		// openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
