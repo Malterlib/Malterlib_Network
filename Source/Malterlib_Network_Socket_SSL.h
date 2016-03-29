@@ -8,6 +8,12 @@ namespace NMib
 {
 	namespace NNet
 	{
+		struct CSocketConnectionInfo_SSL final : public ICSocketConnectionInfo
+		{
+			NContainer::TCVector<uint8> m_PeerCertificate;
+			NStr::CStr m_PeerCertificateName;
+		};
+		
 		class CSocket_SSL final : public ICSocket
 		{
 			DMibClassNoCopyAllowed(CSocket_SSL);
@@ -42,6 +48,7 @@ namespace NMib
 			virtual mint f_ReceiveDatagram(NMib::NNet::CNetAddress &_Address, void *_pData, mint _DataLen) override;
 			virtual NMib::NNet::CNetAddress f_GetPeerAddress() const override;
 			virtual uint32 f_GetListenPort() const override;
+			virtual NPtr::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;
 
 			static FVirtualSocketFactory fs_GetFactory
 				(

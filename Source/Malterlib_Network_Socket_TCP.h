@@ -37,6 +37,8 @@ namespace NMib
 			virtual mint f_ReceiveDatagram(NMib::NNet::CNetAddress &_Address, void *_pData, mint _DataLen) override;
 			virtual NMib::NNet::CNetAddress f_GetPeerAddress() const override;
 			virtual uint32 f_GetListenPort() const override;
+			virtual NPtr::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;
+
 
 			static FVirtualSocketFactory fs_GetFactory();
 

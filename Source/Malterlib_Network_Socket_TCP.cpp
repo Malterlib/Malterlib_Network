@@ -128,6 +128,11 @@ namespace NMib
 			return mp_Socket.f_GetListenPort();
 		}
 		
+		NPtr::TCUniquePointer<ICSocketConnectionInfo> CSocket_TCP::f_GetConnectionInfo() const
+		{
+			return nullptr;			
+		}
+		
 		FVirtualSocketFactory CSocket_TCP::fs_GetFactory()
 		{
 			return []() -> NPtr::TCUniquePointer<ICSocket>

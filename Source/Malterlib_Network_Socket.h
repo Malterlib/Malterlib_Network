@@ -6,6 +6,12 @@ namespace NMib
 {
 	namespace NNet
 	{
+		struct ICSocketConnectionInfo 
+		{
+			virtual ~ICSocketConnectionInfo()
+			{
+			}
+		};
 		class ICSocket
 		{
 		public:
@@ -33,6 +39,7 @@ namespace NMib
 			virtual mint f_ReceiveDatagram(NMib::NNet::CNetAddress &_Address, void *_pData, mint _DataLen) = 0;
 			virtual NMib::NNet::CNetAddress f_GetPeerAddress() const = 0;
 			virtual uint32 f_GetListenPort() const = 0;
+			virtual NPtr::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;
 		};
 		
 		using FVirtualSocketFactory = NFunction::TCFunction<NPtr::TCUniquePointer<ICSocket> ()>;

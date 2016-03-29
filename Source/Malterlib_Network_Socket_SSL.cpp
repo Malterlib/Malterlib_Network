@@ -277,6 +277,17 @@ namespace NMib
 					mp_OnStateChange(_ToAdd);
 			}
 		}
+		
+		NPtr::TCUniquePointer<ICSocketConnectionInfo> CSocket_SSL::f_GetConnectionInfo() const
+		{
+			NPtr::TCUniquePointer<CSocketConnectionInfo_SSL> pReturn = fg_Construct();
+			
+			auto &Result = mp_SSLConnection.f_GetConnectionResult();
+			pReturn->m_PeerCertificate = Result.f_GetPeerCertificate();
+			pReturn->m_PeerCertificateName = Result.f_GetPeerCertificateName();
+			
+			return fg_Move(pReturn);
+		}
 	}
 }
 
