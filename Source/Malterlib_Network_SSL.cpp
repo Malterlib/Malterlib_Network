@@ -2113,13 +2113,8 @@ namespace NMib
 
 				if ((SysError=ERR_peek_error()) != 0)
 				{
-					char SSLErrorBuf[120];
-
-					while( (SysError = ERR_get_error()) )
-					{
-						ERR_error_string(SysError, SSLErrorBuf);
-						AllErrors += NStr::CStr::CFormat("\n{}") << SSLErrorBuf;
-					}
+					while( (SysError = ERR_get_error()))
+						NStr::fg_AddStrSep(AllErrors, NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(SysError), "\n");
 
 					_Result = EAuthenticationResult_Failure;
 					_SystemErrors = AllErrors;
@@ -2137,12 +2132,9 @@ namespace NMib
 					}
 					else if (Error != SSL_ERROR_WANT_WRITE && Error != SSL_ERROR_WANT_READ)
 					{
-						char SSLErrorBuf[120];
-						ERR_error_string(ERR_get_error(), SSLErrorBuf);
-
 						_Result = EAuthenticationResult_Failure;
 						_bConnectionRefused = true;
-						_SystemErrors = SSLErrorBuf;
+						_SystemErrors = NStr::fg_Format("{cc}", ERR_reason_error_string(SysError));
 						return true;
 					}
 				}
