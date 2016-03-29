@@ -24,11 +24,11 @@ namespace NMib
 				, EVerificationFlag_UserCanAcceptUntrusted				= DMibBit(0)
 				, EVerificationFlag_RememberTrustedCertificates			= DMibBit(1)
 				, EVerificationFlag_UseSpecificPeerCertificate			= DMibBit(2)
-				, EVerificationFlag_UseOSStoreIfNoCASpecified				= DMibBit(3)
-				, EVerificationFlag_VerifyHostnameMatches					= DMibBit(4)
-				, EVerificationFlag_UserCanIgnoreVerificationFailures		= DMibBit(5)
-				, EVerificationFlag_AllowInsecureSSL						= DMibBit(6)
-				, EVerificationFlag_AllowNonMatchingPeerCertificate			= DMibBit(7)
+				, EVerificationFlag_UseOSStoreIfNoCASpecified			= DMibBit(3)
+				, EVerificationFlag_VerifyHostnameMatches				= DMibBit(4)
+				, EVerificationFlag_UserCanIgnoreVerificationFailures	= DMibBit(5)
+				, EVerificationFlag_AllowInsecureSSL					= DMibBit(6)
+				, EVerificationFlag_AllowMissingPeerCertificate			= DMibBit(7)
 			};
 			
 			enum EProtocol

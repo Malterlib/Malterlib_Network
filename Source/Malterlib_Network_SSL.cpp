@@ -925,7 +925,12 @@ namespace NMib
 					SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);		
 
 					if (f_IsServerContext())
-						SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, fs_VerifyCallback);
+					{
+						int VerifyFlags = SSL_VERIFY_PEER;
+						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate))
+							VerifyFlags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+						SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
+					}
 					else if (f_IsClientContext())
 						bSetClientFlags = true;
 				}
