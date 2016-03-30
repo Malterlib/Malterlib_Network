@@ -285,6 +285,7 @@ namespace NMib
 			auto &Result = mp_SSLConnection.f_GetConnectionResult();
 			pReturn->m_PeerCertificate = Result.f_GetPeerCertificate();
 			pReturn->m_PeerCertificateName = Result.f_GetPeerCertificateName();
+			pReturn->m_PeerCertificateFingerprint = Result.f_GetPeerCertificateFingerprint();
 			
 			return fg_Move(pReturn);
 		}

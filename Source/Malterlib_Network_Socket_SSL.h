@@ -12,6 +12,7 @@ namespace NMib
 		{
 			NContainer::TCVector<uint8> m_PeerCertificate;
 			NStr::CStr m_PeerCertificateName;
+			NStr::CStr m_PeerCertificateFingerprint;
 		};
 		
 		class CSocket_SSL final : public ICSocket

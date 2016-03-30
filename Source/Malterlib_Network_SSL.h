@@ -157,6 +157,7 @@ namespace NMib
 			NStr::CStr f_GetPeerCertificateName() const;
 			NStr::CStr f_GetPeerCertificateDescription() const;
 			NStr::CStr f_GetPeerCertificateInformation() const;
+			NStr::CStr f_GetPeerCertificateFingerprint() const;
 
 			bool f_ContainsTrustErrors() const;
 			bool f_ContainsVerificationErrors() const;
@@ -291,6 +292,7 @@ namespace NMib
 
 			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData);
 			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData);
+			static NStr::CStr fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData);
 			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName = true);
 			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted);
 			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData);

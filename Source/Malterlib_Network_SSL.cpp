@@ -503,6 +503,28 @@ namespace NMib
 				return NStr::CStr(Buffer, nChars);
 			}
 
+			static NStr::CStr fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+				
+				unsigned int DigestSize;
+				unsigned char Digest[EVP_MAX_MD_SIZE];
+				if (!X509_digest(pCertificate, EVP_sha256(), Digest, &DigestSize))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to calculate certificate digest"));
+				
+				NStr::CStr Fingerprint;
+				for (mint iByte = 0; iByte < DigestSize; ++iByte)
+					Fingerprint += NStr::CStr::CFormat("{nh,sf0,sf2}") << Digest[iByte];
+				
+				return Fingerprint;
+			}
+			
 			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
@@ -1383,6 +1405,11 @@ namespace NMib
 		NStr::CStr CSSLContext::fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
+		}
+		
+		NStr::CStr CSSLContext::fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateFingerprint(_CertificateData);
 		}
 
 		NStr::CStr CSSLContext::fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData)
@@ -2441,7 +2468,15 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::fs_GetIssuerName(mp_Certificates[0].m_Data);
+			return CSSLContext::fs_GetCertificateName(mp_Certificates[0].m_Data);
+		}
+
+		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateFingerprint() const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return NStr::CStr();
+
+			return CSSLContext::fs_GetCertificateFingerprint(mp_Certificates[0].m_Data);
 		}
 
 		NStr::CStr CSSLConnectionResult::fp_GetLibraryStringForError(int _Error) const
