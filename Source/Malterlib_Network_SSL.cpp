@@ -513,7 +513,7 @@ namespace NMib
 					}
 				;
 				
-				unsigned int DigestSize;
+				unsigned int DigestSize = 0;
 				unsigned char Digest[EVP_MAX_MD_SIZE];
 				if (!X509_digest(pCertificate, EVP_sha256(), Digest, &DigestSize))
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to calculate certificate digest"));
