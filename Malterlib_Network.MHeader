@@ -23,7 +23,6 @@ Import "../Core/Lib_Malterlib.MTarget"
 	}
 }
 
-
 Property
 {
 	MalterlibLibrary_Network true
@@ -45,11 +44,20 @@ Property
 	}
 }
 
+%Group "{Test}/{Malterlib_Network}"
+{
+	Property
+	{
+		MalterlibLinkWithOpenSSL true
+	}
+}
+
 Property
 {
 	!!MalterlibEnableInternalTests true
 	
 	MalterlibTests "Malterlib_Network;@(MalterlibTests)"
 	MalterlibTestFiles_Malterlib_Network "@('Test/*'->MakeAbsolute())"
+	MalterlibTestDependencies_Malterlib_Network "Lib_Malterlib_Network"
+	MalterlibTestExtraGroups_Malterlib_Network "{Test}/{Malterlib_Network}"
 }
-
