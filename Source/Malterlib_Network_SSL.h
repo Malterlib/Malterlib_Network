@@ -365,7 +365,31 @@ namespace NMib
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 
 		};
-
+		
+		struct CSalt
+		{
+			uint8 m_Salt[8];
+		};
+		
+		uint32 fg_EncryptAES
+            (
+                NStr::CStrSecure const &_Password
+                , CSalt const *_pSalt
+                , uint8 *_pSource
+                , uint32 _SourceLen
+                , uint8 *_pDest
+            )
+        ;
+        
+		uint32 fg_DecryptAES
+            (
+                NStr::CStrSecure const &_Password
+                , CSalt const *_pSalt
+                , uint8 *_pSource
+                , uint32 _SourceLen
+                , uint8 *_pDest
+            )
+        ;
 	}
 }
 
