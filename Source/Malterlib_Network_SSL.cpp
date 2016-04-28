@@ -655,6 +655,79 @@ namespace NMib
 				return lHostnames;
 			}
 
+			static NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+
+				ERR_clear_error();
+				int nExtensions = X509_get_ext_count(pCertificate);
+				
+				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> Return;
+				
+				for (int iExtension = 0; iExtension < nExtensions; ++iExtension)
+				{
+					auto *pExtension = X509_get_ext(pCertificate, iExtension);
+					if (!pExtension)
+						continue;
+					
+					ASN1_OBJECT *pObject = X509_EXTENSION_get_object(pExtension);
+					ASN1_OCTET_STRING *pData = X509_EXTENSION_get_data(pExtension);
+					int Critical = X509_EXTENSION_get_critical(pExtension);
+					
+					NStr::CStr Name;
+					int nID = OBJ_obj2nid(pObject);
+				    if (nID != NID_undef) 
+					{
+						const char *pShortName = OBJ_nid2sn(nID);
+						if (pShortName)
+						{
+							Name = pShortName; 
+						}
+					}
+					if (Name.f_IsEmpty())
+					{
+						ch8 Data[1024];
+						Data[0] = 0;
+						OBJ_obj2txt(Data, 1024, pObject, 0);
+						Data[1023] = 0;
+						Name = Data;						
+					}
+					
+					NStr::CStr Value;
+					switch (pData->type)
+					{
+					case V_ASN1_NUMERICSTRING:
+					case V_ASN1_PRINTABLESTRING:
+					case V_ASN1_UTF8STRING:
+					case V_ASN1_T61STRING:
+					case V_ASN1_VIDEOTEXSTRING:
+					case V_ASN1_ISO64STRING:
+					case V_ASN1_IA5STRING:
+					case V_ASN1_OCTET_STRING:
+						{
+							Value = NStr::CStr((ch8 const *)pData->data, pData->length); 
+						}
+						break;
+					default:
+						continue;							
+					}
+					
+					auto &Extension = Return[Name].f_Insert();
+					Extension.m_Value = Value;
+					Extension.m_bCritical = Critical != 0;
+				}
+				
+				return Return;
+			}
+
+			
 			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 			{
 				NContainer::TCVector<NStr::CStr> Sorted;
@@ -1346,6 +1419,16 @@ namespace NMib
 
 		int CSSLContext::CInternal::msp_ExDataIndex = 0;
 
+		bool CSSLContext::CCertificateExtension::operator == (CCertificateExtension const &_Right) const
+		{
+			return NContainer::fg_TupleReferences(m_bCritical, m_Value) == NContainer::fg_TupleReferences(_Right.m_bCritical, _Right.m_Value); 
+		}
+		
+		bool CSSLContext::CCertificateExtension::operator < (CCertificateExtension const &_Right) const
+		{
+			return NContainer::fg_TupleReferences(m_bCritical, m_Value) < NContainer::fg_TupleReferences(_Right.m_bCritical, _Right.m_Value); 
+		}
+		
 		CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 			: mp_pInternal(nullptr)
 		{
@@ -1421,6 +1504,11 @@ namespace NMib
 		{
 			return CSSLContext::CInternal::fs_GetCertificateHostnames(_CertificateData, _bCheckCommonName);
 		}
+		
+		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateExtensions(_CertificateData);
+		}
 
 		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 		{
@@ -1447,14 +1535,118 @@ namespace NMib
 			return CSSLContext::CInternal::fs_GetCertificateInformation(_CertificateData);
 		}
 		
+		void CSSLContext::fs_RegisterExtension(NStr::CStr const &_OID, NStr::CStr const &_ShortName, NStr::CStr const &_LongName)
+		{
+			OBJ_create(_OID, _ShortName, _LongName);
+		}
+
+		namespace
+		{
+			X509_EXTENSION *fg_CreateExtension(X509V3_CTX &_Context, int _nID, CSSLContext::CCertificateExtension _Extension)
+			{
+				X509_EXTENSION *pExtension = nullptr;
+
+				ERR_clear_error();
+				pExtension = X509V3_EXT_conf_nid(nullptr, &_Context, _nID, _Extension.m_Value.f_GetStrUniqueWritable());
+				if (pExtension)
+					return pExtension; 
+
+				int Critical = _Extension.m_bCritical;
+				ASN1_UTF8STRING *pValue = nullptr;
+
+				ERR_clear_error();
+				pValue = ASN1_UTF8STRING_new();
+				if (!pValue)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create ASN1 value"));
+
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						pValue->length = 0;
+						pValue->data = nullptr;
+						ASN1_UTF8STRING_free(pValue);
+					}
+				;
+				pValue->length = _Extension.m_Value.f_GetLen();
+				pValue->data = (unsigned char *)_Extension.m_Value.f_GetStrUniqueWritable();
+				ERR_clear_error();
+				pExtension = X509_EXTENSION_create_by_NID(&pExtension, _nID, Critical, pValue);
+				if (!pExtension)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create extension"));
+						
+				return pExtension;
+			}
+			void fg_AddExtension(X509V3_CTX &_Context, X509 *_pCert, int _nID, CSSLContext::CCertificateExtension _Extension)
+			{
+				X509_EXTENSION *pExtension = nullptr;
+				pExtension = fg_CreateExtension(_Context, _nID, _Extension);
+
+				auto Cleanup1 = g_OnScopeExit > [&]
+					{
+						X509_EXTENSION_free(pExtension);
+					}
+				;
+				
+				ERR_clear_error();
+				if (!X509_add_ext(_pCert,pExtension,-1))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 extension"));
+			}
+			
+			void fg_AddExtension(X509V3_CTX &_Context, X509_EXTENSIONS *&_pExtensions, int _nID, CSSLContext::CCertificateExtension _Extension)
+			{
+				X509_EXTENSION *pExtension = fg_CreateExtension(_Context, _nID, _Extension);
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						X509_EXTENSION_free(pExtension);
+					}
+				;
+				
+				ERR_clear_error();
+				X509v3_add_ext(&_pExtensions, pExtension, -1);
+			}
+			
+			template <typename tf_CObject>
+			void fg_AddHostnames(X509V3_CTX &_Context, tf_CObject *&_pObject, NContainer::TCVector<NStr::CStr> const &_Hostnames)
+			{
+				NContainer::TCVector<NStr::CStr> SortedHosts = CSSLContext::fs_GetSortedHostnames(_Hostnames);
+
+				NStr::CStr Output;
+				for (auto Iter = SortedHosts.f_GetIterator(); Iter; ++Iter)
+				{
+					if (Output.f_IsEmpty())
+						Output = NStr::CStr::CFormat("DNS:{}") << (*Iter);
+					else
+						Output += NStr::CStr::CFormat(",DNS:{}") << (*Iter);
+				}
+				
+				CSSLContext::CCertificateExtension Extension;
+				Extension.m_Value = Output;
+				fg_AddExtension(_Context, _pObject, NID_subject_alt_name, Extension);
+			}
+			
+			template <typename tf_CObject>
+			void fg_AddExtensions(X509V3_CTX &_Context, tf_CObject *&_pObject, NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> const &_Extensions)
+			{
+				for (auto iExtension = _Extensions.f_GetIterator(); iExtension; ++iExtension)
+				{
+					ERR_clear_error();
+					int NumericID = OBJ_txt2nid(iExtension.f_GetKey());
+					
+					if (NumericID == NID_undef)
+						DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Unknown extension '{}'", iExtension.f_GetKey())));
+
+					for (auto &Extension : *iExtension)
+						fg_AddExtension(_Context, _pObject, NumericID, Extension);
+				}
+			}
+		}
+		
 		// openssl genrsa -des3 -out client.key 4096
 		// openssl req -new -key client.key -out client.csr
 		void CSSLContext::fs_GenerateClientCertificateRequest
 			(
-				NStr::CStr const &_Subject
+				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertRequestData
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-				, int _KeyLength
 			)
 		{
 			g_SSLLowLevel->f_UseInThread();
@@ -1492,7 +1684,7 @@ namespace NMib
 			if (bGenerateNewKey)
 			{
 				ERR_clear_error();
-				RSA *pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+				RSA *pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
 				if (!pRSA)
 					DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
 				ERR_clear_error();
@@ -1502,8 +1694,34 @@ namespace NMib
 			}
 			
 			ERR_clear_error();
-			if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Subject.f_GetStr(), -1, -1, 0))
+			if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
 				DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
+			
+			X509_EXTENSIONS *pExtensions = nullptr;
+			
+			auto Cleanup2 = g_OnScopeExit > [&]
+				{
+					if (pExtensions)
+						sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
+				}
+			;
+			
+			{
+				X509V3_CTX Context;
+				X509V3_set_ctx_nodb(&Context);
+				X509V3_set_ctx(&Context, nullptr, nullptr, pCertificateRequest, nullptr, 0);
+				if (!_Options.m_Hostnames.f_IsEmpty())
+					fg_AddHostnames(Context, pExtensions, _Options.m_Hostnames);
+				
+				if (!_Options.m_Extensions.f_IsEmpty())
+					fg_AddExtensions(Context, pExtensions, _Options.m_Extensions);
+			}
+
+			if (pExtensions)
+			{
+				if (!X509_REQ_add_extensions(pCertificateRequest, pExtensions))
+					DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 req extensions"));
+			}
 
 			ERR_clear_error();
 			if (!X509_REQ_set_pubkey(pCertificateRequest, pKey))
@@ -1594,7 +1812,7 @@ namespace NMib
 			}
 			
 			ERR_clear_error();
-			if (!X509_set_version(pCertificate, 2))
+			if (!X509_set_version(pCertificate, 3))
 				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
 
 			ERR_clear_error();
@@ -1646,6 +1864,39 @@ namespace NMib
 				
 				EVP_PKEY_copy_parameters(pCAPublicKey, pCAKey);
 			}
+
+			{
+				X509_EXTENSIONS *pExtensions = X509_REQ_get_extensions(pCertificateRequest);
+			
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						if (pExtensions)
+						{
+							sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
+//							sk_X509_EXTENSION_free(pExtensions);
+						}
+					}
+				;
+				
+				if (pExtensions)
+				{
+					ERR_clear_error();
+					int nExtensions = X509v3_get_ext_count(pExtensions);
+					if (nExtensions < 0)
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension count from certificate request"));
+						
+					for (int iExtension = 0; iExtension < nExtensions; ++iExtension)
+					{
+						ERR_clear_error();
+						auto *pExtension = X509v3_get_ext(pExtensions, iExtension);
+						if (!pExtension)
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension from certificate request"));
+						if (!X509_add_ext(pCertificate, pExtension, -1))
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add extension to certificate"));
+					}
+				}
+			}
+
 			
 			ERR_clear_error();
 			if (!X509_check_private_key(pCACertificate, pCAKey))
@@ -1663,11 +1914,9 @@ namespace NMib
 		
 		void CSSLContext::fs_GenerateSelfSignedCertAndKey
 			(
-				NStr::CStr const &_CertificateName
-				, NContainer::TCVector<NStr::CStr> const &_Hostnames
+				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertData
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-				, int _KeyLength
 				, int _Serial
 				, int _Days
 			)
@@ -1695,7 +1944,7 @@ namespace NMib
 				}
 			;
 			ERR_clear_error();
-			RSA* pRSA = RSA_generate_key(_KeyLength, RSA_F4, nullptr, nullptr);
+			RSA* pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
 			if (!pRSA)
 				DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
 
@@ -1705,7 +1954,7 @@ namespace NMib
 			pRSA = nullptr;
 
 			ERR_clear_error();
-			if (!X509_set_version(pCertificate, 2))
+			if (!X509_set_version(pCertificate, 3))
 				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
 
 			ERR_clear_error();
@@ -1725,7 +1974,7 @@ namespace NMib
 				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
 				
 			ERR_clear_error();
-			if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_CertificateName.f_GetStr(), -1, -1, 0))
+			if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
 				DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 CN"));
 				
 			// Self signed.
@@ -1733,43 +1982,17 @@ namespace NMib
 			if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)))
 				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
 
-			auto fAddExt = [] (X509 *_pCert, int _nID, char *_pValue)
-				{
-					X509V3_CTX ctx;
-					X509V3_set_ctx_nodb(&ctx);
-
-					X509V3_set_ctx(&ctx, _pCert, _pCert, nullptr, nullptr, 0);
-					ERR_clear_error();
-					X509_EXTENSION* pExtension = X509V3_EXT_conf_nid(nullptr, &ctx, _nID, _pValue);
-					if (!pExtension)
-						DMibErrorNetSSL(fg_GetExceptionStr("Invalid x509 extension"));
-					
-					auto Cleanup = g_OnScopeExit > [&]
-						{
-							X509_EXTENSION_free(pExtension);
-						}
-					;
-					
-					ERR_clear_error();
-					if (!X509_add_ext(_pCert,pExtension,-1))
-						DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 extension"));
-				}
-			;
-			
 			// Set the subjectAltName
 			{
-				NContainer::TCVector<NStr::CStr> SortedHosts = CSSLContext::fs_GetSortedHostnames(_Hostnames);
+				X509V3_CTX Context;
+				X509V3_set_ctx_nodb(&Context);
+				X509V3_set_ctx(&Context, pCertificate, pCertificate, nullptr, nullptr, 0);
+				
+				if (!_Options.m_Hostnames.f_IsEmpty())
+					fg_AddHostnames(Context, pCertificate, _Options.m_Hostnames);
 
-				NStr::CStr Output;
-				for (auto Iter = SortedHosts.f_GetIterator(); Iter; ++Iter)
-				{
-					if (Output.f_IsEmpty())
-						Output = NStr::CStr::CFormat("DNS:{}") << (*Iter);
-					else
-						Output += NStr::CStr::CFormat(",DNS:{}") << (*Iter);
-				}
-
-				fAddExt(pCertificate, NID_subject_alt_name, Output.f_GetStrWritable());
+				if (!_Options.m_Extensions.f_IsEmpty())
+					fg_AddExtensions(Context, pCertificate, _Options.m_Extensions);
 			}
 
 			ERR_clear_error();

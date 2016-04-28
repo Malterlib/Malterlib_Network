@@ -275,6 +275,29 @@ namespace NMib
 				EState_InvalidCertificateAuthorityData = DMibBit(7),
 			};
 
+			struct CCertificateExtension
+			{
+				NStr::CStr m_Value;
+				bool m_bCritical = false;
+				
+				bool operator == (CCertificateExtension const &_Right) const; 
+				bool operator < (CCertificateExtension const &_Right) const;
+				
+				template <typename tf_CFormatInto>
+				void f_Format(tf_CFormatInto &o_FormatInto) const
+				{
+					o_FormatInto += typename tf_CFormatInto::CFormat("{}{}") << m_Value << (m_bCritical ? " - critical" : "");
+				}
+			};
+			
+			struct CCertificateOptions
+			{
+				NStr::CStr m_Subject;
+				NContainer::TCVector<NStr::CStr> m_Hostnames;
+				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> m_Extensions;
+				uint32 m_KeyLength = 2048;
+			};
+			
 			CSSLContext(EType _Type, CSSLSettings const &_Settings);
 			~CSSLContext();
 
@@ -295,27 +318,29 @@ namespace NMib
 			static NStr::CStr fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData);
 			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName = true);
 			static NContainer::TCVector<NStr::CStr> fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted);
+			static NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData);
+			
 			static NStr::CStr fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData);
 			static NTime::CTime fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const &_CertificateData);
 			static NStr::CStr fs_GetCertificateDescription(NContainer::TCVector<uint8> const &_CertificateData);
 			static NStr::CStr fs_GetCertificateInformation(NContainer::TCVector<uint8> const &_CertificateData);
+
+			static void fs_RegisterExtension(NStr::CStr const &_OID, NStr::CStr const &_ShortName, NStr::CStr const &_LongName);
+
 			static void fs_GenerateSelfSignedCertAndKey
 				(
-					NStr::CStr const &_CertificateName
-					, NContainer::TCVector<NStr::CStr> const &_Hostnames
+					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertData
 					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-					, int _KeyLength = 2048
 					, int _Serial = 0
 					, int _Days = 365
 				)
 			;
 			static void fs_GenerateClientCertificateRequest
 				(
-					NStr::CStr const &_Subject
+					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertRequestData
 					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-					, int _KeyLength = 2048
 				)
 			;
 			static void fs_SignClientCertificate
