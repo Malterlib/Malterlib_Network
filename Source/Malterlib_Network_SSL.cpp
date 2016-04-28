@@ -2855,6 +2855,131 @@ namespace NMib
 
 			return false;
 		}
+				
+		struct CEncryptionAESInternal
+		{
+			CEncryptionAESInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
+				: m_pCipherContext(nullptr)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				f_GenerateKey(_Password, _pSalt);
+			}
+			
+			~CEncryptionAESInternal()
+			{
+				EVP_CIPHER_CTX_free(m_pCipherContext);
+				NMem::fg_MemClear(m_Key, EVP_MAX_KEY_LENGTH);
+				NMem::fg_MemClear(m_IV, EVP_MAX_IV_LENGTH);
+			}
+			
+			void f_GenerateKey(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
+			{
+				EVP_CIPHER const* pCipher = EVP_get_cipherbyname("aes-256-cbc");
+				EVP_MD const* pDigest = EVP_get_digestbyname("sha256");
+				
+				int nRounds = 1;
+				ERR_clear_error();
+				if
+					(
+						!EVP_BytesToKey
+						(
+							pCipher
+							, pDigest
+							, _pSalt ? _pSalt->m_Salt : nullptr
+							, (unsigned char const *)_Password.f_GetStr()
+							, _Password.f_GetLen()
+							, nRounds
+							, m_Key
+							, m_IV
+						)
+					)
+				{
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+				}
+			}
+			
+			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest)
+			{
+				ERR_clear_error();
+				if (!(m_pCipherContext = EVP_CIPHER_CTX_new()))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
+				
+				ERR_clear_error();
+				if (EVP_EncryptInit_ex(m_pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+				
+				ERR_clear_error();
+				EVP_CIPHER_CTX_set_padding(m_pCipherContext, 0);
+				
+				int EncryptedLen = 0;
+				ERR_clear_error();
+				if (EVP_EncryptUpdate(m_pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to encrypt data"));
+				
+				int FinalizeLen = 0;
+				ERR_clear_error();
+				if (EVP_EncryptFinal_ex(m_pCipherContext, _pDest + EncryptedLen, &FinalizeLen) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize encrypted data"));
+				
+				return EncryptedLen + FinalizeLen;
+			}
+		
+			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest)
+			{
+				ERR_clear_error();
+				if (!(m_pCipherContext = EVP_CIPHER_CTX_new()))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
+				
+				ERR_clear_error();
+				if (EVP_DecryptInit_ex(m_pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+				
+				ERR_clear_error();
+				EVP_CIPHER_CTX_set_padding(m_pCipherContext, 0);
+				
+				int DecryptedLen = 0;
+				ERR_clear_error();
+				if (EVP_DecryptUpdate(m_pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to decrypt"));
+				
+				int FinalLen = 0;
+				ERR_clear_error();
+				if (EVP_DecryptFinal_ex(m_pCipherContext, _pDest + DecryptedLen, &FinalLen) != 1)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize decryption"));
+				
+				return DecryptedLen + FinalLen;
+			}
+			
+			EVP_CIPHER_CTX *m_pCipherContext;
+			uint8 m_Key[EVP_MAX_KEY_LENGTH];
+			uint8 m_IV[EVP_MAX_IV_LENGTH];
+		};
+		
+		uint32 fg_EncryptAES
+			(
+				NStr::CStrSecure const &_Password
+				, CSalt const *_pSalt
+				, uint8 *_pSource
+				, uint32 _SourceLen
+				, uint8 *_pDest
+			)
+		{
+			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
+			return EncryptionContext.f_Encrypt(_pSource, _SourceLen, _pDest);
+		}
+		
+		uint32 fg_DecryptAES
+			(
+				NStr::CStrSecure const &_Password
+				, CSalt const *_pSalt
+				, uint8 *_pSource
+				, uint32 _SourceLen
+				, uint8 *_pDest
+			)
+		{
+			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
+			return EncryptionContext.f_Decrypt(_pSource, _SourceLen, _pDest);
+		}
 	}
 }
 
