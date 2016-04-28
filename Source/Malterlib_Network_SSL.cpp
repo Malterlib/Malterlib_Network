@@ -1871,10 +1871,7 @@ namespace NMib
 				auto Cleanup = g_OnScopeExit > [&]
 					{
 						if (pExtensions)
-						{
 							sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
-//							sk_X509_EXTENSION_free(pExtensions);
-						}
 					}
 				;
 				
@@ -1891,6 +1888,7 @@ namespace NMib
 						auto *pExtension = X509v3_get_ext(pExtensions, iExtension);
 						if (!pExtension)
 							DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension from certificate request"));
+						ERR_clear_error();
 						if (!X509_add_ext(pCertificate, pExtension, -1))
 							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add extension to certificate"));
 					}
