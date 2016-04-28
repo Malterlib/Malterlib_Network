@@ -461,7 +461,12 @@ namespace NMib
 					return mp_Address == nullptr;
 				}
 
-				NStr::CStr f_GetString(bint _bIncludeType = false) const { return NMib::NSys::NNet::fg_GetAddressString(mp_Address, _bIncludeType); }
+				NStr::CStr f_GetString(bint _bIncludeType = false) const 
+				{
+					if (mp_Address == nullptr)
+						return "";
+					return NMib::NSys::NNet::fg_GetAddressString(mp_Address, _bIncludeType); 
+				}
 
 				ENetAddressType f_GetType() const
 				{
