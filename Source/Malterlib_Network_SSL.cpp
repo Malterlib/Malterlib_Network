@@ -2886,7 +2886,7 @@ namespace NMib
 							pCipher
 							, pDigest
 							, _pSalt ? _pSalt->m_Salt : nullptr
-							, (unsigned char const*)_Password.f_GetStr()
+							, (unsigned char const *)_Password.f_GetStr()
 							, _Password.f_GetLen()
 							, nRounds
 							, m_Key
@@ -2956,26 +2956,26 @@ namespace NMib
 		};
 		
 		uint32 fg_EncryptAES
-            (
-                NStr::CStrSecure const &_Password
-                , CSalt const *_pSalt
-                , uint8 *_pSource
-                , uint32 _SourceLen
-                , uint8 *_pDest
-            )
+			(
+				NStr::CStrSecure const &_Password
+				, CSalt const *_pSalt
+				, uint8 *_pSource
+				, uint32 _SourceLen
+				, uint8 *_pDest
+			)
 		{
 			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
 			return EncryptionContext.f_Encrypt(_pSource, _SourceLen, _pDest);
 		}
 		
 		uint32 fg_DecryptAES
-            (
-                NStr::CStrSecure const &_Password
-                , CSalt const *_pSalt
-                , uint8 *_pSource
-                , uint32 _SourceLen
-                , uint8 *_pDest
-            )
+			(
+				NStr::CStrSecure const &_Password
+				, CSalt const *_pSalt
+				, uint8 *_pSource
+				, uint32 _SourceLen
+				, uint8 *_pDest
+			)
 		{
 			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
 			return EncryptionContext.f_Decrypt(_pSource, _SourceLen, _pDest);
