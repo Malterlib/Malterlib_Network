@@ -2856,18 +2856,16 @@ namespace NMib
 			return false;
 		}
 				
-		struct CEncryptionAESInternal
+		struct CEncryptAES::CInternal
 		{
-			CEncryptionAESInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
-				: m_pCipherContext(nullptr)
+			CInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				f_GenerateKey(_Password, _pSalt);
 			}
 			
-			~CEncryptionAESInternal()
+			~CInternal()
 			{
-				EVP_CIPHER_CTX_free(m_pCipherContext);
 				NMem::fg_MemClear(m_Key, EVP_MAX_KEY_LENGTH);
 				NMem::fg_MemClear(m_IV, EVP_MAX_IV_LENGTH);
 			}
@@ -2898,87 +2896,93 @@ namespace NMib
 				}
 			}
 			
-			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest)
+			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				EVP_CIPHER_CTX *pCipherContext = nullptr;
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						EVP_CIPHER_CTX_free(pCipherContext);
+					}
+				;
+				
 				ERR_clear_error();
-				if (!(m_pCipherContext = EVP_CIPHER_CTX_new()))
+				if (!(pCipherContext = EVP_CIPHER_CTX_new()))
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
 				
 				ERR_clear_error();
-				if (EVP_EncryptInit_ex(m_pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+				if (EVP_EncryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
 				
 				ERR_clear_error();
-				EVP_CIPHER_CTX_set_padding(m_pCipherContext, 0);
+				EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
 				
 				int EncryptedLen = 0;
 				ERR_clear_error();
-				if (EVP_EncryptUpdate(m_pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
+				if (EVP_EncryptUpdate(pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to encrypt data"));
 				
 				int FinalizeLen = 0;
 				ERR_clear_error();
-				if (EVP_EncryptFinal_ex(m_pCipherContext, _pDest + EncryptedLen, &FinalizeLen) != 1)
+				if (EVP_EncryptFinal_ex(pCipherContext, _pDest + EncryptedLen, &FinalizeLen) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize encrypted data"));
 				
 				return EncryptedLen + FinalizeLen;
 			}
 		
-			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest)
+			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				EVP_CIPHER_CTX *pCipherContext = nullptr;
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						EVP_CIPHER_CTX_free(pCipherContext);
+					}
+				;
+				
 				ERR_clear_error();
-				if (!(m_pCipherContext = EVP_CIPHER_CTX_new()))
+				if (!(pCipherContext = EVP_CIPHER_CTX_new()))
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
 				
 				ERR_clear_error();
-				if (EVP_DecryptInit_ex(m_pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+				if (EVP_DecryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
 				
 				ERR_clear_error();
-				EVP_CIPHER_CTX_set_padding(m_pCipherContext, 0);
+				EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
 				
 				int DecryptedLen = 0;
 				ERR_clear_error();
-				if (EVP_DecryptUpdate(m_pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
+				if (EVP_DecryptUpdate(pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to decrypt"));
 				
 				int FinalLen = 0;
 				ERR_clear_error();
-				if (EVP_DecryptFinal_ex(m_pCipherContext, _pDest + DecryptedLen, &FinalLen) != 1)
+				if (EVP_DecryptFinal_ex(pCipherContext, _pDest + DecryptedLen, &FinalLen) != 1)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize decryption"));
 				
 				return DecryptedLen + FinalLen;
 			}
 			
-			EVP_CIPHER_CTX *m_pCipherContext;
 			uint8 m_Key[EVP_MAX_KEY_LENGTH];
 			uint8 m_IV[EVP_MAX_IV_LENGTH];
 		};
 		
-		uint32 fg_EncryptAES
-			(
-				NStr::CStrSecure const &_Password
-				, CSalt const *_pSalt
-				, uint8 *_pSource
-				, uint32 _SourceLen
-				, uint8 *_pDest
-			)
+		CEncryptAES::CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
+			: mp_pInternal(fg_Construct(_Password, _pSalt))
 		{
-			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
-			return EncryptionContext.f_Encrypt(_pSource, _SourceLen, _pDest);
 		}
 		
-		uint32 fg_DecryptAES
-			(
-				NStr::CStrSecure const &_Password
-				, CSalt const *_pSalt
-				, uint8 *_pSource
-				, uint32 _SourceLen
-				, uint8 *_pDest
-			)
+		CEncryptAES::~CEncryptAES()
 		{
-			CEncryptionAESInternal EncryptionContext(_Password, _pSalt);
-			return EncryptionContext.f_Decrypt(_pSource, _SourceLen, _pDest);
+		}
+		
+		uint32 CEncryptAES::f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
+		{
+			return mp_pInternal->f_Encrypt(_pSource, _SourceLen, _pDest);
+		}
+		
+		uint32 CEncryptAES::f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
+		{
+			return mp_pInternal->f_Decrypt(_pSource, _SourceLen, _pDest);
 		}
 	}
 }

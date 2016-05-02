@@ -104,8 +104,10 @@ public:
 			SaltArray.f_SetLen(8);
 			NMib::NSys::fg_Security_GenerateHighEntropyData(SaltArray.f_GetArray(), SaltArray.f_GetLen());
 			
-			CSalt Salt;
+			CEncryptAES::CSalt Salt;
 			NMem::fg_MemCopy(Salt.m_Salt, SaltArray.f_GetArray(), 8);
+			
+			CEncryptAES EncryptAES(Password, &Salt);
 			
 			TCVector<uint8> PlainText;
 			TCVector<uint8> Decrypted;
@@ -114,8 +116,8 @@ public:
 			PlainText.f_SetLen(32);
 			NMib::NSys::fg_Security_GenerateHighEntropyData(PlainText.f_GetArray(), PlainText.f_GetLen());
 			
-			uint32 EncryptedLen = fg_EncryptAES(Password, &Salt, PlainText.f_GetArray(), PlainText.f_GetLen(), Encrypted.f_GetArray(32));
-			uint32 DecryptedLen = fg_DecryptAES(Password, &Salt, Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray(32));
+			uint32 EncryptedLen = EncryptAES.f_Encrypt(PlainText.f_GetArray(), PlainText.f_GetLen(), Encrypted.f_GetArray(32));
+			uint32 DecryptedLen = EncryptAES.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray(32));
 			
 			DMibExpect(EncryptedLen, ==, DecryptedLen);
 			DMibExpect(Decrypted, ==, PlainText);
@@ -125,19 +127,18 @@ public:
 			{
 				DMibTestPath("IncorrectPassword");
 				CStrSecure IncorrectPassword("MalterlibPasswordTest2");
-				fg_DecryptAES(IncorrectPassword, &Salt, Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
+				CEncryptAES EncryptAES1(IncorrectPassword, &Salt);
+				EncryptAES1.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, !=, PlainText);
 			}
 			
 			{
 				DMibTestPath("IncorrectSalt");
-				TCVector<uint8> IncorrectSaltArray;
-				IncorrectSaltArray.f_SetLen(8);
-				NMib::NSys::fg_Security_GenerateHighEntropyData(IncorrectSaltArray.f_GetArray(), IncorrectSaltArray.f_GetLen());
+				CEncryptAES::CSalt IncorrectSalt;
+				NMib::NSys::fg_Security_GenerateHighEntropyData(IncorrectSalt.m_Salt, 8);
 				
-				CSalt IncorrectSalt;
-				NMem::fg_MemCopy(IncorrectSalt.m_Salt, IncorrectSaltArray.f_GetArray(), 8);
-				fg_DecryptAES(Password, &IncorrectSalt, Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
+				CEncryptAES EncryptAES2(Password, &IncorrectSalt);
+				EncryptAES2.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, !=, PlainText);
 			}
 			
@@ -146,10 +147,12 @@ public:
 				TCVector<uint8> Unaligned;
 				Unaligned.f_SetLen(14);
 				
+				CEncryptAES EncryptAES3(Password, &Salt);
+				
 				DMibTest
 					(
 						DMibExpr(TCThrowsException<NException::CException>())
-						== DMibLExpr(fg_EncryptAES(Password, &Salt, Unaligned.f_GetArray(), Unaligned.f_GetLen(), Encrypted.f_GetArray(32)))
+						== DMibLExpr(EncryptAES3.f_Encrypt(Unaligned.f_GetArray(), Unaligned.f_GetLen(), Encrypted.f_GetArray(32)))
 					)
 				;
 			}
@@ -173,10 +176,12 @@ public:
 				NMem::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
 				
 				NStr::CStrSecure OpenSSLPassword("ABCDEFGH");
-				fg_EncryptAES(OpenSSLPassword, nullptr, ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen(), Encrypted.f_GetArray());
+				CEncryptAES EncryptAES4(OpenSSLPassword, nullptr);
+				
+				EncryptAES4.f_Encrypt(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen(), Encrypted.f_GetArray());
 				DMibExpect(EncryptedOpenSSL, ==, Encrypted);
 				
-				fg_DecryptAES(OpenSSLPassword, nullptr, EncryptedOpenSSL.f_GetArray(), EncryptedOpenSSL.f_GetLen(), Decrypted.f_GetArray());
+				EncryptAES4.f_Decrypt(EncryptedOpenSSL.f_GetArray(), EncryptedOpenSSL.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, ==, ToEncrypt);
 			}
 		};
