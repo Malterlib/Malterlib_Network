@@ -366,30 +366,25 @@ namespace NMib
 
 		};
 		
-		struct CSalt
+		class CEncryptAES
 		{
-			uint8 m_Salt[8];
-		};
+		public:
+			
+			struct CSalt
+			{
+				uint8 m_Salt[8];
+			};
+			
+			CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt);
+			~CEncryptAES();
+			
+			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
+			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
 		
-		uint32 fg_EncryptAES
-			(
-				NStr::CStrSecure const &_Password
-				, CSalt const *_pSalt
-				, uint8 *_pSource
-				, uint32 _SourceLen
-				, uint8 *_pDest
-			)
-		;
-        
-		uint32 fg_DecryptAES
-			(
-				NStr::CStrSecure const &_Password
-				, CSalt const *_pSalt
-				, uint8 *_pSource
-				, uint32 _SourceLen
-				, uint8 *_pDest
-			)
-		;
+		private:
+			struct CInternal;
+			NPtr::TCUniquePointer<CInternal> mp_pInternal;
+		};
 	}
 }
 
