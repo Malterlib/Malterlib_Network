@@ -138,13 +138,8 @@ namespace NMib
 					mp_SSLErrors == _Other.mp_SSLErrors);
 			}
 
-			NContainer::TCVector<uint8> f_GetPeerCertificate() const
-			{
-				if (!mp_Certificates.f_IsEmpty())
-					return mp_Certificates[0].m_Data;
-
-				return NContainer::TCVector<uint8>();
-			}
+			NContainer::TCVector<uint8> f_GetPeerCertificate() const;
+			NContainer::TCVector<NContainer::TCVector<uint8>> f_GetCertificateChain() const;
 
 			CSSLConnectionResult() : mp_bTrustErrorsOccured(false), mp_bVerificationErrorsOccured(false), mp_bConnectionRefused(false) {}
 			~CSSLConnectionResult() {}

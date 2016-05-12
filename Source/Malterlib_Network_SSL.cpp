@@ -2684,6 +2684,23 @@ namespace NMib
 			return CSSLContext::CInternal::fs_GetCertificateInformation(mp_Certificates[0].m_Data);
 		}
 
+		NContainer::TCVector<uint8> CSSLConnectionResult::f_GetPeerCertificate() const
+		{
+			if (!mp_Certificates.f_IsEmpty())
+				return mp_Certificates[0].m_Data;
+
+			return NContainer::TCVector<uint8>();
+		}
+		
+		NContainer::TCVector<NContainer::TCVector<uint8>> CSSLConnectionResult::f_GetCertificateChain() const
+		{
+			NContainer::TCVector<NContainer::TCVector<uint8>> CertificateChain;
+			for (auto &Certificate : mp_Certificates)
+				CertificateChain.f_Insert(Certificate.m_Data);
+			
+			return CertificateChain;
+		}
+		
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateName() const
 		{
 			if (mp_Certificates.f_IsEmpty())
