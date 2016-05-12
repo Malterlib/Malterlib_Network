@@ -29,6 +29,8 @@ namespace NMib
 				, EVerificationFlag_UserCanIgnoreVerificationFailures	= DMibBit(5)
 				, EVerificationFlag_AllowInsecureSSL					= DMibBit(6)
 				, EVerificationFlag_AllowMissingPeerCertificate			= DMibBit(7)
+				, EVerificationFlag_IgnoreVerificationFailures			= DMibBit(8)
+				, EVerificationFlag_IgnoreTrustFailures					= DMibBit(9)
 			};
 			
 			enum EProtocol
