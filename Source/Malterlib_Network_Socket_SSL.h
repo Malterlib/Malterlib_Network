@@ -11,8 +11,7 @@ namespace NMib
 		struct CSocketConnectionInfo_SSL final : public ICSocketConnectionInfo
 		{
 			NContainer::TCVector<uint8> m_PeerCertificate;
-			NStr::CStr m_PeerCertificateName;
-			NStr::CStr m_PeerCertificateFingerprint;
+			NContainer::TCVector<NContainer::TCVector<uint8>> m_CertificateChain;
 		};
 		
 		class CSocket_SSL final : public ICSocket

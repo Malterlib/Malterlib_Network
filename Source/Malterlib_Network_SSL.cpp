@@ -1015,16 +1015,17 @@ namespace NMib
 			{	
 				g_SSLLowLevel->f_UseInThread();
 				bool bSetClientFlags = false;
+
+				int VerifyFlags = SSL_VERIFY_PEER;
+				
 				if (fp_LoadCertificateAuthority())
 				{
 					SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);		
 
 					if (f_IsServerContext())
 					{
-						int VerifyFlags = SSL_VERIFY_PEER;
 						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate))
 							VerifyFlags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-						SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
 					}
 					else if (f_IsClientContext())
 						bSetClientFlags = true;
@@ -1036,10 +1037,9 @@ namespace NMib
 				}
 
 				if (bSetClientFlags)
-				{
-					SSL_CTX_set_verify(mp_pContext, SSL_VERIFY_PEER, fs_VerifyCallback);
 					X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), X509_V_FLAG_CB_ISSUER_CHECK|X509_V_FLAG_HANSOFT_CONTINUE_AFTER_VERIFY_LEAF_SIGNATURE_ERROR);
-				}
+				
+				SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
 
 				bool bVerifyCertAndKey = false;
 				if (fp_LoadPublicCertificate())
@@ -2276,6 +2276,14 @@ namespace NMib
 					bool bCanManageTrust = mp_pContext->f_GetSettings().f_UserCanIgnoreTrustFailures();
 					bool bCanManageVerification = mp_pContext->f_GetSettings().f_UserCanIgnoreVerificationFailures();
 
+					bool bTrustErrors = Result.f_ContainsTrustErrors();
+					bool bVerificationErrors = Result.f_ContainsVerificationErrors();
+					
+					if (bVerificationErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreVerificationFailures))
+						bVerificationErrors = false;
+					if (bTrustErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreTrustFailures))
+						bTrustErrors = false;
+
 					// We can only accept one specific peer certificate
 					if (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate)
 					{
@@ -2294,32 +2302,32 @@ namespace NMib
 							_ResultForCallback = EAuthenticationResult_Success;
 					}
 					// The peer certificate matches a remembered certificate and does not contain any verification errors.
-					else if (!Result.f_ContainsVerificationErrors() && Result.f_ContainsTrustErrors() &&
+					else if (!bVerificationErrors && bTrustErrors &&
 						Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
 					{
 						_ResultForCallback = EAuthenticationResult_Success;
 					}
 					// No errors were reported.
-					else if (!Result.f_ContainsTrustErrors() && !Result.f_ContainsVerificationErrors())
+					else if (!bTrustErrors && !bVerificationErrors)
 					{
 						_ResultForCallback = EAuthenticationResult_Success;
 					}
 					// User can manage certificates but cannot ignore verification failures
 					else if (bCanManageTrust && !bCanManageVerification)
 					{
-						if (Result.f_ContainsTrustErrors() && !Result.f_ContainsVerificationErrors())
+						if (bTrustErrors && !bVerificationErrors)
 							bCallTrustCallback = true;
 					}
 					// User cannot manage both
 					else if (bCanManageTrust && bCanManageVerification)
 					{
-						if (Result.f_ContainsTrustErrors() || Result.f_ContainsVerificationErrors())
+						if (bTrustErrors || bVerificationErrors)
 							bCallTrustCallback = true;
 					}
 					// User can only manage verification failures.
 					else if (!bCanManageTrust && bCanManageVerification)
 					{
-						if (!Result.f_ContainsTrustErrors() && Result.f_ContainsVerificationErrors())
+						if (!bTrustErrors && bVerificationErrors)
 							bCallTrustCallback = true;
 					}
 
@@ -2684,6 +2692,23 @@ namespace NMib
 			return CSSLContext::CInternal::fs_GetCertificateInformation(mp_Certificates[0].m_Data);
 		}
 
+		NContainer::TCVector<uint8> CSSLConnectionResult::f_GetPeerCertificate() const
+		{
+			if (!mp_Certificates.f_IsEmpty())
+				return mp_Certificates[0].m_Data;
+
+			return NContainer::TCVector<uint8>();
+		}
+		
+		NContainer::TCVector<NContainer::TCVector<uint8>> CSSLConnectionResult::f_GetCertificateChain() const
+		{
+			NContainer::TCVector<NContainer::TCVector<uint8>> CertificateChain;
+			for (auto &Certificate : mp_Certificates)
+				CertificateChain.f_Insert(Certificate.m_Data);
+			
+			return CertificateChain;
+		}
+		
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateName() const
 		{
 			if (mp_Certificates.f_IsEmpty())
@@ -2898,6 +2923,7 @@ namespace NMib
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				g_SSLLowLevel->f_UseInThread();
 				EVP_CIPHER_CTX *pCipherContext = nullptr;
 				auto Cleanup = g_OnScopeExit > [&]
 					{
@@ -2931,6 +2957,7 @@ namespace NMib
 		
 			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				g_SSLLowLevel->f_UseInThread();
 				EVP_CIPHER_CTX *pCipherContext = nullptr;
 				auto Cleanup = g_OnScopeExit > [&]
 					{
