@@ -2923,6 +2923,7 @@ namespace NMib
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				g_SSLLowLevel->f_UseInThread();
 				EVP_CIPHER_CTX *pCipherContext = nullptr;
 				auto Cleanup = g_OnScopeExit > [&]
 					{
@@ -2956,6 +2957,7 @@ namespace NMib
 		
 			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
+				g_SSLLowLevel->f_UseInThread();
 				EVP_CIPHER_CTX *pCipherContext = nullptr;
 				auto Cleanup = g_OnScopeExit > [&]
 					{
