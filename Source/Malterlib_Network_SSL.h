@@ -211,6 +211,7 @@ namespace NMib
 				EState_ConnectionShutdown,
 				EState_WriteFailed,
 				EState_ReadFailed,
+				EState_ShutdownFailed,
 			};
 			
 			typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)> FAuthenticationResultCallback;
@@ -234,6 +235,7 @@ namespace NMib
 			bool f_Connect();
 			bool f_Accept();
 			bool f_HandshakeInProgress() const;
+			bool f_Shutdown();
 
 			mint f_Send(const void *_pData, mint _nLen);
 			mint f_Receive(void *_pData, mint _nLen);

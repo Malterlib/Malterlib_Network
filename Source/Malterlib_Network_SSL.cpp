@@ -2103,6 +2103,36 @@ namespace NMib
 			{
 				return fp_Process(true);
 			}
+			
+			bool f_Shutdown()
+			{
+				g_SSLLowLevel->f_UseInThread();
+				auto Ret = SSL_shutdown(f_GetSSL());
+				if (Ret == 1)
+					return true;
+				else if (Ret == -1)
+				{
+					int Error = SSL_get_error(f_GetSSL(), Ret);
+					if (Error == SSL_ERROR_ZERO_RETURN)
+						f_SetState(EState_ConnectionShutdown);
+					else if (Error == SSL_ERROR_SYSCALL)
+					{
+		#if defined(DPlatformFamily_Windows)
+						int Error = WSAGetLastError();
+						DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL, windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
+		#else
+						// Unix
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("SSL_shutdown", errno));
+		#endif
+					}
+					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+					{
+						mp_LastError = fg_GetErrors();
+						f_SetState(EState_ShutdownFailed);
+					}
+				}
+				return false;
+			}			
 
 			mint f_Send(const void *_pData, mint _nLen)
 			{
@@ -2473,6 +2503,11 @@ namespace NMib
 		bool CSSLConnection::f_Accept()
 		{
 			return mp_pInternal->f_Accept();
+		}
+		
+		bool CSSLConnection::f_Shutdown()
+		{
+			return mp_pInternal->f_Shutdown();
 		}
 
 		mint CSSLConnection::f_Send(const void *_pData, mint _nLen)
