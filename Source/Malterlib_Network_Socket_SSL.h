@@ -67,6 +67,8 @@ namespace NMib
 				, EState_Accept
 				, EState_Listen
 				, EState_Done
+				, EState_Shutdown
+				, EState_ShutdownSocket
 				, EState_Disconnected
 			};
 			

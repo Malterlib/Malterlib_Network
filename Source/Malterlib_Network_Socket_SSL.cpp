@@ -34,7 +34,12 @@ namespace NMib
 
 		void CSocket_SSL::f_Shutdown()
 		{
-			return mp_Socket.f_Shutdown();
+			mp_State = EState_Shutdown;
+			if (mp_SSLConnection.f_Shutdown())
+			{
+				mp_State = EState_ShutdownSocket;
+				mp_Socket.f_Shutdown();
+			}
 		}
 
 		NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> CSocket_SSL::fp_SharedOnStateChange()
@@ -224,6 +229,15 @@ namespace NMib
 		{
 			switch (mp_State)
 			{
+			case EState_ShutdownSocket:
+				return false;
+			case EState_Shutdown:
+				if (mp_SSLConnection.f_Shutdown())
+				{
+					mp_State = EState_ShutdownSocket;
+					mp_Socket.f_Shutdown();
+				}
+				return false;
 			case EState_Done:
 				return true;
 			case EState_Disconnected:
