@@ -164,24 +164,53 @@ namespace NMib
 			
 			return Ret;
 		}
-		
+
+		void CSocket_SSL::fp_CheckBrokenState()
+		{
+			if (mp_bBrokenStateReported)
+				return;
+			if (mp_SSLConnection.f_BrokenState())
+			{
+				fp_AddTCPState(ENetTCPState_Closed);
+				mp_bBrokenStateReported = true;
+			}
+		}
 
 		mint CSocket_SSL::f_Receive(void *_pData, mint _DataLen)
 		{
 			if (!fp_HandleHandshake())
 				return 0;
 			if (mp_SSLConnection.f_BrokenState())
+			{
+				fp_CheckBrokenState();
 				return 0;
-			return mp_SSLConnection.f_Receive(_pData, _DataLen);
+			}
+			mint Return = mp_SSLConnection.f_Receive(_pData, _DataLen);
+			
+			if (!Return)
+				fp_CheckBrokenState();
+			
+			return Return;
 		}
 
 		mint CSocket_SSL::f_Send(const void *_pData, mint _DataLen)
 		{
 			if (!fp_HandleHandshake())
+			{
+				DMibLog(DebugVerbose2, " **** CSocket_SSL handshake not done");
 				return 0;
+			}
 			if (mp_SSLConnection.f_BrokenState())
+			{
+				fp_CheckBrokenState();
+				DMibLog(DebugVerbose2, " **** CSocket_SSL broken state");
 				return 0;
-			return mp_SSLConnection.f_Send(_pData, _DataLen);
+			}
+			mint Return = mp_SSLConnection.f_Send(_pData, _DataLen);
+			
+			if (!Return)
+				fp_CheckBrokenState();
+			return Return;
 		}
 
 		mint CSocket_SSL::f_SendDatagram(NMib::NNet::CNetAddress const &_Address, const void *_pData, mint _DataLen)

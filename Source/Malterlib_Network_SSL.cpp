@@ -655,6 +655,108 @@ namespace NMib
 				return lHostnames;
 			}
 
+			static bool fs_DecodeExtension(X509_EXTENSION *_pExtension, NStr::CStr &o_Name, CCertificateExtension &o_Extension)
+			{
+				ASN1_OBJECT *pObject = X509_EXTENSION_get_object(_pExtension);
+				ASN1_OCTET_STRING *pData = X509_EXTENSION_get_data(_pExtension);
+				int Critical = X509_EXTENSION_get_critical(_pExtension);
+				
+				NStr::CStr Name;
+				int nID = OBJ_obj2nid(pObject);
+				if (nID != NID_undef) 
+				{
+					const char *pShortName = OBJ_nid2sn(nID);
+					if (pShortName)
+					{
+						Name = pShortName; 
+					}
+				}
+				if (Name.f_IsEmpty())
+				{
+					ch8 Data[1024];
+					Data[0] = 0;
+					OBJ_obj2txt(Data, 1024, pObject, 0);
+					Data[1023] = 0;
+					Name = Data;						
+				}
+
+				if (Name.f_IsEmpty())
+					return false;
+				
+				NStr::CStr Value;
+				switch (pData->type)
+				{
+				case V_ASN1_NUMERICSTRING:
+				case V_ASN1_PRINTABLESTRING:
+				case V_ASN1_UTF8STRING:
+				case V_ASN1_T61STRING:
+				case V_ASN1_VIDEOTEXSTRING:
+				case V_ASN1_ISO64STRING:
+				case V_ASN1_IA5STRING:
+				case V_ASN1_OCTET_STRING:
+					{
+						Value = NStr::CStr((ch8 const *)pData->data, pData->length); 
+					}
+					break;
+				default:
+					return false;
+				}
+
+				o_Name = fg_Move(Name);
+				o_Extension.m_Value = fg_Move(Value);
+				o_Extension.m_bCritical = Critical != 0;
+				
+				return true;
+			}
+			
+			static NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> fs_GetCertificateRequestExtensions(NContainer::TCVector<uint8> const &_CertificateRequestData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+
+				X509_REQ *pCertificateRequest = fs_LoadCertificateRequest(_CertificateRequestData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_REQ_free(pCertificateRequest);
+					}
+				;
+
+				ERR_clear_error();
+				
+				auto pExtensions = X509_REQ_get_extensions(pCertificateRequest);
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						if (pExtensions)
+							sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
+					}
+				;
+				
+				if (!pExtensions)
+					return fg_Default();
+								
+				ERR_clear_error();
+				int nExtensions = X509v3_get_ext_count(pExtensions);
+				if (nExtensions < 0)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension count from certificate request"));
+				
+				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> Return;
+				
+				for (int iExtension = 0; iExtension < nExtensions; ++iExtension)
+				{
+					auto *pExtension = X509v3_get_ext(pExtensions, iExtension);
+					if (!pExtension)
+						continue;
+					
+					NStr::CStr Name;
+					CCertificateExtension Extension;
+					if (!fs_DecodeExtension(pExtension, Name, Extension))
+						continue;
+
+					Return[Name].f_Insert(fg_Move(Extension)); 
+				}
+				
+				return Return;
+			}
+			
 			static NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
@@ -677,51 +779,12 @@ namespace NMib
 					if (!pExtension)
 						continue;
 					
-					ASN1_OBJECT *pObject = X509_EXTENSION_get_object(pExtension);
-					ASN1_OCTET_STRING *pData = X509_EXTENSION_get_data(pExtension);
-					int Critical = X509_EXTENSION_get_critical(pExtension);
-					
 					NStr::CStr Name;
-					int nID = OBJ_obj2nid(pObject);
-				    if (nID != NID_undef) 
-					{
-						const char *pShortName = OBJ_nid2sn(nID);
-						if (pShortName)
-						{
-							Name = pShortName; 
-						}
-					}
-					if (Name.f_IsEmpty())
-					{
-						ch8 Data[1024];
-						Data[0] = 0;
-						OBJ_obj2txt(Data, 1024, pObject, 0);
-						Data[1023] = 0;
-						Name = Data;						
-					}
-					
-					NStr::CStr Value;
-					switch (pData->type)
-					{
-					case V_ASN1_NUMERICSTRING:
-					case V_ASN1_PRINTABLESTRING:
-					case V_ASN1_UTF8STRING:
-					case V_ASN1_T61STRING:
-					case V_ASN1_VIDEOTEXSTRING:
-					case V_ASN1_ISO64STRING:
-					case V_ASN1_IA5STRING:
-					case V_ASN1_OCTET_STRING:
-						{
-							Value = NStr::CStr((ch8 const *)pData->data, pData->length); 
-						}
-						break;
-					default:
-						continue;							
-					}
-					
-					auto &Extension = Return[Name].f_Insert();
-					Extension.m_Value = Value;
-					Extension.m_bCritical = Critical != 0;
+					CCertificateExtension Extension;
+					if (!fs_DecodeExtension(pExtension, Name, Extension))
+						continue;
+
+					Return[Name].f_Insert(fg_Move(Extension)); 
 				}
 				
 				return Return;
@@ -1510,6 +1573,14 @@ namespace NMib
 			return CSSLContext::CInternal::fs_GetCertificateExtensions(_CertificateData);
 		}
 
+		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateRequestExtensions
+			(
+				NContainer::TCVector<uint8> const &_CertificateData
+			)
+		{
+			return CSSLContext::CInternal::fs_GetCertificateRequestExtensions(_CertificateData);
+		}
+
 		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 		{
 			return CSSLContext::CInternal::fs_GetSortedHostnames(_Unsorted);
@@ -1738,6 +1809,42 @@ namespace NMib
 		
 		// openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
 
+		void CSSLContext::fs_VerifyCertificateRequestSameKeyAsCertificate(NContainer::TCVector<uint8> const &_CertRequestData, NContainer::TCVector<uint8> const &_CertData)
+		{
+			X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
+			auto Cleanup0 = g_OnScopeExit > [&] ()
+				{
+					X509_REQ_free(pCertificateRequest);
+				}
+			;
+
+			X509 *pCertificate = CSSLContext::CInternal::fs_LoadCertificate(_CertData);
+			auto Cleanup3 = g_OnScopeExit > [&] ()
+				{
+					X509_free(pCertificate);
+				}
+			;
+			
+			// Get public key from certificate
+			ERR_clear_error();
+			auto pPublicKey = X509_get_pubkey(pCertificate);
+			if (!pPublicKey)
+				DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
+			auto Cleanup = g_OnScopeExit > [&]
+				{
+					EVP_PKEY_free(pPublicKey);
+				}
+			;
+
+			// Verify with certificate request
+			ERR_clear_error();
+			int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
+			if (VerifyResult < 0)
+				DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
+			else if (VerifyResult == 0)
+				DMibErrorNetSSL("Certificate request signature mismatch");
+		}
+		
 		void CSSLContext::fs_SignClientCertificate
 			(
 				NContainer::TCVector<uint8> const &_CACertificate
@@ -2107,6 +2214,7 @@ namespace NMib
 			bool f_Shutdown()
 			{
 				g_SSLLowLevel->f_UseInThread();
+				ERR_clear_error();
 				auto Ret = SSL_shutdown(f_GetSSL());
 				if (Ret == 1)
 					return true;
@@ -2143,11 +2251,13 @@ namespace NMib
 				DMibRequire(mp_State == EState_None);
 
 				mint nBytesSent = 0;
+				ERR_clear_error();
 				int Ret = SSL_write(f_GetSSL(), _pData, (int)_nLen);
 				if (Ret <= 0)
 				{
 					// Write did not succeed.
 					int Error = SSL_get_error(f_GetSSL(), Ret);
+					DMibLog(DebugVerbose2, " **** SSL error {}", Error);
 					if (Error == SSL_ERROR_ZERO_RETURN)
 					{
 						f_SetState(EState_ConnectionShutdown);
@@ -2170,6 +2280,7 @@ namespace NMib
 				}
 				else
 				{
+					DMibLog(DebugVerbose2, " **** SSL wrote {}", Ret);
 					// Write succeeded, return the number of bytes written.
 					nBytesSent = (mint)Ret;
 				}
@@ -2186,6 +2297,7 @@ namespace NMib
 				DMibRequire(mp_State == EState_None);
 
 				mint nBytesReceived = 0;
+				ERR_clear_error();
 				int Ret = SSL_read(f_GetSSL(), _pData, _nLen);
 				if (Ret <= 0)
 				{
@@ -2208,6 +2320,7 @@ namespace NMib
 					else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 					{
 						mp_LastError = fg_GetErrors();
+						DMibLog(DebugVerbose2, " **** Read failed: {} {}", Error, mp_LastError);
 						f_SetState(EState_ReadFailed);
 					}
 				}
@@ -2442,7 +2555,12 @@ namespace NMib
 
 		bool CSSLConnection::f_BrokenState() const
 		{
-			return mp_pInternal->f_GetState() != EState_None;
+			if (mp_pInternal->f_GetState() != EState_None)
+			{
+				DMibLog(DebugVerbose2, " **** SSL broken: {}", mp_pInternal->f_GetState());
+				return true;
+			}
+			return false;
 		}
 		
 		NStr::CStr CSSLConnection::f_GetLastError() const
