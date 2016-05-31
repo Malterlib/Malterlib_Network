@@ -74,6 +74,7 @@ namespace NMib
 			
 			bool fp_HandleHandshake();
 			void fp_HandleHandshakeDone();
+			void fp_CheckBrokenState();
 			void fp_AddTCPState(ENetTCPState _ToAdd);
 			NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> fp_SharedOnStateChange();
 
@@ -88,6 +89,7 @@ namespace NMib
 			CSSLConnection mp_SSLConnection;
 
 			EState mp_State = EState_None;
+			bool mp_bBrokenStateReported = false;
 		};
 	}
 }
