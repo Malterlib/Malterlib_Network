@@ -168,6 +168,7 @@ namespace NMib
 		static const uint32 ENetAddressType_None = 0;
 		static const uint32 ENetAddressType_TCPv4 = 1;
 		static const uint32 ENetAddressType_TCPv6 = 2;		
+		static const uint32 ENetAddressType_Unix = 3;		
 
 		template<typename t_CIPAddress, ENetAddressType t_Type>
 		class TNetAddressTCP : public t_CIPAddress
@@ -389,7 +390,8 @@ namespace NMib
 				CNetAddress(CNetAddress const& _ToCopy)
 					: mp_Address(nullptr)
 				{
-					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
+					if (_ToCopy.mp_Address)
+						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
 					// DMibLogCat(NNet);
 					// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress const&)");
 				}
@@ -427,7 +429,8 @@ namespace NMib
 				{
 					f_Clear();
 
-					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
+					if (_ToCopy.mp_Address)
+						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
 
 					// DMibLogCat(NNet);
 					// DMibLog(Debug, "CNetAddress::operator =(CNetAddress const&)");
@@ -481,7 +484,9 @@ namespace NMib
 
 				bint f_Set(CNetAddress const& _Address)
 				{
-					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_Address.mp_Address);
+					f_Clear();
+					if (_Address.mp_Address)
+						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_Address.mp_Address);
 
 					return mp_Address != nullptr;
 				}
@@ -489,6 +494,8 @@ namespace NMib
 				template<typename t_CAddress>
 				bint f_Set(t_CAddress const& _Address)
 				{
+					f_Clear();
+					
 					if (mp_Address)
 						mp_Address = NMib::NSys::NNet::fg_SetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
 					else
