@@ -2080,7 +2080,7 @@ namespace NMib
 				
 			ERR_clear_error();
 			if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 CN"));
+				DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Error adding x509 CN '{}'", _Options.m_Subject)));
 				
 			// Self signed.
 			ERR_clear_error();
