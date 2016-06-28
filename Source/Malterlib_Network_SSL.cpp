@@ -3036,10 +3036,10 @@ namespace NMib
 				
 		struct CEncryptAES::CInternal
 		{
-			CInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
+			CInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
 			{
 				g_SSLLowLevel->f_UseInThread();
-				f_GenerateKey(_Password, _pSalt);
+				f_GenerateKey(_Password, _pSalt, _nRounds);
 			}
 			
 			~CInternal()
@@ -3048,12 +3048,11 @@ namespace NMib
 				NMem::fg_MemClear(m_IV, EVP_MAX_IV_LENGTH);
 			}
 			
-			void f_GenerateKey(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
+			void f_GenerateKey(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
 			{
 				EVP_CIPHER const* pCipher = EVP_get_cipherbyname("aes-256-cbc");
 				EVP_MD const* pDigest = EVP_get_digestbyname("sha256");
 				
-				int nRounds = 1;
 				ERR_clear_error();
 				if
 					(
@@ -3064,7 +3063,7 @@ namespace NMib
 							, _pSalt ? _pSalt->m_Salt : nullptr
 							, (unsigned char const *)_Password.f_GetStr()
 							, _Password.f_GetLen()
-							, nRounds
+							, _nRounds
 							, m_Key
 							, m_IV
 						)
@@ -3146,8 +3145,8 @@ namespace NMib
 			uint8 m_IV[EVP_MAX_IV_LENGTH];
 		};
 		
-		CEncryptAES::CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt)
-			: mp_pInternal(fg_Construct(_Password, _pSalt))
+		CEncryptAES::CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
+			: mp_pInternal(fg_Construct(_Password, _pSalt, _nRounds))
 		{
 		}
 		

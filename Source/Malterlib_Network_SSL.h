@@ -376,7 +376,7 @@ namespace NMib
 				uint8 m_Salt[8];
 			};
 			
-			CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt);
+			CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds = 1 << 17);
 			~CEncryptAES();
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
