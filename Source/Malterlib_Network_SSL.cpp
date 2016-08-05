@@ -51,6 +51,91 @@ extern "C"
 	}
 #endif
 
+struct CRegisterState
+{
+	__m128 m_XMM6;
+	__m128 m_XMM7;
+	__m128 m_XMM8;
+	__m128 m_XMM9;
+	__m128 m_XMM10;
+	__m128 m_XMM11;
+	__m128 m_XMM12;
+	__m128 m_XMM13;
+	__m128 m_XMM14;
+	__m128 m_XMM15;
+
+	uint64 m_RDI;
+	uint64 m_RSI;
+	uint64 m_RBX;
+	uint64 m_RBP;
+
+	uint64 m_R12;
+	uint64 m_R13;
+	uint64 m_R14;
+	uint64 m_R15;
+};
+
+#if defined(DPlatformFamily_Windows) && defined(DArchitecture_x64)
+extern "C" void fg_Malterlib_Network_SSL_SaveRegisters_X86_64(CRegisterState *_pRegisters);
+extern "C" void fg_Malterlib_Network_SSL_RestoreRegisters_X86_64(CRegisterState *_pRegisters);
+#endif
+	
+namespace
+{
+#if defined(DPlatformFamily_Windows) && defined(DArchitecture_x64)
+	struct COpenSSLBrokenRegistryHandlingScope
+	{
+		CRegisterState m_RegisterState;
+
+		inline_always COpenSSLBrokenRegistryHandlingScope()
+		{
+			fg_Malterlib_Network_SSL_SaveRegisters_X86_64(&m_RegisterState);
+		}
+		inline_always ~COpenSSLBrokenRegistryHandlingScope()
+		{
+			fg_Malterlib_Network_SSL_RestoreRegisters_X86_64(&m_RegisterState);
+		}
+	};
+
+	template <typename t_FToRun>
+	struct TCRunProtectedRegistersHelper
+	{
+		TCRunProtectedRegistersHelper(t_FToRun &&_fToRun)
+			: mp_fToRun(NMib::fg_Move(_fToRun))
+		{
+
+		}
+		inline_never decltype(auto) f_Run()
+		{
+			COpenSSLBrokenRegistryHandlingScope ProtectionScope;
+			return fp_Run();
+		}
+	private:
+
+		inline_never decltype(auto) fp_Run()
+		{
+			return mp_fToRun();
+		}
+
+		t_FToRun &&mp_fToRun;
+	};
+
+	template <typename t_FToRun>
+	decltype(auto) fg_RunProtectRegisters(t_FToRun &&_fToRun)
+	{
+		TCRunProtectedRegistersHelper<t_FToRun &&> RunHelper{NMib::fg_Move(_fToRun)};
+
+		return RunHelper.f_Run();
+	}
+#else
+	template <typename t_FToRun>
+	inline_always decltype(auto) fg_RunProtectRegisters(t_FToRun &&_fToRun)
+	{
+		return _fToRun();
+	}
+#endif
+}
+
 namespace NMib
 {
 	namespace NNet
@@ -64,42 +149,56 @@ namespace NMib
 
 				CSSLLowLevel()
 				{
-					m_pThreadLocal = fg_Construct();
+					fg_RunProtectRegisters
+						(
+							[&]() -> decltype(auto)
+							{
+								m_pThreadLocal = fg_Construct();
 
-					SSL_library_init();
-					ENGINE_load_builtin_engines();
-					ENGINE_register_all_complete();
+								SSL_library_init();
+								ENGINE_load_builtin_engines();
+								ENGINE_register_all_complete();
 
-					SSL_load_error_strings();
+								SSL_load_error_strings();
 
-					f_UseInThread();
+								f_UseInThread();
 
-					mint nSSLLocks = CRYPTO_num_locks();
-					m_lLocks.f_SetLen(nSSLLocks);
-					CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
+								mint nSSLLocks = CRYPTO_num_locks();
+								m_lLocks.f_SetLen(nSSLLocks);
+								CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
+							}
+						)
+					;
 				}
 
 				~CSSLLowLevel()
 				{
-					m_pThreadLocal.f_Clear();
+					fg_RunProtectRegisters
+						(
+							[&]() -> decltype(auto)
+							{
+								m_pThreadLocal.f_Clear();
 
-					CONF_modules_finish();
-					CONF_modules_free();
-					CONF_modules_unload(1);
+								CONF_modules_finish();
+								CONF_modules_free();
+								CONF_modules_unload(1);
 
-					ERR_free_strings();
+								ERR_free_strings();
 
-					EVP_cleanup();
+								EVP_cleanup();
 
-					OBJ_cleanup();
+								OBJ_cleanup();
 
-					CRYPTO_set_locking_callback(nullptr);
+								CRYPTO_set_locking_callback(nullptr);
 
-					CRYPTO_cleanup_all_ex_data();
+								CRYPTO_cleanup_all_ex_data();
 
-					ENGINE_cleanup();
+								ENGINE_cleanup();
 					
-					m_lLocks.f_Clear();
+								m_lLocks.f_Clear();
+							}
+						)
+					;
 				}
 
 				NContainer::TCVector<NIndirection::TCIndirection<NMib::NThread::CMutual>> m_lLocks;
@@ -110,11 +209,25 @@ namespace NMib
 					CRYPTO_THREADID m_ThreadID;
 					CThreadLocal()
 					{
-					    CRYPTO_THREADID_current(&m_ThreadID);
+						fg_RunProtectRegisters
+							(
+								[&]() -> decltype(auto)
+								{
+								    CRYPTO_THREADID_current(&m_ThreadID);
+								}
+							)
+						;
 					}
 					~CThreadLocal()
 					{
-						ERR_remove_thread_state(&m_ThreadID);
+						fg_RunProtectRegisters
+							(
+								[&]() -> decltype(auto)
+								{
+									ERR_remove_thread_state(&m_ThreadID);
+								}
+							)
+						;
 					}
 				};
 				NPtr::TCUniquePointer<NMib::NThread::TCThreadLocal<CThreadLocal>> m_pThreadLocal;
@@ -158,12 +271,13 @@ namespace NMib
 						NStr::fg_AddStrSep(Errors, NStr::CStr(_pError, _StringLength), DMibNewLine);
 					}
 				;
+				using CAddErrorType = decltype(fAddError);
 
 				ERR_print_errors_cb
 					(
 						[](char const *_pError, size_t _StringLength, void *_pContext) -> int
 						{
-							(*((decltype(fAddError) *)_pContext))(_pError, _StringLength);
+							(*((CAddErrorType *)_pContext))(_pError, _StringLength);
 							return 1;
 						}
 						, &fAddError 
@@ -193,20 +307,34 @@ namespace NMib
 				: mp_pSSL(nullptr)
 				, mp_pContext(_pContext)
 			{
-				g_SSLLowLevel->f_UseInThread();
-				mp_pSSL = SSL_new(_pContext);
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							mp_pSSL = SSL_new(_pContext);
+						}
+					)
+				;
 			}
 
 			~CSession()
 			{
 				if (mp_pSSL)
 				{
-					g_SSLLowLevel->f_UseInThread();
-					SSL_set_shutdown(mp_pSSL, SSL_RECEIVED_SHUTDOWN | SSL_SENT_SHUTDOWN);
-					auto pSession = SSL_get_session(mp_pSSL);
-					if (pSession)
-						SSL_CTX_remove_session(mp_pContext, pSession);
-					SSL_free(mp_pSSL);
+					fg_RunProtectRegisters
+						(
+							[&]() -> decltype(auto)
+							{
+								g_SSLLowLevel->f_UseInThread();
+								SSL_set_shutdown(mp_pSSL, SSL_RECEIVED_SHUTDOWN | SSL_SENT_SHUTDOWN);
+								auto pSession = SSL_get_session(mp_pSSL);
+								if (pSession)
+									SSL_CTX_remove_session(mp_pContext, pSession);
+								SSL_free(mp_pSSL);
+							}
+						)
+					;
 				}
 			}
 
@@ -233,34 +361,48 @@ namespace NMib
 				, mp_State(CSSLContext::EState_None)
 				, mp_Settings(_Settings)
 			{
-				g_SSLLowLevel->f_UseInThread();
-				if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
-				{
-					if (f_IsClientContext())
-						mp_pContext = fg_CreateSSLContext(TLSv1_2_client_method());
-					else
-						mp_pContext = fg_CreateSSLContext(TLSv1_2_server_method());
-				}
-				else
-				{
-					if (f_IsClientContext())
-						mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
-					else
-						mp_pContext = fg_CreateSSLContext(SSLv3_server_method());
-				}
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
+							{
+								if (f_IsClientContext())
+									mp_pContext = fg_CreateSSLContext(TLSv1_2_client_method());
+								else
+									mp_pContext = fg_CreateSSLContext(TLSv1_2_server_method());
+							}
+							else
+							{
+								if (f_IsClientContext())
+									mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
+								else
+									mp_pContext = fg_CreateSSLContext(SSLv3_server_method());
+							}
 				
-				SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
-				SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
-				msp_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
+							SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
+							SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
+							msp_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
 
-				fp_ProcessSettings();
+							fp_ProcessSettings();
+						}
+					)
+				;
 			}
 
 			~CInternal()
 			{
-				g_SSLLowLevel->f_UseInThread();
-				if (mp_pContext)
-					SSL_CTX_free(mp_pContext);
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							if (mp_pContext)
+								SSL_CTX_free(mp_pContext);
+						}
+					)
+				;
 			}
 
 			bool f_IsServerContext() const
@@ -1314,7 +1456,7 @@ namespace NMib
 					for (PCCERT_CONTEXT pCertContext = CertEnumCertificatesInStore(hStore, nullptr); pCertContext; pCertContext = CertEnumCertificatesInStore(hStore, pCertContext))
 					{
 						NStr::CStr OutputType = fsp_IsPKCS7(pCertContext->dwCertEncodingType) ? "PKCS7" : "CERTIFICATE";
-						TCVector<uint8> Data;
+						NContainer::TCVector<uint8> Data;
 						Data.f_Insert(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
 						NStr::CStr CertData = NDataProcessing::fg_Base64Encode(Data);
 						NStr::CStr CertAsString = NStr::CStr::CFormat("-----BEGIN {}-----\n{}\n-----END {}-----\n") << OutputType << CertData << OutputType;
@@ -1495,82 +1637,194 @@ namespace NMib
 		CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 			: mp_pInternal(nullptr)
 		{
-			mp_pInternal = fg_Construct(_Type, _Settings);
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal = fg_Construct(_Type, _Settings);
+					}
+				)
+			;
 		}
 
 		CSSLContext::~CSSLContext()
 		{
-			mp_pInternal = nullptr;
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal = nullptr;
+					}
+				)
+			;
 		}
 
 		NPtr::TCUniquePointer<CSSLContext::CSession> CSSLContext::fp_CreateSession()
 		{
-			return mp_pInternal->fp_CreateSession();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->fp_CreateSession();
+					}
+				)
+			;
 		}
 
 		bool CSSLContext::f_IsValid() const
 		{
-			return mp_pInternal->f_GetState() == CSSLContext::EState_None;
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return bool(mp_pInternal->f_GetState() == CSSLContext::EState_None);
+					}
+				)
+			;
 		}
 
 		void CSSLContext::f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const
 		{
-			mp_pInternal->f_ReportInvalidContext(_ConnectionResult);
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal->f_ReportInvalidContext(_ConnectionResult);
+					}
+				)
+			;
 		}
 
 		int CSSLContext::f_GetExDataIndex() const
 		{
-			return mp_pInternal->f_GetExDataIndex();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetExDataIndex();
+					}
+				)
+			;
 		}
 
 		bool CSSLContext::f_IsClientContext() const
 		{
-			return mp_pInternal->f_IsClientContext();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_IsClientContext();
+					}
+				)
+			;
 		}
 
 		bool CSSLContext::f_IsServerContext() const
 		{
-			return mp_pInternal->f_IsServerContext();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_IsServerContext();
+					}
+				)
+			;
 		}
 
 		CSSLSettings::EVerificationFlag CSSLContext::f_GetVerificationFlags() const
 		{
-			return mp_pInternal->f_GetVerificationFlags();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetVerificationFlags();
+					}
+				)
+			;
 		}
 
 		CSSLSettings const& CSSLContext::f_GetSettings() const
 		{
-			return mp_pInternal->f_GetSettings();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetSettings();
+					}
+				)
+			;
 		}
 
 		bool CSSLContext::f_CanAskUserToTrustServers() const
 		{
-			return (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UserCanAcceptUntrusted);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UserCanAcceptUntrusted);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLContext::fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
+					}
+				)
+			;
 		}
 		
 		NStr::CStr CSSLContext::fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateFingerprint(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateFingerprint(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLContext::fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetIssuerName(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetIssuerName(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateHostnames(_CertificateData, _bCheckCommonName);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateHostnames(_CertificateData, _bCheckCommonName);
+					}
+				)
+			;
 		}
 		
 		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateExtensions(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateExtensions(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateRequestExtensions
@@ -1578,37 +1832,86 @@ namespace NMib
 				NContainer::TCVector<uint8> const &_CertificateData
 			)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateRequestExtensions(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateRequestExtensions(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NContainer::TCVector<NStr::CStr> CSSLContext::fs_GetSortedHostnames(NContainer::TCVector<NStr::CStr> const &_Unsorted)
 		{
-			return CSSLContext::CInternal::fs_GetSortedHostnames(_Unsorted);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetSortedHostnames(_Unsorted);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLContext::fs_GetCertificateHostnamesStr(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateHostnamesStr(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateHostnamesStr(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NTime::CTime CSSLContext::fs_GetCertificateExpirationTime(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateExpirationTime(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateExpirationTime(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLContext::fs_GetCertificateDescription(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateDescription(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateDescription(_CertificateData);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLContext::fs_GetCertificateInformation(NContainer::TCVector<uint8> const &_CertificateData)
 		{
-			return CSSLContext::CInternal::fs_GetCertificateInformation(_CertificateData);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateInformation(_CertificateData);
+					}
+				)
+			;
 		}
 		
 		void CSSLContext::fs_RegisterExtension(NStr::CStr const &_OID, NStr::CStr const &_ShortName, NStr::CStr const &_LongName)
 		{
-			OBJ_create(_OID, _ShortName, _LongName);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						OBJ_create(_OID, _ShortName, _LongName);
+					}
+				)
+			;
 		}
 
 		namespace
@@ -1720,129 +2023,143 @@ namespace NMib
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
 			)
 		{
-			g_SSLLowLevel->f_UseInThread();
-			o_CertRequestData.f_Clear();
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						g_SSLLowLevel->f_UseInThread();
+						o_CertRequestData.f_Clear();
 			
-			bool bGenerateNewKey = o_KeyData.f_IsEmpty(); 
+						bool bGenerateNewKey = o_KeyData.f_IsEmpty(); 
 
-			EVP_PKEY *pKey;
-			if (bGenerateNewKey)
-			{
-				ERR_clear_error();
-				pKey = EVP_PKEY_new();
-				if (!pKey)
-					DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
-			}
-			else
-				pKey = CSSLContext::CInternal::fs_LoadPrivateKey(o_KeyData);
+						EVP_PKEY *pKey;
+						if (bGenerateNewKey)
+						{
+							ERR_clear_error();
+							pKey = EVP_PKEY_new();
+							if (!pKey)
+								DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+						}
+						else
+							pKey = CSSLContext::CInternal::fs_LoadPrivateKey(o_KeyData);
 			
-			auto Cleanup0 = g_OnScopeExit > [&] ()
-				{
-					EVP_PKEY_free(pKey);
-				}
-			;
+						auto Cleanup0 = g_OnScopeExit > [&] ()
+							{
+								EVP_PKEY_free(pKey);
+							}
+						;
 			
-			ERR_clear_error();
-            X509_REQ *pCertificateRequest = X509_REQ_new();
-			if (!pCertificateRequest)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate request"));
-			auto Cleanup1 = g_OnScopeExit > [&] ()
-				{
-					X509_REQ_free(pCertificateRequest);
-				}
-			;
+						ERR_clear_error();
+						X509_REQ *pCertificateRequest = X509_REQ_new();
+						if (!pCertificateRequest)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate request"));
+						auto Cleanup1 = g_OnScopeExit > [&] ()
+							{
+								X509_REQ_free(pCertificateRequest);
+							}
+						;
 
-			if (bGenerateNewKey)
-			{
-				ERR_clear_error();
-				RSA *pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
-				if (!pRSA)
-					DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
-				ERR_clear_error();
-				if (!EVP_PKEY_assign_RSA(pKey, pRSA))
-					DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
-				pRSA = nullptr;
-			}
+						if (bGenerateNewKey)
+						{
+							ERR_clear_error();
+							RSA *pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
+							if (!pRSA)
+								DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+							ERR_clear_error();
+							if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+								DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
+							pRSA = nullptr;
+						}
 			
-			ERR_clear_error();
-			if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
+						ERR_clear_error();
+						if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
 			
-			X509_EXTENSIONS *pExtensions = nullptr;
+						X509_EXTENSIONS *pExtensions = nullptr;
 			
-			auto Cleanup2 = g_OnScopeExit > [&]
-				{
-					if (pExtensions)
-						sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
-				}
-			;
+						auto Cleanup2 = g_OnScopeExit > [&]
+							{
+								if (pExtensions)
+									sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
+							}
+						;
 			
-			{
-				X509V3_CTX Context;
-				X509V3_set_ctx_nodb(&Context);
-				X509V3_set_ctx(&Context, nullptr, nullptr, pCertificateRequest, nullptr, 0);
-				if (!_Options.m_Hostnames.f_IsEmpty())
-					fg_AddHostnames(Context, pExtensions, _Options.m_Hostnames);
+						{
+							X509V3_CTX Context;
+							X509V3_set_ctx_nodb(&Context);
+							X509V3_set_ctx(&Context, nullptr, nullptr, pCertificateRequest, nullptr, 0);
+							if (!_Options.m_Hostnames.f_IsEmpty())
+								fg_AddHostnames(Context, pExtensions, _Options.m_Hostnames);
 				
-				if (!_Options.m_Extensions.f_IsEmpty())
-					fg_AddExtensions(Context, pExtensions, _Options.m_Extensions);
-			}
+							if (!_Options.m_Extensions.f_IsEmpty())
+								fg_AddExtensions(Context, pExtensions, _Options.m_Extensions);
+						}
 
-			if (pExtensions)
-			{
-				if (!X509_REQ_add_extensions(pCertificateRequest, pExtensions))
-					DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 req extensions"));
-			}
+						if (pExtensions)
+						{
+							if (!X509_REQ_add_extensions(pCertificateRequest, pExtensions))
+								DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 req extensions"));
+						}
 
-			ERR_clear_error();
-			if (!X509_REQ_set_pubkey(pCertificateRequest, pKey))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting request public key"));
+						ERR_clear_error();
+						if (!X509_REQ_set_pubkey(pCertificateRequest, pKey))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting request public key"));
 
-			ERR_clear_error();
-			if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha256()))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
+						ERR_clear_error();
+						if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha256()))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
 
-			o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
-			if (bGenerateNewKey)
-				o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
+						o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
+						if (bGenerateNewKey)
+							o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
+					}
+				)
+			;
 		}
 		
 		// openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
 
 		void CSSLContext::fs_VerifyCertificateRequestSameKeyAsCertificate(NContainer::TCVector<uint8> const &_CertRequestData, NContainer::TCVector<uint8> const &_CertData)
 		{
-			X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
-			auto Cleanup0 = g_OnScopeExit > [&] ()
-				{
-					X509_REQ_free(pCertificateRequest);
-				}
-			;
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
+						auto Cleanup0 = g_OnScopeExit > [&] ()
+							{
+								X509_REQ_free(pCertificateRequest);
+							}
+						;
 
-			X509 *pCertificate = CSSLContext::CInternal::fs_LoadCertificate(_CertData);
-			auto Cleanup3 = g_OnScopeExit > [&] ()
-				{
-					X509_free(pCertificate);
-				}
-			;
+						X509 *pCertificate = CSSLContext::CInternal::fs_LoadCertificate(_CertData);
+						auto Cleanup3 = g_OnScopeExit > [&] ()
+							{
+								X509_free(pCertificate);
+							}
+						;
 			
-			// Get public key from certificate
-			ERR_clear_error();
-			auto pPublicKey = X509_get_pubkey(pCertificate);
-			if (!pPublicKey)
-				DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
-			auto Cleanup = g_OnScopeExit > [&]
-				{
-					EVP_PKEY_free(pPublicKey);
-				}
-			;
+						// Get public key from certificate
+						ERR_clear_error();
+						auto pPublicKey = X509_get_pubkey(pCertificate);
+						if (!pPublicKey)
+							DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
+						auto Cleanup = g_OnScopeExit > [&]
+							{
+								EVP_PKEY_free(pPublicKey);
+							}
+						;
 
-			// Verify with certificate request
-			ERR_clear_error();
-			int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
-			if (VerifyResult < 0)
-				DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
-			else if (VerifyResult == 0)
-				DMibErrorNetSSL("Certificate request signature mismatch");
+						// Verify with certificate request
+						ERR_clear_error();
+						int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
+						if (VerifyResult < 0)
+							DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
+						else if (VerifyResult == 0)
+							DMibErrorNetSSL("Certificate request signature mismatch");
+					}
+				)
+			;
 		}
 		
 		void CSSLContext::fs_SignClientCertificate
@@ -1855,163 +2172,170 @@ namespace NMib
 				, int _Days
 			)
 		{
-			g_SSLLowLevel->f_UseInThread();
-			o_SignedCertificateData.f_Clear();
-
-			X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
-			auto Cleanup0 = g_OnScopeExit > [&] ()
-				{
-					X509_REQ_free(pCertificateRequest);
-				}
-			;
-			
-			EVP_PKEY *pCAKey = CSSLContext::CInternal::fs_LoadPrivateKey(_CAKey);
-			auto Cleanup2 = g_OnScopeExit > [&] ()
-				{
-					EVP_PKEY_free(pCAKey);
-				}
-			;
-
-			X509 *pCACertificate = CSSLContext::CInternal::fs_LoadCertificate(_CACertificate);
-			auto Cleanup3 = g_OnScopeExit > [&] ()
-				{
-					X509_free(pCACertificate);
-				}
-			;
-
-			ERR_clear_error();
-			X509 *pCertificate = X509_new();
-			if (!pCertificate)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
-			auto Cleanup1 = g_OnScopeExit > [&] ()
-				{
-					X509_free(pCertificate);
-				}
-			;
-			
-			{
-		        if 
-					(
-						(!pCertificateRequest->req_info)
-						|| (!pCertificateRequest->req_info->pubkey)
-						|| (!pCertificateRequest->req_info->pubkey->public_key)
-						|| (!pCertificateRequest->req_info->pubkey->public_key->data)
-					) 
-				{
-					DMibErrorNetSSL("The certificate request does not contain a public key");
-				}
-				ERR_clear_error();
-				EVP_PKEY *pPublicKey = X509_REQ_get_pubkey(pCertificateRequest); 
-				if (!pPublicKey)
-					DMibErrorNetSSL(fg_GetExceptionStr("Error unpacking public key"));
-				
-				auto Cleanup = g_OnScopeExit > [&] ()
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
 					{
-						EVP_PKEY_free(pPublicKey);
-					}
-				;
-				ERR_clear_error();
-				int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
-				if (VerifyResult < 0)
-					DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
-				else if (VerifyResult == 0)
-					DMibErrorNetSSL("Certificate request signature mismatch");
-			}
+						g_SSLLowLevel->f_UseInThread();
+						o_SignedCertificateData.f_Clear();
+
+						X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
+						auto Cleanup0 = g_OnScopeExit > [&] ()
+							{
+								X509_REQ_free(pCertificateRequest);
+							}
+						;
 			
-			ERR_clear_error();
-			if (!X509_set_version(pCertificate, 3))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
+						EVP_PKEY *pCAKey = CSSLContext::CInternal::fs_LoadPrivateKey(_CAKey);
+						auto Cleanup2 = g_OnScopeExit > [&] ()
+							{
+								EVP_PKEY_free(pCAKey);
+							}
+						;
 
-			ERR_clear_error();
-			if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
-				
-			ERR_clear_error();
-			if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
-				
-			ERR_clear_error();
-			if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
+						X509 *pCACertificate = CSSLContext::CInternal::fs_LoadCertificate(_CACertificate);
+						auto Cleanup3 = g_OnScopeExit > [&] ()
+							{
+								X509_free(pCACertificate);
+							}
+						;
 
-			ERR_clear_error();
-			if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCACertificate)))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
+						ERR_clear_error();
+						X509 *pCertificate = X509_new();
+						if (!pCertificate)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
+						auto Cleanup1 = g_OnScopeExit > [&] ()
+							{
+								X509_free(pCertificate);
+							}
+						;
 			
-			ERR_clear_error();
-			if (!X509_set_subject_name(pCertificate, pCertificateRequest->req_info->subject))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 subject name"));
-
-			{
-				ERR_clear_error();
-				auto pPublicKey = X509_REQ_get_pubkey(pCertificateRequest);
-				if (!pPublicKey)
-					DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
-				auto Cleanup = g_OnScopeExit > [&]
-					{
-						EVP_PKEY_free(pPublicKey);
-					}
-				;
+						{
+							if 
+								(
+									(!pCertificateRequest->req_info)
+									|| (!pCertificateRequest->req_info->pubkey)
+									|| (!pCertificateRequest->req_info->pubkey->public_key)
+									|| (!pCertificateRequest->req_info->pubkey->public_key->data)
+								) 
+							{
+								DMibErrorNetSSL("The certificate request does not contain a public key");
+							}
+							ERR_clear_error();
+							EVP_PKEY *pPublicKey = X509_REQ_get_pubkey(pCertificateRequest); 
+							if (!pPublicKey)
+								DMibErrorNetSSL(fg_GetExceptionStr("Error unpacking public key"));
 				
-				ERR_clear_error();
-				if (!X509_set_pubkey(pCertificate, pPublicKey))
-					DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
-			}
-
-			{
-				ERR_clear_error();
-				auto pCAPublicKey = X509_get_pubkey(pCACertificate);
-				if (!pCAPublicKey)
-					DMibErrorNetSSL(fg_GetExceptionStr("Error getting CA certificate public key"));
-				auto Cleanup = g_OnScopeExit > [&]
-					{
-						EVP_PKEY_free(pCAPublicKey);
-					}
-				;
-				
-				EVP_PKEY_copy_parameters(pCAPublicKey, pCAKey);
-			}
-
-			{
-				X509_EXTENSIONS *pExtensions = X509_REQ_get_extensions(pCertificateRequest);
+							auto Cleanup = g_OnScopeExit > [&] ()
+								{
+									EVP_PKEY_free(pPublicKey);
+								}
+							;
+							ERR_clear_error();
+							int VerifyResult = X509_REQ_verify(pCertificateRequest, pPublicKey);
+							if (VerifyResult < 0)
+								DMibErrorNetSSL(fg_GetExceptionStr("Signature verification error"));
+							else if (VerifyResult == 0)
+								DMibErrorNetSSL("Certificate request signature mismatch");
+						}
 			
-				auto Cleanup = g_OnScopeExit > [&]
-					{
-						if (pExtensions)
-							sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
-					}
-				;
+						ERR_clear_error();
+						if (!X509_set_version(pCertificate, 3))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
+
+						ERR_clear_error();
+						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
 				
-				if (pExtensions)
-				{
-					ERR_clear_error();
-					int nExtensions = X509v3_get_ext_count(pExtensions);
-					if (nExtensions < 0)
-						DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension count from certificate request"));
+						ERR_clear_error();
+						if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
+				
+						ERR_clear_error();
+						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
+
+						ERR_clear_error();
+						if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCACertificate)))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
+			
+						ERR_clear_error();
+						if (!X509_set_subject_name(pCertificate, pCertificateRequest->req_info->subject))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 subject name"));
+
+						{
+							ERR_clear_error();
+							auto pPublicKey = X509_REQ_get_pubkey(pCertificateRequest);
+							if (!pPublicKey)
+								DMibErrorNetSSL(fg_GetExceptionStr("Found no public key in certificate"));
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									EVP_PKEY_free(pPublicKey);
+								}
+							;
+				
+							ERR_clear_error();
+							if (!X509_set_pubkey(pCertificate, pPublicKey))
+								DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
+						}
+
+						{
+							ERR_clear_error();
+							auto pCAPublicKey = X509_get_pubkey(pCACertificate);
+							if (!pCAPublicKey)
+								DMibErrorNetSSL(fg_GetExceptionStr("Error getting CA certificate public key"));
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									EVP_PKEY_free(pCAPublicKey);
+								}
+							;
+				
+							EVP_PKEY_copy_parameters(pCAPublicKey, pCAKey);
+						}
+
+						{
+							X509_EXTENSIONS *pExtensions = X509_REQ_get_extensions(pCertificateRequest);
+			
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									if (pExtensions)
+										sk_X509_EXTENSION_pop_free(pExtensions, X509_EXTENSION_free);
+								}
+							;
+				
+							if (pExtensions)
+							{
+								ERR_clear_error();
+								int nExtensions = X509v3_get_ext_count(pExtensions);
+								if (nExtensions < 0)
+									DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension count from certificate request"));
 						
-					for (int iExtension = 0; iExtension < nExtensions; ++iExtension)
-					{
-						ERR_clear_error();
-						auto *pExtension = X509v3_get_ext(pExtensions, iExtension);
-						if (!pExtension)
-							DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension from certificate request"));
-						ERR_clear_error();
-						if (!X509_add_ext(pCertificate, pExtension, -1))
-							DMibErrorNetSSL(fg_GetExceptionStr("Failed to add extension to certificate"));
-					}
-				}
-			}
+								for (int iExtension = 0; iExtension < nExtensions; ++iExtension)
+								{
+									ERR_clear_error();
+									auto *pExtension = X509v3_get_ext(pExtensions, iExtension);
+									if (!pExtension)
+										DMibErrorNetSSL(fg_GetExceptionStr("Failed to get extension from certificate request"));
+									ERR_clear_error();
+									if (!X509_add_ext(pCertificate, pExtension, -1))
+										DMibErrorNetSSL(fg_GetExceptionStr("Failed to add extension to certificate"));
+								}
+							}
+						}
 
 			
-			ERR_clear_error();
-			if (!X509_check_private_key(pCACertificate, pCAKey))
-				DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
+						ERR_clear_error();
+						if (!X509_check_private_key(pCACertificate, pCAKey))
+							DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
 
-			ERR_clear_error();
-			if (!X509_sign(pCertificate, pCAKey, EVP_sha256()))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error signing certificate request"));
+						ERR_clear_error();
+						if (!X509_sign(pCertificate, pCAKey, EVP_sha256()))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error signing certificate request"));
 
-			o_SignedCertificateData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
+						o_SignedCertificateData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
+					}
+				)
+			;
 		}
 		
 		// openssl genrsa -des3 -out ca.key 4096
@@ -2026,86 +2350,93 @@ namespace NMib
 				, int _Days
 			)
 		{
-			g_SSLLowLevel->f_UseInThread();
-			o_CertData.f_Clear();
-			o_KeyData.f_Clear();
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						g_SSLLowLevel->f_UseInThread();
+						o_CertData.f_Clear();
+						o_KeyData.f_Clear();
 
-			ERR_clear_error();
-			X509 *pCertificate = X509_new();
-			if (!pCertificate)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
-			auto Cleanup0 = g_OnScopeExit > [&] ()
-				{
-					X509_free(pCertificate);
-				}
+						ERR_clear_error();
+						X509 *pCertificate = X509_new();
+						if (!pCertificate)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error creating certificate"));
+						auto Cleanup0 = g_OnScopeExit > [&] ()
+							{
+								X509_free(pCertificate);
+							}
+						;
+						ERR_clear_error();
+						EVP_PKEY* pKey = EVP_PKEY_new();
+						if (!pKey)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
+						auto Cleanup1 = g_OnScopeExit > [&] ()
+							{
+								EVP_PKEY_free(pKey);
+							}
+						;
+						ERR_clear_error();
+						RSA* pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
+						if (!pRSA)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+
+						ERR_clear_error();
+						if (!EVP_PKEY_assign_RSA(pKey, pRSA))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
+						pRSA = nullptr;
+
+						ERR_clear_error();
+						if (!X509_set_version(pCertificate, 3))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
+
+						ERR_clear_error();
+						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
+				
+						ERR_clear_error();
+						if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
+				
+						ERR_clear_error();
+						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
+
+						ERR_clear_error();
+						if (!X509_set_pubkey(pCertificate, pKey))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
+				
+						ERR_clear_error();
+						if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
+							DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Error adding x509 CN '{}'", _Options.m_Subject)));
+				
+						// Self signed.
+						ERR_clear_error();
+						if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
+
+						// Set the subjectAltName
+						{
+							X509V3_CTX Context;
+							X509V3_set_ctx_nodb(&Context);
+							X509V3_set_ctx(&Context, pCertificate, pCertificate, nullptr, nullptr, 0);
+				
+							if (!_Options.m_Hostnames.f_IsEmpty())
+								fg_AddHostnames(Context, pCertificate, _Options.m_Hostnames);
+
+							if (!_Options.m_Extensions.f_IsEmpty())
+								fg_AddExtensions(Context, pCertificate, _Options.m_Extensions);
+						}
+
+						ERR_clear_error();
+						if (!X509_sign(pCertificate, pKey, EVP_sha256()))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error signing selfsigned certificate"));
+
+						o_CertData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
+						o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
+					}
+				)
 			;
-			ERR_clear_error();
-			EVP_PKEY* pKey = EVP_PKEY_new();
-			if (!pKey)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error creating key"));
-			auto Cleanup1 = g_OnScopeExit > [&] ()
-				{
-					EVP_PKEY_free(pKey);
-				}
-			;
-			ERR_clear_error();
-			RSA* pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
-			if (!pRSA)
-				DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
-
-			ERR_clear_error();
-			if (!EVP_PKEY_assign_RSA(pKey, pRSA))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
-			pRSA = nullptr;
-
-			ERR_clear_error();
-			if (!X509_set_version(pCertificate, 3))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
-
-			ERR_clear_error();
-			if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
-				
-			ERR_clear_error();
-			if (!X509_gmtime_adj(X509_get_notBefore(pCertificate), 0))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
-				
-			ERR_clear_error();
-			if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
-
-			ERR_clear_error();
-			if (!X509_set_pubkey(pCertificate, pKey))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
-				
-			ERR_clear_error();
-			if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
-				DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Error adding x509 CN '{}'", _Options.m_Subject)));
-				
-			// Self signed.
-			ERR_clear_error();
-			if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 issuer"));
-
-			// Set the subjectAltName
-			{
-				X509V3_CTX Context;
-				X509V3_set_ctx_nodb(&Context);
-				X509V3_set_ctx(&Context, pCertificate, pCertificate, nullptr, nullptr, 0);
-				
-				if (!_Options.m_Hostnames.f_IsEmpty())
-					fg_AddHostnames(Context, pCertificate, _Options.m_Hostnames);
-
-				if (!_Options.m_Extensions.f_IsEmpty())
-					fg_AddExtensions(Context, pCertificate, _Options.m_Extensions);
-			}
-
-			ERR_clear_error();
-			if (!X509_sign(pCertificate, pKey, EVP_sha256()))
-				DMibErrorNetSSL(fg_GetExceptionStr("Error signing selfsigned certificate"));
-
-			o_CertData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
-			o_KeyData = CSSLContext::CInternal::fs_ConvertKeyToBinary(pKey);
 		}
 
 		// CSSLConnection methods.
@@ -2191,14 +2522,10 @@ namespace NMib
 				return (void*)(mint)SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL());
 			}
 
-			NDataProcessing::CHashDigest_SHA256 f_GetSessionKey()
+			NDataProcessing::CHashDigest_SHA256 f_GetSessionKeyDigest()
 			{
 				DMibRequire(mp_bConnected);
-
-				NStr::CStr SessionMasterKeyStr;
-				SessionMasterKeyStr.f_AddStr(f_GetSSL()->session->master_key, f_GetSSL()->session->master_key_length);
-
-				return NDataProcessing::CHashDigest_SHA256::fs_FromString(SessionMasterKeyStr);
+				return NDataProcessing::CHash_SHA256::fs_DigestFromData(f_GetSSL()->session->master_key, f_GetSSL()->session->master_key_length);
 			}
 
 			bool f_Connect()
@@ -2546,106 +2873,247 @@ namespace NMib
 		CSSLConnection::CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustDecisionCallback)
 			: mp_pInternal(nullptr)
 		{
-			mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback));
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback));
+					}
+				)
+			;
 		}
 
 		CSSLConnection::~CSSLConnection()
 		{
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal.f_Clear();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_BrokenState() const
 		{
-			if (mp_pInternal->f_GetState() != EState_None)
-			{
-				DMibLog(DebugVerbose2, " **** SSL broken: {}", mp_pInternal->f_GetState());
-				return true;
-			}
-			return false;
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						if (mp_pInternal->f_GetState() != EState_None)
+						{
+							DMibLog(DebugVerbose2, " **** SSL broken: {}", mp_pInternal->f_GetState());
+							return true;
+						}
+						return false;
+					}
+				)
+			;
 		}
 		
 		NStr::CStr CSSLConnection::f_GetLastError() const
 		{
-			return mp_pInternal->f_GetLastError();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetLastError();
+					}
+				)
+			;
 		}
 		
 		void CSSLConnection::f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult)
 		{
-			mp_pInternal->f_SetExpectedConnectionResult(_ExpectedResult);
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal->f_SetExpectedConnectionResult(_ExpectedResult);
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_Connected() const
 		{
-			return mp_pInternal->f_Connected();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Connected();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_HandshakeInProgress() const
 		{
-			return mp_pInternal->f_GetHandshakeInProgress();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetHandshakeInProgress();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_GiveSocket(void *_pSocket)
 		{
-			return mp_pInternal->f_GiveSocket(_pSocket);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GiveSocket(_pSocket);
+					}
+				)
+			;
 		}
 
 		void* CSSLConnection::f_GetSocket() const
 		{
-			return mp_pInternal->f_GetSocket();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetSocket();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_HasSocket() const
 		{
-			return mp_pInternal->f_HasSocket();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_HasSocket();
+					}
+				)
+			;
 		}
 
 		void CSSLConnection::f_SetHostname(NStr::CStr const &_Hostname)
 		{
-			mp_pInternal->f_SetHostname(_Hostname);
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						mp_pInternal->f_SetHostname(_Hostname);
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLConnection::f_GetHostname() const
 		{
-			return mp_pInternal->f_GetHostname();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetHostname();
+					}
+				)
+			;
 		}
 
 		CSSLSettings::EVerificationFlag CSSLConnection::f_GetVerificationFlags() const
 		{
-			return mp_pInternal->f_GetVerificationFlags();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetVerificationFlags();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_Connect()
 		{
-			return mp_pInternal->f_Connect();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Connect();
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_Accept()
 		{
-			return mp_pInternal->f_Accept();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Accept();
+					}
+				)
+			;
 		}
 		
 		bool CSSLConnection::f_Shutdown()
 		{
-			return mp_pInternal->f_Shutdown();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Shutdown();
+					}
+				)
+			;
 		}
 
 		mint CSSLConnection::f_Send(const void *_pData, mint _nLen)
 		{
-			return mp_pInternal->f_Send(_pData, _nLen);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Send(_pData, _nLen);
+					}
+				)
+			;
 		}
 
 		mint CSSLConnection::f_Receive(void *_pData, mint _nLen)
 		{
-			return mp_pInternal->f_Receive(_pData, _nLen);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Receive(_pData, _nLen);
+					}
+				)
+			;
 		}
 
 		bool CSSLConnection::f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len)
 		{
-			return mp_pInternal->f_Decrypt(_pDataIn, _pDataOut, _Len);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_Decrypt(_pDataIn, _pDataOut, _Len);
+					}
+				)
+			;
 		}
 
-		NDataProcessing::CHashDigest_SHA256 CSSLConnection::f_GetSessionKey() const
+		NDataProcessing::CHashDigest_SHA256 CSSLConnection::f_GetSessionKeyDigest() const
 		{
-			return mp_pInternal->f_GetSessionKey();
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return mp_pInternal->f_GetSessionKeyDigest();
+					}
+				)
+			;
 		}
 
 
@@ -2880,11 +3348,18 @@ namespace NMib
 
 		NStr::CStr CSSLConnectionResult::fp_GetLibraryStringForError(int _Error) const
 		{
-			g_SSLLowLevel->f_UseInThread();
-			if (_Error == EMiscError_HostnameMisMatch)
-				return (NStr::CStr::CFormat("Hostname mismatch (valid hostnames in certificate: {})") << CSSLContext::fs_GetCertificateHostnamesStr(f_GetPeerCertificate())).f_GetStr();
-			else
-				return X509_verify_cert_error_string(_Error);
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						g_SSLLowLevel->f_UseInThread();
+						if (_Error == EMiscError_HostnameMisMatch)
+							return (NStr::CStr::CFormat("Hostname mismatch (valid hostnames in certificate: {})") << CSSLContext::fs_GetCertificateHostnamesStr(f_GetPeerCertificate())).f_GetStr();
+						else
+							return NStr::CStr(X509_verify_cert_error_string(_Error));
+					}
+				)
+			;
 		}
 
 		NStr::CStr CSSLConnectionResult::fp_StringForError(int _Error) const
@@ -3038,8 +3513,15 @@ namespace NMib
 		{
 			CInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
 			{
-				g_SSLLowLevel->f_UseInThread();
-				f_GenerateKey(_Password, _pSalt, _nRounds);
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							f_GenerateKey(_Password, _pSalt, _nRounds);
+						}
+					)
+				;
 			}
 			
 			~CInternal()
@@ -3050,95 +3532,116 @@ namespace NMib
 			
 			void f_GenerateKey(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
 			{
-				EVP_CIPHER const* pCipher = EVP_get_cipherbyname("aes-256-cbc");
-				EVP_MD const* pDigest = EVP_get_digestbyname("sha256");
-				
-				ERR_clear_error();
-				if
+				fg_RunProtectRegisters
 					(
-						!EVP_BytesToKey
-						(
-							pCipher
-							, pDigest
-							, _pSalt ? _pSalt->m_Salt : nullptr
-							, (unsigned char const *)_Password.f_GetStr()
-							, _Password.f_GetLen()
-							, _nRounds
-							, m_Key
-							, m_IV
-						)
+						[&]() -> decltype(auto)
+						{
+							EVP_CIPHER const* pCipher = EVP_get_cipherbyname("aes-256-cbc");
+							EVP_MD const* pDigest = EVP_get_digestbyname("sha256");
+				
+							ERR_clear_error();
+							if
+								(
+									!EVP_BytesToKey
+									(
+										pCipher
+										, pDigest
+										, _pSalt ? _pSalt->m_Salt : nullptr
+										, (unsigned char const *)_Password.f_GetStr()
+										, _Password.f_GetLen()
+										, _nRounds
+										, m_Key
+										, m_IV
+									)
+								)
+							{
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+							}
+						}
 					)
-				{
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
-				}
+				;
 			}
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
-				g_SSLLowLevel->f_UseInThread();
-				EVP_CIPHER_CTX *pCipherContext = nullptr;
-				auto Cleanup = g_OnScopeExit > [&]
-					{
-						EVP_CIPHER_CTX_free(pCipherContext);
-					}
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							EVP_CIPHER_CTX *pCipherContext = nullptr;
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									EVP_CIPHER_CTX_free(pCipherContext);
+								}
+							;
+				
+							ERR_clear_error();
+							if (!(pCipherContext = EVP_CIPHER_CTX_new()))
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
+				
+							ERR_clear_error();
+							if (EVP_EncryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+				
+							ERR_clear_error();
+							EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
+				
+							int EncryptedLen = 0;
+							ERR_clear_error();
+							if (EVP_EncryptUpdate(pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to encrypt data"));
+				
+							int FinalizeLen = 0;
+							ERR_clear_error();
+							if (EVP_EncryptFinal_ex(pCipherContext, _pDest + EncryptedLen, &FinalizeLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize encrypted data"));
+				
+							return uint32(EncryptedLen + FinalizeLen);
+						}
+					)
 				;
-				
-				ERR_clear_error();
-				if (!(pCipherContext = EVP_CIPHER_CTX_new()))
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
-				
-				ERR_clear_error();
-				if (EVP_EncryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
-				
-				ERR_clear_error();
-				EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
-				
-				int EncryptedLen = 0;
-				ERR_clear_error();
-				if (EVP_EncryptUpdate(pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to encrypt data"));
-				
-				int FinalizeLen = 0;
-				ERR_clear_error();
-				if (EVP_EncryptFinal_ex(pCipherContext, _pDest + EncryptedLen, &FinalizeLen) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize encrypted data"));
-				
-				return EncryptedLen + FinalizeLen;
 			}
 		
 			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 			{
-				g_SSLLowLevel->f_UseInThread();
-				EVP_CIPHER_CTX *pCipherContext = nullptr;
-				auto Cleanup = g_OnScopeExit > [&]
-					{
-						EVP_CIPHER_CTX_free(pCipherContext);
-					}
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							EVP_CIPHER_CTX *pCipherContext = nullptr;
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									EVP_CIPHER_CTX_free(pCipherContext);
+								}
+							;
+				
+							ERR_clear_error();
+							if (!(pCipherContext = EVP_CIPHER_CTX_new()))
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
+				
+							ERR_clear_error();
+							if (EVP_DecryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+				
+							ERR_clear_error();
+							EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
+				
+							int DecryptedLen = 0;
+							ERR_clear_error();
+							if (EVP_DecryptUpdate(pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to decrypt"));
+				
+							int FinalLen = 0;
+							ERR_clear_error();
+							if (EVP_DecryptFinal_ex(pCipherContext, _pDest + DecryptedLen, &FinalLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize decryption"));
+				
+							return uint32(DecryptedLen + FinalLen);
+						}
+					)
 				;
-				
-				ERR_clear_error();
-				if (!(pCipherContext = EVP_CIPHER_CTX_new()))
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
-				
-				ERR_clear_error();
-				if (EVP_DecryptInit_ex(pCipherContext, EVP_aes_256_cbc(), nullptr, m_Key, m_IV) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
-				
-				ERR_clear_error();
-				EVP_CIPHER_CTX_set_padding(pCipherContext, 0);
-				
-				int DecryptedLen = 0;
-				ERR_clear_error();
-				if (EVP_DecryptUpdate(pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to decrypt"));
-				
-				int FinalLen = 0;
-				ERR_clear_error();
-				if (EVP_DecryptFinal_ex(pCipherContext, _pDest + DecryptedLen, &FinalLen) != 1)
-					DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize decryption"));
-				
-				return DecryptedLen + FinalLen;
 			}
 			
 			uint8 m_Key[EVP_MAX_KEY_LENGTH];

@@ -3,6 +3,22 @@
 
 Import "../Core/Lib_Malterlib.MTarget"
 
+%Group "!Automatic/MalterlibOpenSSLAsm"
+{
+	%File Source/Malterlib_Network_SSL_Windows_x64.asm
+}
+
+Target.ExtraGroups "!Automatic/MalterlibOpenSSLAsm;@(Target.ExtraGroups)"
+{
+	&
+	{
+		Architecture "x64"
+		PlatformFamily Windows
+		MalterlibLinkWithOpenSSL true
+		TargetIsExecutable true
+	}
+}
+
 %Group "{Malterlib}/{Lib_Malterlib_Network}"
 {
 	%Group Network
@@ -16,6 +32,10 @@ Import "../Core/Lib_Malterlib.MTarget"
 			%File "Include/Mib/Network/^*"
 		}
 		%File "Source/*"
+		%File "Source/Malterlib_Network_SSL_Windows_x64.asm"
+		{
+			Compile.Disabled true
+		}
 		%Group Documentation
 		{
 			%File "Documentation/*"
