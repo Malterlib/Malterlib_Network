@@ -176,7 +176,7 @@ public:
 				NMem::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
 				
 				NStr::CStrSecure OpenSSLPassword("ABCDEFGH");
-				CEncryptAES EncryptAES4(OpenSSLPassword, nullptr);
+				CEncryptAES EncryptAES4(OpenSSLPassword, nullptr, 1);
 				
 				EncryptAES4.f_Encrypt(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen(), Encrypted.f_GetArray());
 				DMibExpect(EncryptedOpenSSL, ==, Encrypted);

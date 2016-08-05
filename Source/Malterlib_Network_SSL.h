@@ -245,7 +245,7 @@ namespace NMib
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 			CSSLConnectionResult& f_GetConnectionResult() { return mp_Result; }
 			CSSLConnectionResult const& f_GetConnectionResult() const { return mp_Result; }
-			NDataProcessing::CHashDigest_SHA256 f_GetSessionKey() const;
+			NDataProcessing::CHashDigest_SHA256 f_GetSessionKeyDigest() const;
 
 		protected:
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
