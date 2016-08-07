@@ -87,17 +87,17 @@ namespace NMib
 			;
 		}
 
-		void CSocket_SSL::f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
+		void CSocket_SSL::f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags)
 		{
 			if (!mp_pSSLContext->f_IsServerContext())
 				DMibErrorNet("SSL context is not a server context when trying to listen");
 
 			mp_State = EState_Listen;
 			mp_OnStateChange = fg_Move(_OnStateChange);
-			return mp_Socket.f_Listen(_Address, fp_SharedOnStateChange());
+			return mp_Socket.f_Listen(_Address, fp_SharedOnStateChange(), _Flags);
 		}
 
-		void CSocket_SSL::f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
+		void CSocket_SSL::f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags)
 		{
 			DMibErrorNet("Datagrams not supported");
 		}

@@ -223,12 +223,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal)
+						, NNet::ENetFlag_None
 					)
 				;
 				m_ListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal)
+						, NNet::ENetFlag_None
 					)
 				;
 			}
@@ -244,12 +246,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo)
+						, NNet::ENetFlag_None
 					)
 				;
 				m_EchoListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo)
+						, NNet::ENetFlag_None
 					)
 				;
 			}
@@ -265,12 +269,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror)
+						, NNet::ENetFlag_None
 					)
 				;
 				m_MirrorListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror)
+						, NNet::ENetFlag_None
 					)
 				;
 			}

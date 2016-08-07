@@ -41,8 +41,8 @@
 
 						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 
-						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when a new connection has arrived
-						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data
+						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, NMib::NNet::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
+						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, NMib::NNet::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
 
 						void fg_Close(void *_pSocket); // Closes the socket and connection
 
@@ -163,12 +163,13 @@ namespace NMib
 			}
 		};
 
-		// This is not an enum as each platform can add it's own address types.
-		typedef uint32 ENetAddressType;
-		static const uint32 ENetAddressType_None = 0;
-		static const uint32 ENetAddressType_TCPv4 = 1;
-		static const uint32 ENetAddressType_TCPv6 = 2;		
-		static const uint32 ENetAddressType_Unix = 3;		
+		enum ENetAddressType : uint32
+		{
+			ENetAddressType_None = 0
+			, ENetAddressType_TCPv4 = 1
+			, ENetAddressType_TCPv6 = 2
+			, ENetAddressType_Unix = 3
+		};
 
 		template<typename t_CIPAddress, ENetAddressType t_Type>
 		class TNetAddressTCP : public t_CIPAddress
@@ -225,6 +226,12 @@ namespace NMib
 			, ENetTCPState_Connection	= DMibBit(2) // A new connection is available for accept
 			, ENetTCPState_Connected	= DMibBit(3) // A async connection has completed
 			, ENetTCPState_Closed		= DMibBit(4) // The connection has been lost
+		};
+
+		enum ENetFlag
+		{
+			ENetFlag_None = 0
+			, ENetFlag_ReuseAddress = DMibBit(0) // Reuse address 
 		};
 
 		class CNetAddress;
@@ -329,8 +336,8 @@ namespace NMib
 
 				void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange, CAddress _pBindAddr); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 
-				void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange); // Report to the supplied event when a new connection has arrived
-				void *fg_ListenDatagram(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange); // Report to the supplied event when new data is received or when we are ready to send new data
+				void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
+				void *fg_ListenDatagram(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
 				void *fg_Accept(void *_pSocket, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange); // Report to the supplied event when new data is received or when we are ready to send new data
 
 				void fg_Shutdown(void *_pSocket); // Closes the socket and connection
@@ -734,25 +741,25 @@ namespace NMib
 				mp_pSocket = NMib::NSys::NNet::fg_AsyncConnect(_Address, fg_Move(_OnStateChange), _BindAddress);
 			}
 			
-			void f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+			void f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, ENetFlag _Flags)
 			{
 				f_Close();
 
-				mp_pSocket = NMib::NSys::NNet::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo));
+				mp_pSocket = NMib::NSys::NNet::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
 			}
 			
-			void f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange)
+			void f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange, ENetFlag _Flags)
 			{
 				f_Close();
 
-				mp_pSocket = NMib::NSys::NNet::fg_Listen(_Address, fg_Move(_OnStateChange));
+				mp_pSocket = NMib::NSys::NNet::fg_Listen(_Address, fg_Move(_OnStateChange), _Flags);
 			}
 			
-			void f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange)
+			void f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (::NMib::NNet::ENetTCPState _StateAdded)>&& _OnStateChange, ENetFlag _Flags)
 			{
 				f_Close();
 
-				mp_pSocket = NMib::NSys::NNet::fg_ListenDatagram(_Address, fg_Move(_OnStateChange));
+				mp_pSocket = NMib::NSys::NNet::fg_ListenDatagram(_Address, fg_Move(_OnStateChange), _Flags);
 			}
 			
 			void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)

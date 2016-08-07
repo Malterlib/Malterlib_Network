@@ -49,14 +49,14 @@ namespace NMib
 			return mp_Socket.f_AsyncConnect(_Address, fg_Move(_OnStateChange), _BindAddress);
 		}
 
-		void CSocket_TCP::f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
+		void CSocket_TCP::f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags)
 		{
-			return mp_Socket.f_Listen(_Address, fg_Move(_OnStateChange));
+			return mp_Socket.f_Listen(_Address, fg_Move(_OnStateChange), _Flags);
 		}
 
-		void CSocket_TCP::f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
+		void CSocket_TCP::f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, NMib::NNet::ENetFlag _Flags)
 		{
-			return mp_Socket.f_ListenDatagram(_Address, fg_Move(_OnStateChange));
+			return mp_Socket.f_ListenDatagram(_Address, fg_Move(_OnStateChange), _Flags);
 		}
 
 		NPtr::TCUniquePointer<ICSocket> CSocket_TCP::f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
