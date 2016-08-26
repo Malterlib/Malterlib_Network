@@ -231,7 +231,7 @@ namespace NMib
 		enum ENetFlag
 		{
 			ENetFlag_None = 0
-			, ENetFlag_ReuseAddress = DMibBit(0) // Reuse address 
+			, ENetFlag_ReusePort = DMibBit(0) // Reuse port, allowing several sockets to bind to the same port
 		};
 
 		class CNetAddress;

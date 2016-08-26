@@ -264,7 +264,7 @@ public:
 						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));
 						DMibTest(DMibExpr(BindAddress) != DMibExpr(nullptr));
 
-						void* pServer = fg_Listen(BindAddress, nullptr, NMib::NNet::ENetFlag_ReuseAddress);
+						void* pServer = fg_Listen(BindAddress, nullptr, NMib::NNet::ENetFlag_None);
 						auto CleanupServer
 							= fg_OnScopeExit
 							(
@@ -559,7 +559,7 @@ public:
 								{
 									ListenEvent.f_Signal();
 								}
-								, NMib::NNet::ENetFlag_ReuseAddress
+								, NMib::NNet::ENetFlag_None
 							)
 						;
 
