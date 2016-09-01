@@ -303,7 +303,6 @@ namespace NMib
 			bool f_IsValid() const;
 			void f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const;
 
-			int f_GetExDataIndex() const;
 			bool f_IsClientContext() const;
 			bool f_IsServerContext() const;
 

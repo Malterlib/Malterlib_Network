@@ -243,6 +243,17 @@ namespace NMib
 
 			NAggregate::TCAggregate<CSSLLowLevel> g_SSLLowLevel = {DAggregateInit};
 
+			struct CSSLLowLevelDataIndex
+			{
+				CSSLLowLevelDataIndex()
+				{
+					m_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
+				}
+				int m_ExDataIndex = 0;
+			};
+			
+			NAggregate::TCAggregate<CSSLLowLevelDataIndex> g_SSLLowLevelDataIndex = {DAggregateInit};
+
 			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line)
 			{
 				if (_Mode & CRYPTO_LOCK)
@@ -261,6 +272,11 @@ namespace NMib
 			{
 				DMibLock(g_SSLLowLevel->m_ContextCreationLock);
 				return SSL_CTX_new(_pMethod);
+			}
+			
+			int fg_ExDataIndex()
+			{
+				return g_SSLLowLevelDataIndex->m_ExDataIndex;
 			}
 
 			NStr::CStr fg_GetErrors()
@@ -383,7 +399,6 @@ namespace NMib
 				
 							SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
 							SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
-							msp_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
 
 							fp_ProcessSettings();
 						}
@@ -449,11 +464,6 @@ namespace NMib
 					_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityData);
 			}
 
-			int f_GetExDataIndex() const
-			{
-				return msp_ExDataIndex;
-			}
-
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
 			{
 				return mp_Settings.m_VerificationFlags;
@@ -508,7 +518,7 @@ namespace NMib
 				if (!pSSL)
 					return 0;
 
-				CSSLConnection* pCSSL = (CSSLConnection*)SSL_get_ex_data(pSSL, msp_ExDataIndex);
+				CSSLConnection* pCSSL = (CSSLConnection*)SSL_get_ex_data(pSSL, fg_ExDataIndex());
 				if (!pCSSL)
 					return 0;
 
@@ -1613,7 +1623,6 @@ namespace NMib
 		#endif
 
 			SSL_CTX* mp_pContext;
-			static int msp_ExDataIndex;
 
 			CSSLContext::EType mp_Type;
 			CSSLContext::EState mp_State;
@@ -1621,8 +1630,6 @@ namespace NMib
 			CSSLSettings mp_Settings;
 
 		};
-
-		int CSSLContext::CInternal::msp_ExDataIndex = 0;
 
 		bool CSSLContext::CCertificateExtension::operator == (CCertificateExtension const &_Right) const
 		{
@@ -1690,18 +1697,6 @@ namespace NMib
 					[&]() -> decltype(auto)
 					{
 						mp_pInternal->f_ReportInvalidContext(_ConnectionResult);
-					}
-				)
-			;
-		}
-
-		int CSSLContext::f_GetExDataIndex() const
-		{
-			return fg_RunProtectRegisters
-				(
-					[&]() -> decltype(auto)
-					{
-						return mp_pInternal->f_GetExDataIndex();
 					}
 				)
 			;
@@ -2718,7 +2713,7 @@ namespace NMib
 				}
 				else
 				{
-					SSL_set_ex_data(f_GetSSL(), mp_pContext->f_GetExDataIndex(), mp_pSSL);
+					SSL_set_ex_data(f_GetSSL(), fg_ExDataIndex(), mp_pSSL);
 
 					ERR_clear_error();
 					int Ret = _bAccept ? SSL_accept(f_GetSSL()) : SSL_connect(f_GetSSL());
@@ -2839,7 +2834,9 @@ namespace NMib
 
 				if ((SysError=ERR_peek_error()) != 0)
 				{
-					while( (SysError = ERR_get_error()))
+					const char *pFile; 
+					int Line;
+					while( (SysError = ERR_get_error_line(&pFile, &Line)))
 						NStr::fg_AddStrSep(AllErrors, NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(SysError), "\n");
 
 					_Result = EAuthenticationResult_Failure;
