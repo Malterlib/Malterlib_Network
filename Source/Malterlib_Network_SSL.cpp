@@ -164,7 +164,7 @@ namespace NMib
 								f_UseInThread();
 
 								mint nSSLLocks = CRYPTO_num_locks();
-								m_lLocks.f_SetLen(nSSLLocks);
+								m_Locks.f_SetLen(nSSLLocks);
 								CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
 							}
 						)
@@ -195,13 +195,13 @@ namespace NMib
 
 								ENGINE_cleanup();
 					
-								m_lLocks.f_Clear();
+								m_Locks.f_Clear();
 							}
 						)
 					;
 				}
 
-				NContainer::TCVector<NIndirection::TCIndirection<NMib::NThread::CMutual>> m_lLocks;
+				NContainer::TCVector<NIndirection::TCIndirection<NMib::NThread::CMutualManyRead>> m_Locks;
 				NMib::NThread::CMutual m_ContextCreationLock;
 				
 				struct CThreadLocal
@@ -256,15 +256,21 @@ namespace NMib
 
 			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line)
 			{
+				DMibCheck(g_SSLLowLevel->m_Locks.f_IsPosValid(_Type));
+				auto &Lock = g_SSLLowLevel->m_Locks[_Type].f_Get();
 				if (_Mode & CRYPTO_LOCK)
 				{
-					DMibCheck(g_SSLLowLevel->m_lLocks.f_IsPosValid(_Type));
-					g_SSLLowLevel->m_lLocks[_Type].f_Get().f_Lock();
+					if (_Mode & CRYPTO_READ)
+						Lock.f_LockRead();
+					else
+						Lock.f_Lock();
 				}
 				else
 				{
-					DMibCheck(g_SSLLowLevel->m_lLocks.f_IsPosValid(_Type));
-					g_SSLLowLevel->m_lLocks[_Type].f_Get().f_Unlock();
+					if (_Mode & CRYPTO_READ)
+						Lock.f_UnlockRead();
+					else
+						Lock.f_Unlock();
 				}
 			}
 
