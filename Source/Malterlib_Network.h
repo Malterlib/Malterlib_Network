@@ -866,7 +866,7 @@ namespace NMib
 				fp_CheckSocket();
 				return NMib::NSys::NNet::fg_GetListenPort(mp_pSocket);
 			}
-
+			
 			static NMib::NNet::CNetAddress fs_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNet::ENetAddressType _PreferType = ::NMib::NNet::ENetAddressType_None)
 			{
 				return fg_Move(CNetAddress(NMib::NSys::NNet::fg_ResolveAddress(_Address, _PreferType)));
@@ -874,6 +874,7 @@ namespace NMib
 
 		};
 
+		bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars = "");
 	}
 }
 
