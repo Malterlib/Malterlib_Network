@@ -20,18 +20,18 @@ public:
 		{
 			CSSLContext::fs_RegisterExtension
 				(
-					"1.3.6.1.4.1.555555.1.2"
+					"1.3.6.1.4.1.47722.1.2"
 					, "MalterlibTest"
 					, "Malterlib Test"
 				)
 			;
 
-			uint32 TestKeySize = 1024;
+			CSSLKeySetting TestKeySetting = CSSLKeySettings_EC_secp256r1{};
 			CSSLSettings ServerSettings;
 			CSSLContext::CCertificateOptions ServerOptions;
 			ServerOptions.m_Subject = "localhost0";
 			ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost1", "localhost2");
-			ServerOptions.m_KeyLength = TestKeySize;
+			ServerOptions.m_KeySetting = TestKeySetting;
 			auto &ServerExtension = ServerOptions.m_Extensions["MalterlibTest"].f_Insert();
 			ServerExtension.m_Value = "Test0";
 			ServerExtension.m_bCritical = false;
@@ -39,7 +39,7 @@ public:
 			ServerExtensionCritical.m_Value = "Test1";
 			ServerExtensionCritical.m_bCritical = true;
 			
-			CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, TestKeySize);
+			CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 			ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 			
 			auto ServerHostNames = CSSLContext::fs_GetCertificateHostnames(ServerSettings.m_PublicCertificateData, false);
@@ -53,7 +53,7 @@ public:
 				CSSLSettings ClientSettings;
 				CSSLContext::CCertificateOptions ClientOptions;
 				ClientOptions.m_Subject = "localhost3";
-				ClientOptions.m_KeyLength = TestKeySize;
+				ClientOptions.m_KeySetting = TestKeySetting;
 				ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost4", "localhost5");
 				auto &ClientExtension = ClientOptions.m_Extensions["MalterlibTest"].f_Insert();
 				ClientExtension.m_Value = "Test2";
@@ -78,7 +78,7 @@ public:
 				
 				CSSLContext::CCertificateOptions ClientOptions;
 				ClientOptions.m_Subject = "localhost3";
-				ClientOptions.m_KeyLength = TestKeySize;
+				ClientOptions.m_KeySetting = TestKeySetting;
 				auto &ClientExtension = ClientOptions.m_Extensions["MalterlibTest"].f_Insert();
 				ClientExtension.m_Value = "Test2";
 				ClientExtension.m_bCritical = false;

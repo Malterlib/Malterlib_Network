@@ -10,6 +10,7 @@ extern "C"
 #	ifdef final
 #		undef final
 #	endif
+#	include <openssl/dh.h>
 #	include <openssl/ssl.h>
 #	include <openssl/evp.h>
 #	include <openssl/aes.h>
@@ -28,6 +29,8 @@ extern "C"
 #endif
 
 };
+
+#include "Malterlib_Network_SSL_DHParams.hpp"
 
 #if !defined(OPENSSL_THREADS)
 	#error Must use multithreaded openssl library!
@@ -387,6 +390,13 @@ namespace NMib
 					(
 						[&]() -> decltype(auto)
 						{
+							// Protect against destructor not being run in case of exception
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									this->~CInternal();
+								}
+							;
+
 							g_SSLLowLevel->f_UseInThread();
 							if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
 							{
@@ -402,11 +412,17 @@ namespace NMib
 								else
 									mp_pContext = fg_CreateSSLContext(SSLv3_server_method());
 							}
-				
+							
 							SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
 							SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
-
+							if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
+								SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1);
+							SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
+							if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites))
+								SSL_CTX_set_cipher_list(mp_pContext, "AES256+EECDH:AES256+EDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS");
+							
 							fp_ProcessSettings();
+							Cleanup.f_Clear();
 						}
 					)
 				;
@@ -1208,6 +1224,66 @@ namespace NMib
 				return pKey;
 			}
 
+			static void fs_GenerateKey(EVP_PKEY *_pKey, CCertificateOptions const &_Options)
+			{
+				switch (_Options.m_KeySetting.f_GetTypeID())
+				{
+				case ESSLKeyType_RSA:
+					{
+						ERR_clear_error();
+						RSA *pRSA = RSA_generate_key(_Options.m_KeySetting.f_Get<ESSLKeyType_RSA>().m_KeyLength, RSA_F4, nullptr, nullptr);
+						if (!pRSA)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
+						ERR_clear_error();
+						if (!EVP_PKEY_assign_RSA(_pKey, pRSA))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
+						pRSA = nullptr;
+					}
+					break;
+				case ESSLKeyType_EC_secp256r1:
+				case ESSLKeyType_EC_secp384r1:
+				case ESSLKeyType_EC_secp521r1:
+					{
+						ERR_clear_error();
+						EC_KEY *pECKey;
+						
+						int CurveName;
+						switch (_Options.m_KeySetting.f_GetTypeID())
+						{
+						case ESSLKeyType_EC_secp256r1:
+							CurveName = NID_X9_62_prime256v1;
+							break;
+						case ESSLKeyType_EC_secp384r1:
+							CurveName = NID_secp384r1;
+							break;
+						case ESSLKeyType_EC_secp521r1:
+							CurveName = NID_secp521r1;
+							break;
+						}
+						
+						ERR_clear_error();
+						pECKey = EC_KEY_new_by_curve_name(CurveName);
+						if (!pECKey)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error creating elliptic curve key"));
+						auto Cleanup = g_OnScopeExit > [&]
+							{
+								EC_KEY_free(pECKey);
+							}
+						;
+						ERR_clear_error();
+						if (EC_KEY_generate_key(pECKey) != 1)
+							DMibErrorNetSSL(fg_GetExceptionStr("Error generating elliptic curve key"));
+						EC_KEY_set_asn1_flag(pECKey, OPENSSL_EC_NAMED_CURVE);
+						ERR_clear_error();
+						if (!EVP_PKEY_assign_EC_KEY(_pKey, pECKey))
+							DMibErrorNetSSL(fg_GetExceptionStr("Error assigning elliptic curve key"));
+						Cleanup.f_Clear();
+					}
+					break;
+				default:
+					DMibErrorNetSSL("Invalid key type");
+				}
+			}
 			
 			static X509_CRL* fs_LoadCRL(NContainer::TCVector<uint8> const &_CRLData)
 			{
@@ -1439,11 +1515,63 @@ namespace NMib
 						EVP_PKEY_free(pKey);
 					}
 				;
+
+				if (f_IsServerContext())
+				{
+					int CurveName = 0;
+					if (auto pRSA = EVP_PKEY_get1_RSA(pKey))
+					{
+						auto RSASize = RSA_size(pRSA) * 8;
+						RSA_free(pRSA);
+						
+						DH *pDHParam;
+						if (RSASize >= 8192)
+							pDHParam = fg_Get_dh8192();
+						else if (RSASize >= 4096)
+							pDHParam = fg_Get_dh4096();
+						else if (RSASize >= 2048)
+							pDHParam = fg_Get_dh2048();
+						else
+							pDHParam = fg_Get_dh1024();
+						
+						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_DisallowEllipticCurveDHKeyExchange))
+						{
+							if (RSASize >= 12288)
+								CurveName = NID_secp521r1;
+							else if (RSASize >= 4096)
+								CurveName = NID_secp384r1;
+							else
+								CurveName = NID_X9_62_prime256v1;
+						}
+						
+						if (SSL_CTX_set_tmp_dh(mp_pContext, pDHParam) != 1)
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to set tmp dh param in SSL context"));
+						DH_free(pDHParam);
+					}
+					else if (auto pECKey = EVP_PKEY_get1_EC_KEY(pKey))
+					{
+						CurveName = EC_GROUP_get_curve_name(EC_KEY_get0_group(pECKey));
+						if (!CurveName)
+							CurveName = NID_secp521r1;
+					}
+					if (CurveName)
+					{
+						EC_KEY *pECDH = EC_KEY_new_by_curve_name(CurveName);
+						if (pECDH)
+						{
+							if (SSL_CTX_set_tmp_ecdh(mp_pContext, pECDH) != 1)
+								SSL_CTX_set_ecdh_auto(mp_pContext, 1);
+							EC_KEY_free(pECDH);		
+						}
+						else
+							SSL_CTX_set_ecdh_auto(mp_pContext, 1);
+					}
+				}
 				
 				ERR_clear_error();
 				if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to use private key in SSL context"));
-
+				
 				return true;
 			}
 
@@ -2061,16 +2189,7 @@ namespace NMib
 						;
 
 						if (bGenerateNewKey)
-						{
-							ERR_clear_error();
-							RSA *pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
-							if (!pRSA)
-								DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
-							ERR_clear_error();
-							if (!EVP_PKEY_assign_RSA(pKey, pRSA))
-								DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
-							pRSA = nullptr;
-						}
+							CSSLContext::CInternal::fs_GenerateKey(pKey, _Options);
 			
 						ERR_clear_error();
 						if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
@@ -2107,7 +2226,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting request public key"));
 
 						ERR_clear_error();
-						if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha256()))
+						if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha512()))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
 
 						o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
@@ -2126,6 +2245,8 @@ namespace NMib
 				(
 					[&]() -> decltype(auto)
 					{
+						g_SSLLowLevel->f_UseInThread();
+						
 						X509_REQ *pCertificateRequest = CSSLContext::CInternal::fs_LoadCertificateRequest(_CertRequestData);
 						auto Cleanup0 = g_OnScopeExit > [&] ()
 							{
@@ -2330,7 +2451,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
 
 						ERR_clear_error();
-						if (!X509_sign(pCertificate, pCAKey, EVP_sha256()))
+						if (!X509_sign(pCertificate, pCAKey, EVP_sha512()))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing certificate request"));
 
 						o_SignedCertificateData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
@@ -2377,16 +2498,9 @@ namespace NMib
 								EVP_PKEY_free(pKey);
 							}
 						;
-						ERR_clear_error();
-						RSA* pRSA = RSA_generate_key(_Options.m_KeyLength, RSA_F4, nullptr, nullptr);
-						if (!pRSA)
-							DMibErrorNetSSL(fg_GetExceptionStr("Error generating RSA key"));
-
-						ERR_clear_error();
-						if (!EVP_PKEY_assign_RSA(pKey, pRSA))
-							DMibErrorNetSSL(fg_GetExceptionStr("Error assigning RSA key"));
-						pRSA = nullptr;
-
+						
+						CSSLContext::CInternal::fs_GenerateKey(pKey, _Options);
+						
 						ERR_clear_error();
 						if (!X509_set_version(pCertificate, 3))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
@@ -2430,7 +2544,7 @@ namespace NMib
 						}
 
 						ERR_clear_error();
-						if (!X509_sign(pCertificate, pKey, EVP_sha256()))
+						if (!X509_sign(pCertificate, pKey, EVP_sha512()))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing selfsigned certificate"));
 
 						o_CertData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
@@ -2730,6 +2844,15 @@ namespace NMib
 				if (mp_AuthenticationResultCallback)
 					mp_AuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
 				mp_bHandshakeInProgress = ResultForCallback == EAuthenticationResult_SocketNotReady;
+				
+#if 0
+				if (ResultForCallback == EAuthenticationResult_Success)
+				{
+					auto pChipher = SSL_get_current_cipher(f_GetSSL());
+					auto pVerson = SSL_get_version(f_GetSSL());
+					DMibConOut2("Negotiated: {}   {}\n", pVerson, SSL_CIPHER_get_name(pChipher));
+				}
+#endif
 				return ResultForCallback == EAuthenticationResult_Success;
 			}
 

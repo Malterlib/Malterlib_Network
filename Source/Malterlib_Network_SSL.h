@@ -3,6 +3,7 @@
 
 #include <Mib/Cryptography/Hashes/SHA>
 #include "Malterlib_Network_Exception.h"
+#include "Malterlib_Network_SSLKeySetting.h"
 #include <Mib/Memory/Allocators/Secure>
 
 namespace NMib
@@ -31,6 +32,9 @@ namespace NMib
 				, EVerificationFlag_AllowMissingPeerCertificate			= DMibBit(7)
 				, EVerificationFlag_IgnoreVerificationFailures			= DMibBit(8)
 				, EVerificationFlag_IgnoreTrustFailures					= DMibBit(9)
+				, EVerificationFlag_DisallowEllipticCurveDHKeyExchange	= DMibBit(10)
+				, EVerificationFlag_AllowInsecureCipherSuites			= DMibBit(11)
+				, EVerificationFlag_AllowInsecureSSLVersions			= DMibBit(12)
 			};
 			
 			enum EProtocol
@@ -288,13 +292,13 @@ namespace NMib
 					o_FormatInto += typename tf_CFormatInto::CFormat("{}{}") << m_Value << (m_bCritical ? " - critical" : "");
 				}
 			};
-			
+
 			struct CCertificateOptions
 			{
 				NStr::CStr m_Subject;
 				NContainer::TCVector<NStr::CStr> m_Hostnames;
 				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> m_Extensions;
-				uint32 m_KeyLength = 2048;
+				CSSLKeySetting m_KeySetting;
 			};
 			
 			CSSLContext(EType _Type, CSSLSettings const &_Settings);
