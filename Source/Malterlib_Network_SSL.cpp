@@ -1553,6 +1553,7 @@ namespace NMib
 						CurveName = EC_GROUP_get_curve_name(EC_KEY_get0_group(pECKey));
 						if (!CurveName)
 							CurveName = NID_secp521r1;
+						EC_KEY_free(pECKey);
 					}
 					if (CurveName)
 					{
