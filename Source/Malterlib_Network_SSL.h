@@ -389,6 +389,9 @@ namespace NMib
 			struct CInternal;
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 		};
+		
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
 	}
 }
 

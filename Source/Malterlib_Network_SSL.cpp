@@ -420,7 +420,7 @@ namespace NMib
 							SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
 							if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites))
 								SSL_CTX_set_cipher_list(mp_pContext, "AES256+EECDH:AES256+EDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS");
-							
+
 							fp_ProcessSettings();
 							Cleanup.f_Clear();
 						}
@@ -3792,6 +3792,60 @@ namespace NMib
 		uint32 CEncryptAES::f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
 		{
 			return mp_pInternal->f_Decrypt(_pSource, _SourceLen, _pDest);
+		}
+		
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key)
+		{
+			NDataProcessing::CHashDigest_SHA256 Return;
+			unsigned int Size = Return.fs_GetSize();
+			if 
+				(
+					!HMAC
+					(
+						EVP_sha256()
+						, _Key.f_GetArray()
+						, _Key.f_GetLen()
+						, _Data.f_GetArray()
+						, _Data.f_GetLen() 
+						, Return.f_GetData()
+						, &Size
+					)
+				)
+			{
+				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA256"));
+			}
+			
+			if (Size != Return.fs_GetSize())
+				DMibErrorNetSSL("Failed to run HMAC-SHA256: Unexpected digest size");
+			
+			return Return;
+		}
+
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key)
+		{
+			NDataProcessing::CHashDigest_SHA1 Return;
+			unsigned int Size = Return.fs_GetSize();
+			if 
+				(
+					!HMAC
+					(
+						EVP_sha1()
+						, _Key.f_GetArray()
+						, _Key.f_GetLen()
+						, _Data.f_GetArray()
+						, _Data.f_GetLen() 
+						, Return.f_GetData()
+						, &Size
+					)
+				)
+			{
+				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
+			}
+			
+			if (Size != Return.fs_GetSize())
+				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
+			
+			return Return;
 		}
 	}
 }

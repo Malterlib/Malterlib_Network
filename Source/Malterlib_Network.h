@@ -320,6 +320,8 @@ namespace NMib
 				CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNet::ENetAddressType _Type, void const* _pRawData, mint _nDataBytes);
 
 				CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNet::ENetAddressType _PreferType = ::NMib::NNet::ENetAddressType_None);
+			
+				mint fg_GetMaxUnixSocketNameLength();
 
 				void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNet::ENetAddressType _PreferType, NMib::NFunction::TCFunction<void ()>&& _fOnFinish);
 				bint fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
