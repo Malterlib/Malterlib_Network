@@ -98,14 +98,22 @@ namespace NMib
 			return mp_Socket.f_GetCloseReason();
 		}
 
-		mint CSocket_TCP::f_Receive(void *_pData, mint _DataLen)
+		CSocketOperationResult CSocket_TCP::f_Receive(void *_pData, mint _DataLen)
 		{
-			return mp_Socket.f_Receive(_pData, _DataLen);
+			CSocketOperationResult Result;
+			Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen);
+			if (Result.m_nBytes != 0)
+				Result.m_bReceivedNetwork = true;
+			return Result;
 		}
 
-		mint CSocket_TCP::f_Send(const void *_pData, mint _DataLen)
+		CSocketOperationResult CSocket_TCP::f_Send(const void *_pData, mint _DataLen)
 		{
-			return mp_Socket.f_Send(_pData, _DataLen);
+			CSocketOperationResult Result;
+			Result.m_nBytes = mp_Socket.f_Send(_pData, _DataLen);
+			if (Result.m_nBytes != 0)
+				Result.m_bSentNetwork = true;
+			return Result;
 		}
 
 		mint CSocket_TCP::f_SendDatagram(NMib::NNet::CNetAddress const &_Address, const void *_pData, mint _DataLen)

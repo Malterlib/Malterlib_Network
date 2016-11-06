@@ -241,8 +241,8 @@ namespace NMib
 			bool f_HandshakeInProgress() const;
 			bool f_Shutdown();
 
-			mint f_Send(const void *_pData, mint _nLen);
-			mint f_Receive(void *_pData, mint _nLen);
+			CSocketOperationResult f_Send(const void *_pData, mint _nLen);
+			CSocketOperationResult f_Receive(void *_pData, mint _nLen);
 
 			bool f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len);
 

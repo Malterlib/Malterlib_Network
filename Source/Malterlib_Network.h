@@ -655,6 +655,15 @@ namespace NMib
 			}
 		};
 
+		struct CSocketOperationResult
+		{
+			mint m_nBytes = 0;
+			bool m_bSentNetwork = false;
+			bool m_bReceivedNetwork = false;
+			
+			CSocketOperationResult &operator += (CSocketOperationResult const &_Other);
+		};
+		
 		class CSocket
 		{
 			void *mp_pSocket;

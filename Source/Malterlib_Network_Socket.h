@@ -12,6 +12,7 @@ namespace NMib
 			{
 			}
 		};
+		
 		class ICSocket
 		{
 		public:
@@ -33,8 +34,8 @@ namespace NMib
 			virtual void f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange) = 0;
 			virtual ENetTCPState f_GetState() = 0;
 			virtual NStr::CStr f_GetCloseReason() = 0;
-			virtual mint f_Receive(void *_pData, mint _DataLen) = 0;
-			virtual mint f_Send(const void *_pData, mint _DataLen) = 0;
+			virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) = 0;
+			virtual CSocketOperationResult f_Send(const void *_pData, mint _DataLen) = 0;
 			virtual mint f_SendDatagram(NMib::NNet::CNetAddress const& _Address, const void *_pData, mint _DataLen) = 0;
 			virtual mint f_ReceiveDatagram(NMib::NNet::CNetAddress &_Address, void *_pData, mint _DataLen) = 0;
 			virtual NMib::NNet::CNetAddress f_GetPeerAddress() const = 0;

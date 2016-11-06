@@ -2685,7 +2685,7 @@ namespace NMib
 				return false;
 			}			
 
-			mint f_Send(const void *_pData, mint _nLen)
+			CSocketOperationResult f_Send(const void *_pData, mint _nLen)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				DMibRequire(_nLen > 0);
@@ -2693,13 +2693,20 @@ namespace NMib
 				DMibRequire(!mp_bHandshakeInProgress);
 				DMibRequire(mp_State == EState_None);
 
-				mint nBytesSent = 0;
+				CSocketOperationResult Result;
 				ERR_clear_error();
-				int Ret = SSL_write(f_GetSSL(), _pData, (int)_nLen);
+				auto pSSL = f_GetSSL();
+				auto SocketNumRead = pSSL->rbio->num_read;
+				auto SocketNumWrite = pSSL->wbio->num_write;
+				int Ret = SSL_write(pSSL, _pData, (int)_nLen);
+				if (pSSL->rbio->num_read != SocketNumRead)
+					Result.m_bReceivedNetwork = true;
+				if (pSSL->rbio->num_write != SocketNumWrite)
+					Result.m_bSentNetwork = true;
 				if (Ret <= 0)
 				{
 					// Write did not succeed.
-					int Error = SSL_get_error(f_GetSSL(), Ret);
+					int Error = SSL_get_error(pSSL, Ret);
 					DMibLog(DebugVerbose2, " **** SSL error {}", Error);
 					if (Error == SSL_ERROR_ZERO_RETURN)
 					{
@@ -2725,27 +2732,35 @@ namespace NMib
 				{
 					DMibLog(DebugVerbose2, " **** SSL wrote {}", Ret);
 					// Write succeeded, return the number of bytes written.
-					nBytesSent = (mint)Ret;
+					Result.m_nBytes = (mint)Ret;
 				}
 
-				return nBytesSent;
+				return Result;
 			}
 
-			mint f_Receive(void *_pData, mint _nLen)
+			CSocketOperationResult f_Receive(void *_pData, mint _nLen)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				DMibRequire(_nLen > 0);
 				DMibRequire(mp_bConnected);
 				DMibRequire(!mp_bHandshakeInProgress);
 				DMibRequire(mp_State == EState_None);
-
-				mint nBytesReceived = 0;
+				
+				CSocketOperationResult Result;
 				ERR_clear_error();
-				int Ret = SSL_read(f_GetSSL(), _pData, _nLen);
+				auto pSSL = f_GetSSL();
+				auto SocketNumRead = pSSL->rbio->num_read;
+				auto SocketNumWrite = pSSL->wbio->num_write;
+				int Ret = SSL_read(pSSL, _pData, _nLen);
+				if (pSSL->rbio->num_read != SocketNumRead)
+					Result.m_bReceivedNetwork = true;
+				if (pSSL->rbio->num_write != SocketNumWrite)
+					Result.m_bSentNetwork = true;
+				
 				if (Ret <= 0)
 				{
 					// Read did not succeed.
-					int Error = SSL_get_error(f_GetSSL(), Ret);
+					int Error = SSL_get_error(pSSL, Ret);
 					if (Error == SSL_ERROR_ZERO_RETURN)
 					{
 						f_SetState(EState_ConnectionShutdown);
@@ -2770,10 +2785,10 @@ namespace NMib
 				else
 				{
 					// Read succeeded, return the number of bytes read.
-					nBytesReceived = (mint)Ret;
+					Result.m_nBytes = (mint)Ret;
 				}
 
-				return nBytesReceived;
+				return Result;
 			}
 
 			bool f_GetHandshakeInProgress() const
@@ -3195,7 +3210,7 @@ namespace NMib
 			;
 		}
 
-		mint CSSLConnection::f_Send(const void *_pData, mint _nLen)
+		CSocketOperationResult CSSLConnection::f_Send(const void *_pData, mint _nLen)
 		{
 			return fg_RunProtectRegisters
 				(
@@ -3206,8 +3221,8 @@ namespace NMib
 				)
 			;
 		}
-
-		mint CSSLConnection::f_Receive(void *_pData, mint _nLen)
+		
+		CSocketOperationResult CSSLConnection::f_Receive(void *_pData, mint _nLen)
 		{
 			return fg_RunProtectRegisters
 				(

@@ -35,4 +35,14 @@ namespace NMib::NNet
 		}
 		return true;
 	}
+
+	CSocketOperationResult &CSocketOperationResult::operator += (CSocketOperationResult const &_Other)
+	{
+		m_nBytes += _Other.m_nBytes;
+		if (_Other.m_bSentNetwork)
+			m_bSentNetwork = true;
+		if (_Other.m_bReceivedNetwork)
+			m_bReceivedNetwork = true;
+		return *this;
+	}
 }

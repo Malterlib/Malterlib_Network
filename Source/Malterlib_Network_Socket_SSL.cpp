@@ -176,39 +176,39 @@ namespace NMib
 			}
 		}
 
-		mint CSocket_SSL::f_Receive(void *_pData, mint _DataLen)
+		CSocketOperationResult CSocket_SSL::f_Receive(void *_pData, mint _DataLen)
 		{
 			if (!fp_HandleHandshake())
-				return 0;
+				return {};
 			if (mp_SSLConnection.f_BrokenState())
 			{
 				fp_CheckBrokenState();
-				return 0;
+				return {};
 			}
-			mint Return = mp_SSLConnection.f_Receive(_pData, _DataLen);
-			
-			if (!Return)
+
+			CSocketOperationResult Return = mp_SSLConnection.f_Receive(_pData, _DataLen);
+			if (!Return.m_nBytes)
 				fp_CheckBrokenState();
 			
 			return Return;
 		}
 
-		mint CSocket_SSL::f_Send(const void *_pData, mint _DataLen)
+		CSocketOperationResult CSocket_SSL::f_Send(const void *_pData, mint _DataLen)
 		{
 			if (!fp_HandleHandshake())
 			{
 				DMibLog(DebugVerbose2, " **** CSocket_SSL handshake not done");
-				return 0;
+				return {};
 			}
 			if (mp_SSLConnection.f_BrokenState())
 			{
 				fp_CheckBrokenState();
 				DMibLog(DebugVerbose2, " **** CSocket_SSL broken state");
-				return 0;
+				return {};
 			}
-			mint Return = mp_SSLConnection.f_Send(_pData, _DataLen);
-			
-			if (!Return)
+
+			CSocketOperationResult Return = mp_SSLConnection.f_Send(_pData, _DataLen);
+			if (!Return.m_nBytes)
 				fp_CheckBrokenState();
 			return Return;
 		}
