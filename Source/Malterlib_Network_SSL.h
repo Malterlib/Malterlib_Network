@@ -300,7 +300,7 @@ namespace NMib
 				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> m_Extensions;
 				CSSLKeySetting m_KeySetting;
 			};
-			
+
 			CSSLContext(EType _Type, CSSLSettings const &_Settings);
 			~CSSLContext();
 
@@ -335,8 +335,7 @@ namespace NMib
 					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertData
 					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-					, int _Serial = 0
-					, int _Days = 365
+					, CSignOptions const &_SignOptions = {}
 				)
 			;
 			static void fs_GenerateClientCertificateRequest
@@ -344,6 +343,7 @@ namespace NMib
 					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertRequestData
 					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+					, ESSLDigest _Digest = ESSLDigest_Automatic 
 				)
 			;
 			static void fs_SignClientCertificate
@@ -352,8 +352,7 @@ namespace NMib
 					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
 					, NContainer::TCVector<uint8> const &_CertRequestData
 					, NContainer::TCVector<uint8> &o_SignedCertificateData
-					, int _Serial = 0
-					, int _Days = 365
+					, CSignOptions const &_SignOptions = {}
 				)
 			;
 			static void fs_VerifyCertificateRequestSameKeyAsCertificate(NContainer::TCVector<uint8> const &_CertRequestData, NContainer::TCVector<uint8> const &_CertData);

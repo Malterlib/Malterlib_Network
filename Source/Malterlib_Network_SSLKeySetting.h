@@ -45,6 +45,20 @@ namespace NMib
 			>
 		;
 		
+		enum ESSLDigest
+		{
+			ESSLDigest_Automatic
+			, ESSLDigest_SHA256
+			, ESSLDigest_SHA384
+			, ESSLDigest_SHA512
+		};
+		
+		struct CSignOptions
+		{
+			ESSLDigest m_Digest = ESSLDigest_Automatic;
+			int32 m_Serial = 1;
+			int32 m_Days = 365;
+		};
 	}
 }
 

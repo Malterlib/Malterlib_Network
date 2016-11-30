@@ -417,6 +417,7 @@ namespace NMib
 							SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
 							if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
 								SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1);
+					        SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE);
 							SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
 							if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites))
 								SSL_CTX_set_cipher_list(mp_pContext, "AES256+EECDH:AES256+EDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS");
@@ -1560,6 +1561,7 @@ namespace NMib
 						EC_KEY *pECDH = EC_KEY_new_by_curve_name(CurveName);
 						if (pECDH)
 						{
+						    SSL_CTX_set_options(mp_pContext, SSL_OP_SINGLE_ECDH_USE);
 							if (SSL_CTX_set_tmp_ecdh(mp_pContext, pECDH) != 1)
 								SSL_CTX_set_ecdh_auto(mp_pContext, 1);
 							EC_KEY_free(pECDH);		
@@ -2142,6 +2144,49 @@ namespace NMib
 						fg_AddExtension(_Context, _pObject, NumericID, Extension);
 				}
 			}
+			
+			const EVP_MD *fg_GetDigest(ESSLDigest _Digest, EVP_PKEY *_pKey)
+			{
+				switch (_Digest)
+				{
+				case ESSLDigest_Automatic:
+					{
+						if (auto pRSA = EVP_PKEY_get1_RSA(_pKey))
+						{
+							auto RSASize = RSA_size(pRSA) * 8;
+							RSA_free(pRSA);
+
+							if (RSASize >= 12288)
+								return EVP_sha512();
+							else if (RSASize >= 4096)
+								return EVP_sha384();
+							else
+								return EVP_sha256();
+						}
+						else if (auto pECKey = EVP_PKEY_get1_EC_KEY(_pKey))
+						{
+							auto CurveName = EC_GROUP_get_curve_name(EC_KEY_get0_group(pECKey));
+							
+							switch (CurveName)
+							{
+							case NID_secp521r1:
+								return EVP_sha512();
+							case NID_secp384r1:
+								return EVP_sha384();
+							case NID_X9_62_prime256v1:
+								return EVP_sha256();
+							}
+							EC_KEY_free(pECKey);
+						}
+						return EVP_sha384();
+					}
+				case ESSLDigest_SHA256: return EVP_sha256();
+				case ESSLDigest_SHA384: return EVP_sha384();
+				case ESSLDigest_SHA512: return EVP_sha512();
+				}
+				DMibNeverGetHere;
+				return EVP_sha384();
+			}
 		}
 		
 		// openssl genrsa -des3 -out client.key 4096
@@ -2151,6 +2196,7 @@ namespace NMib
 				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertRequestData
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+				, ESSLDigest _Digest
 			)
 		{
 			fg_RunProtectRegisters
@@ -2227,7 +2273,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting request public key"));
 
 						ERR_clear_error();
-						if (!X509_REQ_sign(pCertificateRequest, pKey, EVP_sha512()))
+						if (!X509_REQ_sign(pCertificateRequest, pKey, fg_GetDigest(_Digest, pKey)))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing request"));
 
 						o_CertRequestData = CSSLContext::CInternal::fs_ConvertX509RequestToBinary(pCertificateRequest);
@@ -2284,15 +2330,14 @@ namespace NMib
 				)
 			;
 		}
-		
+
 		void CSSLContext::fs_SignClientCertificate
 			(
 				NContainer::TCVector<uint8> const &_CACertificate
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
 				, NContainer::TCVector<uint8> const &_CertRequestData
 				, NContainer::TCVector<uint8> &o_SignedCertificateData
-				, int _Serial
-				, int _Days
+				, CSignOptions const &_SignOptions
 			)
 		{
 			fg_RunProtectRegisters
@@ -2363,11 +2408,11 @@ namespace NMib
 						}
 			
 						ERR_clear_error();
-						if (!X509_set_version(pCertificate, 3))
+						if (!X509_set_version(pCertificate, 2))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
 
 						ERR_clear_error();
-						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _SignOptions.m_Serial))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
 				
 						ERR_clear_error();
@@ -2375,7 +2420,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
 				
 						ERR_clear_error();
-						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_SignOptions.m_Days))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
 
 						ERR_clear_error();
@@ -2452,7 +2497,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
 
 						ERR_clear_error();
-						if (!X509_sign(pCertificate, pCAKey, EVP_sha512()))
+						if (!X509_sign(pCertificate, pCAKey, fg_GetDigest(_SignOptions.m_Digest, pCAKey)))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing certificate request"));
 
 						o_SignedCertificateData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
@@ -2469,8 +2514,7 @@ namespace NMib
 				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertData
 				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
-				, int _Serial
-				, int _Days
+				, CSignOptions const &_SignOptions
 			)
 		{
 			fg_RunProtectRegisters
@@ -2503,11 +2547,11 @@ namespace NMib
 						CSSLContext::CInternal::fs_GenerateKey(pKey, _Options);
 						
 						ERR_clear_error();
-						if (!X509_set_version(pCertificate, 3))
+						if (!X509_set_version(pCertificate, 2))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 version"));
 
 						ERR_clear_error();
-						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _Serial))
+						if (!ASN1_INTEGER_set(X509_get_serialNumber(pCertificate), _SignOptions.m_Serial))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 serial"));
 				
 						ERR_clear_error();
@@ -2515,7 +2559,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
 				
 						ERR_clear_error();
-						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_Days))
+						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_SignOptions.m_Days))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
 
 						ERR_clear_error();
@@ -2545,7 +2589,7 @@ namespace NMib
 						}
 
 						ERR_clear_error();
-						if (!X509_sign(pCertificate, pKey, EVP_sha512()))
+						if (!X509_sign(pCertificate, pKey, fg_GetDigest(_SignOptions.m_Digest, pKey)))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error signing selfsigned certificate"));
 
 						o_CertData = CSSLContext::CInternal::fs_ConvertX509ToBinary(pCertificate);
