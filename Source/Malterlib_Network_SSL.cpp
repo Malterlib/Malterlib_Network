@@ -163,6 +163,9 @@ namespace NMib
 								ENGINE_register_all_complete();
 
 								SSL_load_error_strings();
+								ERR_load_crypto_strings();
+								
+								OpenSSL_add_all_algorithms();
 
 								f_UseInThread();
 
@@ -245,7 +248,7 @@ namespace NMib
 			};
 
 			NAggregate::TCAggregate<CSSLLowLevel> g_SSLLowLevel = {DAggregateInit};
-
+			
 			struct CSSLLowLevelDataIndex
 			{
 				CSSLLowLevelDataIndex()
@@ -678,6 +681,41 @@ namespace NMib
 				return NStr::CStr(Buffer, nChars);
 			}
 
+			static NStr::CStr fs_GetCertificateDistinguishedName_RFC2253(NContainer::TCVector<uint8> const &_CertificateData)
+			{
+				g_SSLLowLevel->f_UseInThread();
+				X509 *pCertificate = fs_LoadCertificate(_CertificateData);
+				auto Cleanup0 = g_OnScopeExit > [&]
+					{
+						X509_free(pCertificate);
+					}
+				;
+				
+				ERR_clear_error();
+				BIO* pMemoryBio = BIO_new(BIO_s_mem());
+				if (!pMemoryBio)
+					DMibErrorNetSSL(fg_GetExceptionStr("Error creating BIO"));
+				auto Cleanup = g_OnScopeExit > [&]
+					{
+						BIO_free(pMemoryBio);
+					}
+				;
+
+				ERR_clear_error();
+				int nChars = X509_NAME_print_ex(pMemoryBio, X509_get_subject_name(pCertificate), 0, XN_FLAG_RFC2253); 
+				if (nChars < 0)
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to read certificate name"));
+				
+				auto nWritten = BIO_number_written(pMemoryBio);
+				NStr::CStr Output;
+				
+				BIO_read(pMemoryBio, Output.f_GetStr(nWritten + 1), nWritten);
+
+				Output.f_SetAt(nWritten, 0);
+				Output.f_SetStrLen(nWritten);
+				return Output;
+			}
+			
 			static NStr::CStr fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData)
 			{
 				g_SSLLowLevel->f_UseInThread();
@@ -1906,6 +1944,18 @@ namespace NMib
 					[&]() -> decltype(auto)
 					{
 						return CSSLContext::CInternal::fs_GetCertificateName(_CertificateData);
+					}
+				)
+			;
+		}
+		
+		NStr::CStr CSSLContext::fs_GetCertificateDistinguishedName_RFC2253(NContainer::TCVector<uint8> const &_CertificateData)
+		{
+			return fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						return CSSLContext::CInternal::fs_GetCertificateDistinguishedName_RFC2253(_CertificateData);
 					}
 				)
 			;
@@ -3523,6 +3573,14 @@ namespace NMib
 
 			return CSSLContext::fs_GetCertificateName(mp_Certificates[0].m_Data);
 		}
+		
+		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateDistinguishedName_RFC2253() const
+		{
+			if (mp_Certificates.f_IsEmpty())
+				return NStr::CStr();
+
+			return CSSLContext::fs_GetCertificateDistinguishedName_RFC2253(mp_Certificates[0].m_Data);
+		}
 
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateFingerprint() const
 		{
@@ -3909,3 +3967,7 @@ namespace NMib
 	}
 }
 
+extern "C" void fg_Malterlib_UseSSL()
+{
+	NMib::NNet::g_SSLLowLevel->f_UseInThread();
+}

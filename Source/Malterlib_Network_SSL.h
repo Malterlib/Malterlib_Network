@@ -156,6 +156,7 @@ namespace NMib
 			void f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const &_Certificate);
 
 			NStr::CStr f_GetPeerCertificateName() const;
+			NStr::CStr f_GetPeerCertificateDistinguishedName_RFC2253() const;
 			NStr::CStr f_GetPeerCertificateDescription() const;
 			NStr::CStr f_GetPeerCertificateInformation() const;
 			NStr::CStr f_GetPeerCertificateFingerprint() const;
@@ -316,6 +317,7 @@ namespace NMib
 			bool f_CanAskUserToTrustServers() const;
 
 			static NStr::CStr fs_GetCertificateName(NContainer::TCVector<uint8> const &_CertificateData);
+			static NStr::CStr fs_GetCertificateDistinguishedName_RFC2253(NContainer::TCVector<uint8> const &_CertificateData);
 			static NStr::CStr fs_GetIssuerName(NContainer::TCVector<uint8> const &_CertificateData);
 			static NStr::CStr fs_GetCertificateFingerprint(NContainer::TCVector<uint8> const &_CertificateData);
 			static NContainer::TCVector<NStr::CStr> fs_GetCertificateHostnames(NContainer::TCVector<uint8> const &_CertificateData, bool _bCheckCommonName = true);
