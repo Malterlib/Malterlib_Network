@@ -158,7 +158,25 @@ namespace NMib
 							{
 								m_pThreadLocal = fg_Construct();
 
+								CRYPTO_set_mem_functions
+									(
+										[](size_t _Size) -> void *
+										{
+											return NMem::fg_Alloc(_Size);
+										}
+										, [](void *_pPtr, size_t _Size) -> void *
+										{
+											return NMem::fg_Resize(_pPtr, _Size);
+										}
+										, [](void *_pPtr)
+										{
+											return NMem::fg_Free(_pPtr);
+										}
+									)
+								;
+								
 								SSL_library_init();
+								
 								ENGINE_load_builtin_engines();
 								ENGINE_register_all_complete();
 
@@ -2216,6 +2234,7 @@ namespace NMib
 						else if (auto pECKey = EVP_PKEY_get1_EC_KEY(_pKey))
 						{
 							auto CurveName = EC_GROUP_get_curve_name(EC_KEY_get0_group(pECKey));
+							EC_KEY_free(pECKey);
 							
 							switch (CurveName)
 							{
@@ -2226,7 +2245,6 @@ namespace NMib
 							case NID_X9_62_prime256v1:
 								return EVP_sha256();
 							}
-							EC_KEY_free(pECKey);
 						}
 						return EVP_sha384();
 					}
