@@ -23,21 +23,25 @@ Property
 
 Property
 {
-	MalterlibSSLLibrary BoringSSL // User: OpenSSL library to use. Currently BoringSSL is the default, and OpenSSL can be used but is deprecated
+	DefaultMalterlibSSLLibrary "BoringSSL"
 	{
 		&
 		{
-			MalterlibSSLLibrary ""
+			DefaultMalterlibSSLLibrary ""
 			BoringSSLExists true
 			!PlatformFamily Windows
 		}
 	}
-	MalterlibSSLLibrary OpenSSL
+	DefaultMalterlibSSLLibrary OpenSSL
 	{
 		&
 		{
-			MalterlibSSLLibrary ""
+			DefaultMalterlibSSLLibrary ""
 		}
+	}
+	MalterlibSSLLibrary "@(DefaultMalterlibSSLLibrary)" // User: OpenSSL library to use. Currently BoringSSL is the default, and OpenSSL can be used but is deprecated
+	{
+		!!MalterlibSSLLibrary ""
 	}
 }
 
