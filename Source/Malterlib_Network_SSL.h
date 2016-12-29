@@ -245,7 +245,9 @@ namespace NMib
 			CSocketOperationResult f_Send(const void *_pData, mint _nLen);
 			CSocketOperationResult f_Receive(void *_pData, mint _nLen);
 
+#ifndef DMibSSLLibrary_BoringSSL								
 			bool f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len);
+#endif
 
 			CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 			CSSLConnectionResult& f_GetConnectionResult() { return mp_Result; }

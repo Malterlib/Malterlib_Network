@@ -32,7 +32,7 @@ extern "C"
 
 #include "Malterlib_Network_SSL_DHParams.hpp"
 
-#if !defined(OPENSSL_THREADS)
+#if !defined(DMibSSLLibrary_BoringSSL) && !defined(OPENSSL_THREADS)
 	#error Must use multithreaded openssl library!
 #endif
 
@@ -47,6 +47,7 @@ extern "C"
 #else
 	// Unix
 	#include <Mib/Core/PlatformSpecific/PosixErrNo>
+	#include <errno.h>
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
 	{
@@ -145,7 +146,9 @@ namespace NMib
 	{
 		namespace
 		{
+#ifndef DMibSSLLibrary_BoringSSL
 			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line);
+#endif
 
 			struct CSSLLowLevel
 			{
@@ -156,6 +159,7 @@ namespace NMib
 						(
 							[&]() -> decltype(auto)
 							{
+#ifndef DMibSSLLibrary_BoringSSL
 								m_pThreadLocal = fg_Construct();
 
 								CRYPTO_set_mem_functions
@@ -174,27 +178,31 @@ namespace NMib
 										}
 									)
 								;
+#endif
 								
 								SSL_library_init();
 								
+#ifndef DMibSSLLibrary_BoringSSL
 								ENGINE_load_builtin_engines();
 								ENGINE_register_all_complete();
-
 								SSL_load_error_strings();
 								ERR_load_crypto_strings();
-								
 								OpenSSL_add_all_algorithms();
+#endif
 
 								f_UseInThread();
 
+#ifndef DMibSSLLibrary_BoringSSL
 								mint nSSLLocks = CRYPTO_num_locks();
 								m_Locks.f_SetLen(nSSLLocks);
 								CRYPTO_set_locking_callback(&fg_SSLLockingCallback);
+#endif
 							}
 						)
 					;
 				}
 
+#ifndef DMibSSLLibrary_BoringSSL
 				~CSSLLowLevel()
 				{
 					fg_RunProtectRegisters
@@ -206,19 +214,12 @@ namespace NMib
 								CONF_modules_finish();
 								CONF_modules_free();
 								CONF_modules_unload(1);
-
 								ERR_free_strings();
-
 								EVP_cleanup();
-
 								OBJ_cleanup();
-
 								CRYPTO_set_locking_callback(nullptr);
-
 								CRYPTO_cleanup_all_ex_data();
-
 								ENGINE_cleanup();
-					
 								m_Locks.f_Clear();
 							}
 						)
@@ -262,6 +263,11 @@ namespace NMib
 
 					(void)Test;
 				}
+#else
+				void f_UseInThread()
+				{
+				}
+#endif
 				
 			};
 
@@ -278,6 +284,7 @@ namespace NMib
 			
 			NAggregate::TCAggregate<CSSLLowLevelDataIndex> g_SSLLowLevelDataIndex = {DAggregateInit};
 
+#ifndef DMibSSLLibrary_BoringSSL
 			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line)
 			{
 				DMibCheck(g_SSLLowLevel->m_Locks.f_IsPosValid(_Type));
@@ -297,10 +304,13 @@ namespace NMib
 						Lock.f_Unlock();
 				}
 			}
+#endif
 
 			SSL_CTX* fg_CreateSSLContext(SSL_METHOD const *_pMethod)
 			{
+#ifndef DMibSSLLibrary_BoringSSL
 				DMibLock(g_SSLLowLevel->m_ContextCreationLock);
+#endif
 				return SSL_CTX_new(_pMethod);
 			}
 			
@@ -622,9 +632,7 @@ namespace NMib
 				}
 
 				if (_PreVerifyOK == 0)
-				{
 					Result.f_LogError(Depth, Error);
-				}
 
 				return 1;
 			}
@@ -1300,6 +1308,7 @@ namespace NMib
 				case ESSLKeyType_EC_secp256r1:
 				case ESSLKeyType_EC_secp384r1:
 				case ESSLKeyType_EC_secp521r1:
+				case ESSLKeyType_EC_X25519:
 					{
 						ERR_clear_error();
 						EC_KEY *pECKey;
@@ -1316,6 +1325,11 @@ namespace NMib
 						case ESSLKeyType_EC_secp521r1:
 							CurveName = NID_secp521r1;
 							break;
+#ifdef DMibSSLLibrary_BoringSSL
+						case ESSLKeyType_EC_X25519:
+							CurveName = NID_X25519;
+							break;
+#endif
 						}
 						
 						ERR_clear_error();
@@ -1368,8 +1382,8 @@ namespace NMib
 			void fp_ProcessSettings()
 			{	
 				g_SSLLowLevel->f_UseInThread();
-				bool bSetClientFlags = false;
 
+				bool bVerifyIssuer = false;
 				int VerifyFlags = SSL_VERIFY_PEER;
 				
 				if (fp_LoadCertificateAuthority())
@@ -1382,19 +1396,39 @@ namespace NMib
 							VerifyFlags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 					}
 					else if (f_IsClientContext())
-						bSetClientFlags = true;
+						bVerifyIssuer = true;
 				}
 				else if (f_IsClientContext() && mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified)
 				{
 					fp_LoadTrustedStoreFromOS();
-					bSetClientFlags = true;
+					bVerifyIssuer = true;
 				}
 
-				if (bSetClientFlags)
-					X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), X509_V_FLAG_CB_ISSUER_CHECK|X509_V_FLAG_HANSOFT_CONTINUE_AFTER_VERIFY_LEAF_SIGNATURE_ERROR);
+				if (f_IsClientContext())
+				{
+					unsigned long ClientFlags = 0;
+					if (bVerifyIssuer)
+						ClientFlags |= X509_V_FLAG_CHECK_SS_SIGNATURE | X509_V_FLAG_CB_ISSUER_CHECK;
+					X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), ClientFlags);
+				}
 				
 				SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
-
+				
+				static const int s_SupportedCurves[] = 
+					{
+						NID_secp521r1
+						, NID_secp384r1
+#ifdef DMibSSLLibrary_BoringSSL
+						, NID_X25519
+#endif
+						, NID_X9_62_prime256v1
+					}
+				;
+				
+				ERR_clear_error();
+				if (!SSL_CTX_set1_curves(mp_pContext, s_SupportedCurves, sizeof(s_SupportedCurves) / sizeof(s_SupportedCurves[0])))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to set supported curves on ssl context"));
+				
 				bool bVerifyCertAndKey = false;
 				if (fp_LoadPublicCertificate())
 					bVerifyCertAndKey = true;
@@ -1415,7 +1449,7 @@ namespace NMib
 
 				if (!mp_Settings.m_CAStoreLocation.f_IsEmpty())
 				{
-					X509_STORE* pStore = mp_pContext->cert_store;
+					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 
 					if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
 						DMibErrorNetSSL(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
@@ -1453,7 +1487,7 @@ namespace NMib
 
 				if (!mp_Settings.m_CACertificateData.f_IsEmpty())
 				{
-					X509_STORE* pStore = mp_pContext->cert_store;
+					X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 					X509 *pCertificate = fs_LoadCertificate(mp_Settings.m_CACertificateData);
 					auto Cleanup0 = g_OnScopeExit > [&]
 						{
@@ -1465,6 +1499,10 @@ namespace NMib
 					if (!X509_STORE_add_cert(pStore, pCertificate))
 						DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
 
+					ERR_clear_error();
+					if (!SSL_CTX_add1_chain_cert(mp_pContext, pCertificate))
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to add certificate '{}' to certificate chain"));
+					
 					bUsingCertificateAuthority = true;
 				}
 
@@ -1559,12 +1597,84 @@ namespace NMib
 						X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
 				}
 			}
+			
+			void fp_DeduceSigningAlgorithms(int _CurveName)
+			{
+#ifdef DMibSSLLibrary_BoringSSL
+				static const uint16_t s_DefaultAlgos[] = 
+					{
+						SSL_SIGN_ECDSA_SECP521R1_SHA512
+						, SSL_SIGN_RSA_PSS_SHA512
+						, SSL_SIGN_RSA_PKCS1_SHA512
+						, SSL_SIGN_ECDSA_SECP384R1_SHA384
+						, SSL_SIGN_RSA_PSS_SHA384
+						, SSL_SIGN_RSA_PKCS1_SHA384
+						, SSL_SIGN_ECDSA_SECP256R1_SHA256
+						, SSL_SIGN_RSA_PSS_SHA256
+						, SSL_SIGN_RSA_PKCS1_SHA256
+					}
+				;
+				mint nAlgos = sizeof(s_DefaultAlgos) / sizeof(s_DefaultAlgos[0]);
+				const uint16_t *pAlgos = s_DefaultAlgos; 
+				
+				switch (_CurveName)
+				{
+				case NID_secp521r1: break;
+				case NID_secp384r1:
+					{
+						static const uint16_t s_CustomAlgos[] = 
+							{
+								SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, SSL_SIGN_RSA_PSS_SHA384
+								, SSL_SIGN_RSA_PKCS1_SHA384
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, SSL_SIGN_RSA_PSS_SHA512
+								, SSL_SIGN_RSA_PKCS1_SHA512
+								, SSL_SIGN_ECDSA_SECP256R1_SHA256
+								, SSL_SIGN_RSA_PSS_SHA256
+								, SSL_SIGN_RSA_PKCS1_SHA256
+							}
+						;
+						nAlgos = sizeof(s_CustomAlgos) / sizeof(s_CustomAlgos[0]);
+						pAlgos = s_CustomAlgos; 
+					}
+					break;
+				case NID_X9_62_prime256v1:
+				case NID_X25519:
+					{
+						static const uint16_t s_CustomAlgos[] = 
+							{
+								SSL_SIGN_ECDSA_SECP256R1_SHA256
+								, SSL_SIGN_RSA_PSS_SHA256
+								, SSL_SIGN_RSA_PKCS1_SHA256
+								, SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, SSL_SIGN_RSA_PSS_SHA384
+								, SSL_SIGN_RSA_PKCS1_SHA384
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, SSL_SIGN_RSA_PSS_SHA512
+								, SSL_SIGN_RSA_PKCS1_SHA512
+							}
+						;
+						nAlgos = sizeof(s_CustomAlgos) / sizeof(s_CustomAlgos[0]);
+						pAlgos = s_CustomAlgos; 
+					}
+					break;
+				}
+				
+				ERR_clear_error();
+				if (!SSL_CTX_set_signing_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to set preferred signing algorithms on ssl context"));
+#endif
+			}
 
 			bool fp_LoadPrivateKey()
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
+				{
+					fp_DeduceSigningAlgorithms(0);
 					return false;
+				}
 
 				EVP_PKEY* pKey = fs_LoadPrivateKey(mp_Settings.m_PrivateKeyData); 
 				auto Cleanup = g_OnScopeExit > [&]
@@ -1573,7 +1683,6 @@ namespace NMib
 					}
 				;
 
-				if (f_IsServerContext())
 				{
 					int CurveName = 0;
 					if (auto pRSA = EVP_PKEY_get1_RSA(pKey))
@@ -1598,7 +1707,11 @@ namespace NMib
 							else if (RSASize >= 4096)
 								CurveName = NID_secp384r1;
 							else
+#ifdef DMibSSLLibrary_BoringSSL
+								CurveName = NID_X25519;
+#else
 								CurveName = NID_X9_62_prime256v1;
+#endif
 						}
 						
 						if (SSL_CTX_set_tmp_dh(mp_pContext, pDHParam) != 1)
@@ -1612,18 +1725,27 @@ namespace NMib
 							CurveName = NID_secp521r1;
 						EC_KEY_free(pECKey);
 					}
-					if (CurveName)
+					
+					fp_DeduceSigningAlgorithms(CurveName);
+					
+					if (f_IsServerContext() && CurveName)
 					{
 						EC_KEY *pECDH = EC_KEY_new_by_curve_name(CurveName);
 						if (pECDH)
 						{
 						    SSL_CTX_set_options(mp_pContext, SSL_OP_SINGLE_ECDH_USE);
 							if (SSL_CTX_set_tmp_ecdh(mp_pContext, pECDH) != 1)
+							{
+#ifndef DMibSSLLibrary_BoringSSL								
 								SSL_CTX_set_ecdh_auto(mp_pContext, 1);
+#endif
+							}
 							EC_KEY_free(pECDH);		
 						}
+#ifndef DMibSSLLibrary_BoringSSL								
 						else
 							SSL_CTX_set_ecdh_auto(mp_pContext, 1);
+#endif
 					}
 				}
 				
@@ -2243,6 +2365,9 @@ namespace NMib
 							case NID_secp384r1:
 								return EVP_sha384();
 							case NID_X9_62_prime256v1:
+#ifdef DMibSSLLibrary_BoringSSL
+							case NID_X25519:
+#endif
 								return EVP_sha256();
 							}
 						}
@@ -2717,6 +2842,7 @@ namespace NMib
 				mp_ExpectedResultCallback = _ExpectedResult;
 			}
 
+#ifndef DMibSSLLibrary_BoringSSL								
 			bool f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len)
 			{
 				g_SSLLowLevel->f_UseInThread();
@@ -2727,7 +2853,8 @@ namespace NMib
 				int Len = _Len;
 				EVP_DecryptUpdate(f_GetSSL()->enc_read_ctx, (unsigned char*)_pDataOut, &Len, (unsigned char*)_pDataIn, _Len);
 				return true;
-			} 
+			}
+#endif
 
 			bool f_GiveSocket(void *_pSocket)
 			{
@@ -3088,7 +3215,7 @@ namespace NMib
 				g_SSLLowLevel->f_UseInThread();
 				unsigned long SysError;
 				NStr::CStr AllErrors;
-
+				
 				if ((SysError=ERR_peek_error()) != 0)
 				{
 					const char *pFile; 
@@ -3346,6 +3473,7 @@ namespace NMib
 			;
 		}
 
+#ifndef DMibSSLLibrary_BoringSSL								
 		bool CSSLConnection::f_Decrypt(const void *_pDataIn, void *_pDataOut, int _Len)
 		{
 			return fg_RunProtectRegisters
@@ -3357,6 +3485,7 @@ namespace NMib
 				)
 			;
 		}
+#endif
 
 		NDataProcessing::CHashDigest_SHA256 CSSLConnection::f_GetSessionKeyDigest() const
 		{

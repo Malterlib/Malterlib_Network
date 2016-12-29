@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Mib/Core/Core>
 #include "Malterlib_Network_Socket.h"
 #include "Malterlib_Network.h"
 #include "Malterlib_Network_SSL.h"

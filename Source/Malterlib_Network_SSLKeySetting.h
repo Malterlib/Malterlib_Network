@@ -10,6 +10,7 @@ namespace NMib
 			, ESSLKeyType_EC_secp256r1
 			, ESSLKeyType_EC_secp384r1
 			, ESSLKeyType_EC_secp521r1
+			, ESSLKeyType_EC_X25519
 		};
 		
 		struct CSSLKeySettings_RSA
@@ -35,6 +36,10 @@ namespace NMib
 		{
 		};
 		
+		struct CSSLKeySettings_EC_X25519
+		{
+		};
+		
 		using CSSLKeySetting = NContainer::TCStreamableVariant
 			<
 				ESSLKeyType
@@ -42,6 +47,7 @@ namespace NMib
 				, CSSLKeySettings_EC_secp256r1, ESSLKeyType_EC_secp256r1
 				, CSSLKeySettings_EC_secp384r1, ESSLKeyType_EC_secp384r1
 				, CSSLKeySettings_EC_secp521r1, ESSLKeyType_EC_secp521r1
+				, CSSLKeySettings_EC_X25519, ESSLKeyType_EC_X25519
 			>
 		;
 		

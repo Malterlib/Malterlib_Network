@@ -3,6 +3,80 @@
 
 Import "../Core/Lib_Malterlib.MTarget"
 
+%Repository "boringssl"
+{
+	Repository
+	{
+		Type External
+		Remotes "upstream=https://github.com/google/boringssl.git;@(Repository.Remotes)"
+	}
+}
+
+Property
+{
+	BoringSSLExists "@('../../External/boringssl'->FindFilesIn('CMakeLists.txt'))"
+	BoringSSLExists true
+	{
+		!BoringSSLExists ""
+	}
+}
+
+Property
+{
+	MalterlibSSLLibrary BoringSSL // User: OpenSSL library to use. Currently BoringSSL is the default, and OpenSSL can be used but is deprecated
+	{
+		&
+		{
+			MalterlibSSLLibrary ""
+			BoringSSLExists true
+			!PlatformFamily Windows
+		}
+	}
+	MalterlibSSLLibrary OpenSSL
+	{
+		&
+		{
+			MalterlibSSLLibrary ""
+		}
+	}
+}
+
+%Import "../../External/boringssl/CMakeLists.txt"
+{
+	!!MalterlibSSLLibrary BoringSSL
+	Compile
+	{
+		!!MalterlibCompileSupportTabSetings true
+		IndentWidth 2
+		TabWidth 2
+		UsesTabs false
+	}
+	Compile
+	{
+		!!CompileDialect C
+		PrefixHeader ""
+	}
+}
+
+%Group "~Automatic/DependBoringSSL"
+{
+	%Dependency Lib_decrepit
+	%Dependency Lib_ssl
+	%Dependency Lib_crypto
+}
+
+Target.ExtraGroups "~Automatic/DependBoringSSL;@(Target.ExtraGroups)"
+{
+	&
+	{
+		Architecture "x64"
+		PlatformFamily Windows
+		MalterlibLinkWithOpenSSL true
+		TargetIsExecutable true
+		MalterlibSSLLibrary BoringSSL
+	}
+}
+
 %Group "!Automatic/MalterlibOpenSSLAsm"
 {
 	%File Source/Malterlib_Network_SSL_Windows_x64.asm
@@ -17,6 +91,21 @@ Target.ExtraGroups "!Automatic/MalterlibOpenSSLAsm;@(Target.ExtraGroups)"
 		MalterlibLinkWithOpenSSL true
 		TargetIsExecutable true
 	}
+}
+
+Compile
+{
+	&
+	{
+		LanguageFamily Native
+		CompileDialect C
+	}
+	
+	SearchPath "@('../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+	{
+		!!MalterlibSSLLibrary BoringSSL
+	}
+	PreprocessorDefines "DMibSSLLibrary_@(MalterlibSSLLibrary);@(Compile.PreprocessorDefines)"
 }
 
 %Group "{Malterlib}/{Lib_Malterlib_Network}"
@@ -40,6 +129,21 @@ Target.ExtraGroups "!Automatic/MalterlibOpenSSLAsm;@(Target.ExtraGroups)"
 		{
 			%File "Documentation/*"
 		}
+	}
+	%Dependency "Lib_crypto"
+	{
+		!!MalterlibSSLLibrary BoringSSL
+		Dependency.Indirect true
+	}
+	%Dependency "Lib_ssl"
+	{
+		!!MalterlibSSLLibrary BoringSSL
+		Dependency.Indirect true
+	}
+	%Dependency "Lib_decrepit"
+	{
+		!!MalterlibSSLLibrary BoringSSL
+		Dependency.Indirect true
 	}
 }
 
