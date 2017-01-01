@@ -37,6 +37,12 @@ extern "C"
 #endif
 
 #if defined(DPlatformFamily_Windows)
+#include <Windows.h>
+#  undef X509_NAME 
+#  undef X509_EXTENSIONS 
+#  undef PKCS7_ISSUER_AND_SERIAL 
+#  undef OCSP_REQUEST 
+#  undef OCSP_RESPONSE 
 #include <Mib/Core/PlatformSpecific/WindowsError>
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
@@ -602,7 +608,7 @@ namespace NMib
 				// Update chain of certificates
 				if (!Result.f_HasLoggedCertificateChain())
 				{
-					int nCertsInChain = sk_X509_num(_pStoreContext->chain);
+					auto nCertsInChain = sk_X509_num(_pStoreContext->chain);
 					while (nCertsInChain)
 					{
 						X509* pCert = sk_X509_value(_pStoreContext->chain, nCertsInChain - 1);
@@ -735,7 +741,7 @@ namespace NMib
 				auto nWritten = BIO_number_written(pMemoryBio);
 				NStr::CStr Output;
 				
-				BIO_read(pMemoryBio, Output.f_GetStr(nWritten + 1), nWritten);
+				BIO_read(pMemoryBio, Output.f_GetStr(nWritten + 1), (int)nWritten);
 
 				Output.f_SetAt(nWritten, 0);
 				Output.f_SetStrLen(nWritten);
@@ -824,9 +830,9 @@ namespace NMib
 							GENERAL_NAMES_free(pSubjectAltNames);
 						}
 					;
-					int nAltEntries = sk_GENERAL_NAME_num(pSubjectAltNames);
+					mint nAltEntries = sk_GENERAL_NAME_num(pSubjectAltNames);
 
-					for (int iEntry = 0; iEntry < nAltEntries; ++iEntry)
+					for (mint iEntry = 0; iEntry < nAltEntries; ++iEntry)
 					{
 						GENERAL_NAME const* pName = sk_GENERAL_NAME_value(pSubjectAltNames, iEntry);
 						if (!pName)
@@ -3502,7 +3508,7 @@ namespace NMib
 
 		// CSSLConnectionResult
 
-		void CSSLConnectionResult::f_LogError(int _Depth, int _Error)
+		void CSSLConnectionResult::f_LogError(mint _Depth, int _Error)
 		{
 			bint bCreated = false;
 			CCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
@@ -3534,7 +3540,7 @@ namespace NMib
 				mp_bVerificationErrorsOccured = true;
 		}
 
-		void CSSLConnectionResult::f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const &_Certificate)
+		void CSSLConnectionResult::f_LogCertificate(mint _Depth, NContainer::TCVector<uint8> const &_Certificate)
 		{
 			bint bCreated = false;
 			CCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);

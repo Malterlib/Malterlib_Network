@@ -150,10 +150,10 @@ namespace NMib
 			CSSLConnectionResult() : mp_bTrustErrorsOccured(false), mp_bVerificationErrorsOccured(false), mp_bConnectionRefused(false) {}
 			~CSSLConnectionResult() {}
 
-			void f_LogError(int _Depth, int _Error);
+			void f_LogError(mint _Depth, int _Error);
 			void f_LogMiscError(EMiscError _Error);
 			bool f_HasLoggedCertificateChain() const { return !mp_Certificates.f_IsEmpty(); }
-			void f_LogCertificate(int _Depth, NContainer::TCVector<uint8> const &_Certificate);
+			void f_LogCertificate(mint _Depth, NContainer::TCVector<uint8> const &_Certificate);
 
 			NStr::CStr f_GetPeerCertificateName() const;
 			NStr::CStr f_GetPeerCertificateDistinguishedName_RFC2253() const;
@@ -184,8 +184,8 @@ namespace NMib
 			NStr::CStr fp_StringForError(int _Error) const;
 			NStr::CStr fp_GetLibraryStringForError(int _Error) const;
 
-			NContainer::TCMap<int,CCertificate> mp_Certificates;
-			NContainer::TCMap<EMiscError,int> mp_MiscErrors;
+			NContainer::TCMap<mint, CCertificate> mp_Certificates;
+			NContainer::TCMap<EMiscError, int> mp_MiscErrors;
 			NStr::CStr mp_SSLErrors;
 			bool mp_bTrustErrorsOccured;
 			bool mp_bVerificationErrorsOccured;
