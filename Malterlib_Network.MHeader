@@ -48,7 +48,7 @@ Property
 {
 	!!MalterlibSSLLibrary BoringSSL
 
-	Import.CMake_FullRebuildVersion 2
+	Import.CMake_FullRebuildVersion 3
 	Compile
 	{
 		!!MalterlibCompileSupportTabSetings true
@@ -77,6 +77,15 @@ Property
 	%Target Lib_crypto
 	{
 		Property.MalterlibGenerateLibrary true // Needed because for asm objects are not included otherwise
+		Target.LinkerGroup "BoringSSL"
+	}
+	%Target Lib_decrepit
+	{
+		Target.LinkerGroup "BoringSSL"
+	}
+	%Target Lib_ssl
+	{
+		Target.LinkerGroup "BoringSSL"
 	}
 }
 
