@@ -3606,7 +3606,7 @@ namespace NMib
 				if (_Certificate.f_IsEmpty())
 					return false;
 
-				return (mp_Certificates[0].m_Data == _Certificate);
+				return (mp_Certificates[mint(0)].m_Data == _Certificate);
 			};
 
 			for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
@@ -3636,7 +3636,7 @@ namespace NMib
 
 			NContainer::TCVector<uint8> ConvertedCert = CSSLContext::CInternal::fs_ConvertX509ToBinary(pPeerCertificate);
 			
-			bool bMatches = (mp_Certificates[0].m_Data == ConvertedCert);
+			bool bMatches = (mp_Certificates[mint(0)].m_Data == ConvertedCert);
 			return bMatches;
 		}
 
@@ -3691,7 +3691,7 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::CInternal::fs_GetCertificateDescription(mp_Certificates[0].m_Data);
+			return CSSLContext::CInternal::fs_GetCertificateDescription(mp_Certificates[mint(0)].m_Data);
 		}
 
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateInformation() const
@@ -3699,13 +3699,13 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::CInternal::fs_GetCertificateInformation(mp_Certificates[0].m_Data);
+			return CSSLContext::CInternal::fs_GetCertificateInformation(mp_Certificates[mint(0)].m_Data);
 		}
 
 		NContainer::TCVector<uint8> CSSLConnectionResult::f_GetPeerCertificate() const
 		{
 			if (!mp_Certificates.f_IsEmpty())
-				return mp_Certificates[0].m_Data;
+				return mp_Certificates[mint(0)].m_Data;
 
 			return NContainer::TCVector<uint8>();
 		}
@@ -3724,7 +3724,7 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::fs_GetCertificateName(mp_Certificates[0].m_Data);
+			return CSSLContext::fs_GetCertificateName(mp_Certificates[mint(0)].m_Data);
 		}
 		
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateDistinguishedName_RFC2253() const
@@ -3732,7 +3732,7 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::fs_GetCertificateDistinguishedName_RFC2253(mp_Certificates[0].m_Data);
+			return CSSLContext::fs_GetCertificateDistinguishedName_RFC2253(mp_Certificates[mint(0)].m_Data);
 		}
 
 		NStr::CStr CSSLConnectionResult::f_GetPeerCertificateFingerprint() const
@@ -3740,7 +3740,7 @@ namespace NMib
 			if (mp_Certificates.f_IsEmpty())
 				return NStr::CStr();
 
-			return CSSLContext::fs_GetCertificateFingerprint(mp_Certificates[0].m_Data);
+			return CSSLContext::fs_GetCertificateFingerprint(mp_Certificates[mint(0)].m_Data);
 		}
 
 		NStr::CStr CSSLConnectionResult::fp_GetLibraryStringForError(int _Error) const
