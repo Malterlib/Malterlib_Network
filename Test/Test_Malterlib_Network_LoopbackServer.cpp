@@ -306,7 +306,7 @@ namespace NMib
 
 		NStr::CStr fg_GetLoopbackMachine()
 		{
-			NStr::CStr Machine = NSys::fg_Process_GetEnvironmentVariable(NStr::CStr("MalterlibTestLoopbackMachine"));
+			NStr::CStr Machine = fg_GetSys()->f_GetEnvironmentVariable("MalterlibTestLoopbackMachine");
 			if (!Machine.f_IsEmpty())
 				return Machine;
 			else
