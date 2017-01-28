@@ -1274,7 +1274,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/bn'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/bn-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/bn/asm/bn-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/bn/asm/bn-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/bn-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/bn/asm/bn-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/bn-586.asm"
 							}
 						}
 						%File "crypto/bn/co-586.asm.rule"
@@ -1284,7 +1284,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/bn'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/co-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/bn/asm/co-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/bn/asm/co-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/co-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/bn/asm/co-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/co-586.asm"
 							}
 						}
 						%File "crypto/bn/x86-mont.asm.rule"
@@ -1294,7 +1294,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/bn'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/x86-mont.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/bn/asm/x86-mont.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/bn/asm/x86-mont.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/x86-mont.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/bn/asm/x86-mont.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/bn/x86-mont.asm"
 							}
 						}
 					}
@@ -1312,7 +1312,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/chacha'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/chacha/asm/chacha-x86.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/chacha/asm/chacha-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/chacha/asm/chacha-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86.asm"
 							}
 						}
 					}
@@ -1340,7 +1340,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/aes'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aes-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/aes/asm/aes-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/aes/asm/aes-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aes-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/aes/asm/aes-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aes-586.asm"
 							}
 						}
 						%File "crypto/aes/vpaes-x86.asm.rule"
@@ -1350,7 +1350,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/aes'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/vpaes-x86.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/aes/asm/vpaes-x86.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/aes/asm/vpaes-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/vpaes-x86.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/aes/asm/vpaes-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/vpaes-x86.asm"
 							}
 						}
 						%File "crypto/aes/aesni-x86.asm.rule"
@@ -1360,7 +1360,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/aes'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aesni-x86.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/aes/asm/aesni-x86.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/aes/asm/aesni-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aesni-x86.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/aes/asm/aesni-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/aes/aesni-x86.asm"
 							}
 						}
 					}
@@ -1378,7 +1378,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/modes'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/modes/ghash-x86.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/modes/asm/ghash-x86.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/modes/asm/ghash-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/modes/ghash-x86.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/modes/asm/ghash-x86.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/modes/ghash-x86.asm"
 							}
 						}
 					}
@@ -1396,7 +1396,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/md5'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/md5/md5-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/md5/asm/md5-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/md5/asm/md5-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/md5/md5-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/md5/asm/md5-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/md5/md5-586.asm"
 							}
 						}
 					}
@@ -1424,7 +1424,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/sha'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha1-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/sha/asm/sha1-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha1-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha1-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha1-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha1-586.asm"
 							}
 						}
 						%File "crypto/sha/sha256-586.asm.rule"
@@ -1434,7 +1434,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/sha'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha256-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/sha/asm/sha256-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha256-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha256-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha256-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha256-586.asm"
 							}
 						}
 						%File "crypto/sha/sha512-586.asm.rule"
@@ -1444,7 +1444,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('crypto/sha'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha512-586.asm"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/sha/asm/sha512-586.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
-								Custom_CommandLine "C:/strawberry/perl/bin/perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha512-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha512-586.asm"
+								Custom_CommandLine "perl.exe @('../../../../External/boringssl/crypto/sha/asm/sha512-586.pl'->MakeAbsolute()) win32n -DOPENSSL_IA32_SSE2 @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/sha/sha512-586.asm"
 							}
 						}
 					}
@@ -1462,7 +1462,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 								Custom_WorkingDirectory "@('../../../../External/boringssl/crypto/err'->MakeAbsolute())"
 								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
 								Custom_Inputs "@('../../../../External/boringssl/crypto/err/err_data_generate.go'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/asn1.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/bio.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/bn.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/cipher.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/conf.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/dh.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/digest.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/dsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ecdh.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ecdsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ec.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/engine.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/evp.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/hkdf.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/obj.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/pem.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/pkcs8.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/rsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ssl.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/x509.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/x509v3.errordata'->MakeAbsolute())"
-								Custom_CommandLine "C:/Go/bin/go.exe run err_data_generate.go > @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
+								Custom_CommandLine "go.exe run err_data_generate.go > @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
 							}
 						}
 					}
