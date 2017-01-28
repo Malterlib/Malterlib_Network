@@ -1,4 +1,4 @@
-Property.CMakeOutputPath_BoringSSL "@(''->MakeAbsolute())"
+Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 %Target Lib_gtest
 {
 	Compile
