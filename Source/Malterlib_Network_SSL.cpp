@@ -38,11 +38,11 @@ extern "C"
 
 #if defined(DPlatformFamily_Windows)
 #include <Windows.h>
-#  undef X509_NAME 
-#  undef X509_EXTENSIONS 
-#  undef PKCS7_ISSUER_AND_SERIAL 
-#  undef OCSP_REQUEST 
-#  undef OCSP_RESPONSE 
+#  undef X509_NAME
+#  undef X509_EXTENSIONS
+#  undef PKCS7_ISSUER_AND_SERIAL
+#  undef OCSP_REQUEST
+#  undef OCSP_RESPONSE
 #include <Mib/Core/PlatformSpecific/WindowsError>
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
