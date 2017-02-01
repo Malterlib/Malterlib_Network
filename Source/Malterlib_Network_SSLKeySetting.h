@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Mib/Storage/Variant>
+
 namespace NMib
 {
 	namespace NNet
