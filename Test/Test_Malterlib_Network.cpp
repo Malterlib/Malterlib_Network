@@ -64,7 +64,7 @@ public:
 		t_CNotNetAddress NotReturn;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Localhost, _NotType, &NotReturn, sizeof(NotReturn))) == DMibExpr((bint)false));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((char const*)&_Localhost, (char const*)&Return, sizeof(t_CNetAddress))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&_Localhost, (uint8 const*)&Return, sizeof(t_CNetAddress))) == DMibExpr(0));
 
 		CAddress Other = fg_CreateAddress(_Type, &_Other, sizeof(_Other));
 		DMibTest(DMibExpr(Other) != DMibExpr(nullptr));
@@ -72,7 +72,7 @@ public:
 		t_CNetAddress Return2;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Other, _Type, &Return2, sizeof(Return2))) == DMibExpr((bint)true));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((char const*)&_Other, (char const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&_Other, (uint8 const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
 
 		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Localhost)) == DMibExpr(0));
 		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Other)) == DMibExpr(-1));
@@ -90,7 +90,7 @@ public:
 		t_CNetAddress Return;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((char const*)&Return.f_GetIP(), (char const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
 
 		fg_FreeAddress(Resolved);
 	}
@@ -122,7 +122,7 @@ public:
 			t_CNetAddress Return;
 			DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
 
-			DMibTest(DMibExpr(NMem::fg_MemCmp((char const*)&Return.f_GetIP(), (char const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
+			DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
 
 			fg_FreeAddress(Resolved);
 		}
