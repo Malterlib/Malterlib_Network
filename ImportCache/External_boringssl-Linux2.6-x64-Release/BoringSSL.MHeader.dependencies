@@ -43,7 +43,6 @@
 ../../../../External/boringssl/crypto/x509v3/CMakeLists.txt
 ../../../../External/boringssl/decrepit/CMakeLists.txt
 ../../../../External/boringssl/decrepit/bio/CMakeLists.txt
-../../../../External/boringssl/decrepit/biossl/CMakeLists.txt
 ../../../../External/boringssl/decrepit/blowfish/CMakeLists.txt
 ../../../../External/boringssl/decrepit/cast/CMakeLists.txt
 ../../../../External/boringssl/decrepit/des/CMakeLists.txt

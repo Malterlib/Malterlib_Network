@@ -2886,7 +2886,15 @@ namespace NMib
 			NDataProcessing::CHashDigest_SHA256 f_GetSessionKeyDigest()
 			{
 				DMibRequire(mp_bConnected);
-				return NDataProcessing::CHash_SHA256::fs_DigestFromData(f_GetSSL()->session->master_key, f_GetSSL()->session->master_key_length);
+
+				auto pSession = SSL_get_session(f_GetSSL());
+				DMibRequire(pSession);
+				
+				auto KeyLength = SSL_SESSION_get_master_key(pSession, nullptr, 0);
+				NContainer::TCVector<uint8> KeyData;
+				KeyData.f_SetLen(KeyLength);
+				SSL_SESSION_get_master_key(pSession, KeyData.f_GetArray(), KeyLength);
+				return NDataProcessing::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyLength);
 			}
 
 			bool f_Connect()
@@ -2941,12 +2949,14 @@ namespace NMib
 				CSocketOperationResult Result;
 				ERR_clear_error();
 				auto pSSL = f_GetSSL();
-				auto SocketNumRead = pSSL->rbio->num_read;
-				auto SocketNumWrite = pSSL->wbio->num_write;
+				auto pReadBio = SSL_get_rbio(pSSL);
+				auto pWriteBio = SSL_get_wbio(pSSL);
+				auto SocketNumRead = pReadBio->num_read;
+				auto SocketNumWrite = pWriteBio->num_write;
 				int Ret = SSL_write(pSSL, _pData, (int)_nLen);
-				if (pSSL->rbio->num_read != SocketNumRead)
+				if (pReadBio->num_read != SocketNumRead)
 					Result.m_bReceivedNetwork = true;
-				if (pSSL->rbio->num_write != SocketNumWrite)
+				if (pReadBio->num_write != SocketNumWrite)
 					Result.m_bSentNetwork = true;
 				if (Ret <= 0)
 				{
@@ -2994,12 +3004,14 @@ namespace NMib
 				CSocketOperationResult Result;
 				ERR_clear_error();
 				auto pSSL = f_GetSSL();
-				auto SocketNumRead = pSSL->rbio->num_read;
-				auto SocketNumWrite = pSSL->wbio->num_write;
+				auto pReadBio = SSL_get_rbio(pSSL);
+				auto pWriteBio = SSL_get_wbio(pSSL);
+				auto SocketNumRead = pReadBio->num_read;
+				auto SocketNumWrite = pWriteBio->num_write;
 				int Ret = SSL_read(pSSL, _pData, _nLen);
-				if (pSSL->rbio->num_read != SocketNumRead)
+				if (pReadBio->num_read != SocketNumRead)
 					Result.m_bReceivedNetwork = true;
-				if (pSSL->rbio->num_write != SocketNumWrite)
+				if (pReadBio->num_write != SocketNumWrite)
 					Result.m_bSentNetwork = true;
 				
 				if (Ret <= 0)

@@ -198,10 +198,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		{
 			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/crypto/time_support.c"
-		{
-			Compile.Type C
-		}
 		%Group pkcs8
 		{
 			%File "../../../../External/boringssl/crypto/pkcs8/pkcs8.c"
@@ -909,6 +905,10 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 			{
 				Compile.Type C
 			}
+			%File "../../../../External/boringssl/crypto/asn1/time_support.c"
+			{
+				Compile.Type C
+			}
 			%File "../../../../External/boringssl/crypto/asn1/x_bignum.c"
 			{
 				Compile.Type C
@@ -1022,10 +1022,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 				Compile.Type C
 			}
 			%File "../../../../External/boringssl/crypto/bio/bio_mem.c"
-			{
-				Compile.Type C
-			}
-			%File "../../../../External/boringssl/crypto/bio/buffer.c"
 			{
 				Compile.Type C
 			}
@@ -1441,6 +1437,24 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 							}
 						}
 					}
+					%Group cipher
+					{
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher/chacha20_poly1305_x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "crypto/cipher/chacha20_poly1305_x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/cipher'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher/chacha20_poly1305_x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/cipher/asm/chacha20_poly1305_x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/cipher/asm/chacha20_poly1305_x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher/chacha20_poly1305_x86_64.S"
+							}
+						}
+					}
 					%Group chacha
 					{
 						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86_64.S"
@@ -1658,6 +1672,20 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	Target.BaseName crypto_test
 	%Group crypto
 	{
+		%Group chacha
+		{
+			%File "../../../../External/boringssl/crypto/chacha/chacha_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group curve25519
+		{
+			%File "../../../../External/boringssl/crypto/curve25519/x25519_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
 		%Group dh
 		{
 			%File "../../../../External/boringssl/crypto/dh/dh_test.cc"
@@ -1668,6 +1696,34 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		%Group dsa
 		{
 			%File "../../../../External/boringssl/crypto/dsa/dsa_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group ec
+		{
+			%File "../../../../External/boringssl/crypto/ec/ec_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group err
+		{
+			%File "../../../../External/boringssl/crypto/err/err_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group evp
+		{
+			%File "../../../../External/boringssl/crypto/evp/evp_extra_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group rsa
+		{
+			%File "../../../../External/boringssl/crypto/rsa/rsa_test.cc"
 			{
 				Compile.Type C++
 			}
@@ -1712,45 +1768,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		%Group lhash
 		{
 			%File "../../../../External/boringssl/crypto/lhash/lhash_test.cc"
-			{
-				Compile.Type C++
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_err_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName err_test
-	%Group crypto
-	{
-		%Group err
-		{
-			%File "../../../../External/boringssl/crypto/err/err_test.cc"
 			{
 				Compile.Type C++
 			}
@@ -1968,45 +1985,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	%Dependency Lib_crypto
 }
-%Target Exe_chacha_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName chacha_test
-	%Group crypto
-	{
-		%Group chacha
-		{
-			%File "../../../../External/boringssl/crypto/chacha/chacha_test.cc"
-			{
-				Compile.Type C++
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
 %Target Exe_poly1305_test
 {
 	Compile
@@ -2043,24 +2021,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 				Compile.Type C++
 			}
 		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_x25519_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName x25519_test
-	%Group crypto
-	{
-		Compile.Type C++
 	}
 	%Dependency Lib_crypto
 }
@@ -2372,84 +2332,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		%Group asn1
 		{
 			%File "../../../../External/boringssl/crypto/asn1/asn1_test.cc"
-			{
-				Compile.Type C++
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_rsa_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName rsa_test
-	%Group crypto
-	{
-		%Group rsa
-		{
-			%File "../../../../External/boringssl/crypto/rsa/rsa_test.cc"
-			{
-				Compile.Type C++
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_ec_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName ec_test
-	%Group crypto
-	{
-		%Group ec
-		{
-			%File "../../../../External/boringssl/crypto/ec/ec_test.cc"
 			{
 				Compile.Type C++
 			}
@@ -2829,45 +2711,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	%Dependency Lib_crypto
 }
-%Target Exe_evp_extra_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName evp_extra_test
-	%Group crypto
-	{
-		%Group evp
-		{
-			%File "../../../../External/boringssl/crypto/evp/evp_extra_test.cc"
-			{
-				Compile.Type C++
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
 %Target Exe_pbkdf_test
 {
 	Compile
@@ -3197,15 +3040,11 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	Target.BaseName ssl
 	%Group ssl
 	{
+		%File "../../../../External/boringssl/ssl/bio_ssl.c"
+		{
+			Compile.Type C
+		}
 		%File "../../../../External/boringssl/ssl/custom_extensions.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/handshake_server.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/handshake_client.c"
 		{
 			Compile.Type C
 		}
@@ -3233,11 +3072,15 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		{
 			Compile.Type C
 		}
-		%File "../../../../External/boringssl/ssl/s3_both.c"
+		%File "../../../../External/boringssl/ssl/handshake_client.c"
 		{
 			Compile.Type C
 		}
-		%File "../../../../External/boringssl/ssl/s3_enc.c"
+		%File "../../../../External/boringssl/ssl/handshake_server.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/ssl/s3_both.c"
 		{
 			Compile.Type C
 		}
@@ -3281,11 +3124,11 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		{
 			Compile.Type C
 		}
-		%File "../../../../External/boringssl/ssl/ssl_rsa.c"
+		%File "../../../../External/boringssl/ssl/ssl_privkey.c"
 		{
 			Compile.Type C
 		}
-		%File "../../../../External/boringssl/ssl/ssl_rsa_cc.cc"
+		%File "../../../../External/boringssl/ssl/ssl_privkey_cc.cc"
 		{
 			Compile.Type C++
 		}
@@ -3294,6 +3137,14 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 			Compile.Type C
 		}
 		%File "../../../../External/boringssl/ssl/ssl_stat.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/ssl/ssl_transcript.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/ssl/ssl_x509.c"
 		{
 			Compile.Type C
 		}
@@ -3654,13 +3505,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		%Group blowfish
 		{
 			%File "../../../../External/boringssl/decrepit/blowfish/blowfish.c"
-			{
-				Compile.Type C
-			}
-		}
-		%Group biossl
-		{
-			%File "../../../../External/boringssl/decrepit/biossl/bio_ssl.c"
 			{
 				Compile.Type C
 			}
