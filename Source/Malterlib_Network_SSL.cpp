@@ -2619,7 +2619,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
 				
 						ERR_clear_error();
-						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_SignOptions.m_Days))
+						if (!X509_time_adj_ex(X509_get_notAfter(pCertificate), _SignOptions.m_Days, 0, nullptr))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
 
 						ERR_clear_error();
@@ -2758,7 +2758,7 @@ namespace NMib
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not before"));
 				
 						ERR_clear_error();
-						if (!X509_gmtime_adj(X509_get_notAfter(pCertificate), (long)60*60*24*_SignOptions.m_Days))
+						if (!X509_time_adj_ex(X509_get_notAfter(pCertificate), _SignOptions.m_Days, 0, nullptr))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 not after"));
 
 						ERR_clear_error();
