@@ -468,6 +468,11 @@ namespace NMib
 					return pRet;
 				}
 
+				void *f_AccessRaw() const
+				{
+					return mp_Address;
+				}
+
 				bint f_IsEmpty() const
 				{
 					return mp_Address == nullptr;
