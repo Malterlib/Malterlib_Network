@@ -1670,6 +1670,8 @@ namespace NMib
 				ERR_clear_error();
 				if (!SSL_CTX_set_signing_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to set preferred signing algorithms on ssl context"));
+				if (!SSL_CTX_set_verify_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
+					DMibErrorNetSSL(fg_GetExceptionStr("Failed to set preferred verify algorithms on ssl context"));
 #endif
 			}
 
