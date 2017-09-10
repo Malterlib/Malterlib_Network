@@ -1539,9 +1539,19 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 				Compile.Type C++
 			}
 		}
+		%Group x509v3
+		{
+			%File "../../../../External/boringssl/crypto/x509v3/tab_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3name_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
 	}
 	%Dependency Lib_crypto
-	%Dependency Lib_gtest
 	%Group Windows
 	{
 		%Group x86
@@ -1566,144 +1576,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 			}
 		}
 	}
-}
-%Target Exe_v3name_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Compile
-	{
-		!!Compile.Type C
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName v3name_test
-	%Group crypto
-	{
-		%Group x509v3
-		{
-			%File "../../../../External/boringssl/crypto/x509v3/v3name_test.c"
-			{
-				Compile.Type C
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_tab_test
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Compile
-	{
-		!!Compile.Type C
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName tab_test
-	%Group crypto
-	{
-		%Group x509v3
-		{
-			%File "../../../../External/boringssl/crypto/x509v3/tab_test.c"
-			{
-				Compile.Type C
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
-}
-%Target Exe_example_mul
-{
-	Compile
-	{
-		!!Compile.Type C++
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Compile
-	{
-		!!Compile.Type C
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
-	Property.MalterlibTargetNameType Normal
-	Target.Group "External/BoringSSL"
-	Target.Type ConsoleExecutable
-	Target.BaseName example_mul
-	%Group crypto
-	{
-		%Group fipsmodule
-		{
-			%Group ec
-			{
-				%File "../../../../External/boringssl/crypto/fipsmodule/ec/example_mul.c"
-				{
-					Compile.Type C
-				}
-			}
-		}
-		%Group test
-		{
-			%File "../../../../External/boringssl/crypto/test/file_test.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/malloc.cc"
-			{
-				Compile.Type C++
-			}
-			%File "../../../../External/boringssl/crypto/test/test_util.cc"
-			{
-				Compile.Type C++
-			}
-		}
-	}
-	%Dependency Lib_crypto
+	%Dependency Lib_gtest
 }
 %Target Lib_ssl
 {
@@ -1713,157 +1586,155 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
 		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
 	}
-	Compile
-	{
-		!!Compile.Type C
-		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
-		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NOMINMAX;WIN32_LEAN_AND_MEAN;_CRT_SECURE_NO_WARNINGS;_HAS_EXCEPTIONS=0;_STL_EXTRA_DISABLED_WARNINGS=4774 4987;@(Compile.PreprocessorDefines)"
-	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
 	Target.Type StaticLibrary
 	Target.BaseName ssl
 	%Group ssl
 	{
-		%File "../../../../External/boringssl/ssl/bio_ssl.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/custom_extensions.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/d1_both.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/d1_lib.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/d1_pkt.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/d1_srtp.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/dtls_method.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/dtls_record.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/handshake_client.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/handshake_server.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/s3_both.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/s3_lib.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/s3_pkt.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_aead_ctx.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_asn1.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_buffer.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_cert.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_cipher.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_ecdh.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_file.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_lib.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_privkey.c"
-		{
-			Compile.Type C
-		}
-		%File "../../../../External/boringssl/ssl/ssl_privkey_cc.cc"
+		%File "../../../../External/boringssl/ssl/bio_ssl.cc"
 		{
 			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/ssl_session.c"
+		%File "../../../../External/boringssl/ssl/custom_extensions.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/ssl_stat.c"
+		%File "../../../../External/boringssl/ssl/d1_both.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/ssl_transcript.c"
+		%File "../../../../External/boringssl/ssl/d1_lib.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/ssl_x509.c"
+		%File "../../../../External/boringssl/ssl/d1_pkt.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/t1_enc.c"
+		%File "../../../../External/boringssl/ssl/d1_srtp.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/t1_lib.c"
+		%File "../../../../External/boringssl/ssl/dtls_method.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls_method.c"
+		%File "../../../../External/boringssl/ssl/dtls_record.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls_record.c"
+		%File "../../../../External/boringssl/ssl/handshake.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls13_both.c"
+		%File "../../../../External/boringssl/ssl/handshake_client.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls13_client.c"
+		%File "../../../../External/boringssl/ssl/handshake_server.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls13_enc.c"
+		%File "../../../../External/boringssl/ssl/s3_both.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
 		}
-		%File "../../../../External/boringssl/ssl/tls13_server.c"
+		%File "../../../../External/boringssl/ssl/s3_lib.cc"
 		{
-			Compile.Type C
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/s3_pkt.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_aead_ctx.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_asn1.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_buffer.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_cert.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_cipher.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_file.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_key_share.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_privkey.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_session.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_stat.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_transcript.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_versions.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_x509.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/t1_enc.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/t1_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls_method.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls_record.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_both.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_client.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_enc.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_server.cc"
+		{
+			Compile.Type C++
 		}
 	}
 	%Dependency Lib_crypto
@@ -1885,7 +1756,14 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	Target.BaseName ssl_test
 	%Group ssl
 	{
-		Compile.Type C++
+		%File "../../../../External/boringssl/ssl/span_test.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_test.cc"
+		{
+			Compile.Type C++
+		}
 	}
 	%Dependency Lib_ssl
 	%Group crypto
