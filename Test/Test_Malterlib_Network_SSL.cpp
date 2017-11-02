@@ -29,7 +29,7 @@ public:
 			CSSLKeySetting TestKeySetting = CSSLKeySettings_EC_secp256r1{};
 			CSSLSettings ServerSettings;
 			CSSLContext::CCertificateOptions ServerOptions;
-			ServerOptions.m_Subject = "localhost0";
+			ServerOptions.m_CommonName = "localhost0";
 			ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost1", "localhost2");
 			ServerOptions.m_KeySetting = TestKeySetting;
 			auto &ServerExtension = ServerOptions.m_Extensions["MalterlibTest"].f_Insert();
@@ -52,7 +52,7 @@ public:
 			{
 				CSSLSettings ClientSettings;
 				CSSLContext::CCertificateOptions ClientOptions;
-				ClientOptions.m_Subject = "localhost3";
+				ClientOptions.m_CommonName = "localhost3";
 				ClientOptions.m_KeySetting = TestKeySetting;
 				ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost4", "localhost5");
 				auto &ClientExtension = ClientOptions.m_Extensions["MalterlibTest"].f_Insert();
@@ -77,7 +77,7 @@ public:
 				CSSLSettings ClientSettings;
 				
 				CSSLContext::CCertificateOptions ClientOptions;
-				ClientOptions.m_Subject = "localhost3";
+				ClientOptions.m_CommonName = "localhost3";
 				ClientOptions.m_KeySetting = TestKeySetting;
 				auto &ClientExtension = ClientOptions.m_Extensions["MalterlibTest"].f_Insert();
 				ClientExtension.m_Value = "Test2";

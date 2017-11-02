@@ -1954,12 +1954,67 @@ namespace NMib
 
 		};
 
-		bool CSSLContext::CCertificateExtension::operator == (CCertificateExtension const &_Right) const
+		void CSSLContext::CCertificateOptions::f_MakeCA()
 		{
-			return NContainer::fg_TupleReferences(m_bCritical, m_Value) == NContainer::fg_TupleReferences(_Right.m_bCritical, _Right.m_Value); 
+			f_AddExtension_BasicConstraints(true);
+			f_AddExtension_KeyUsage(EKeyUsage_CertificateSign | EKeyUsage_CRLSign);
+		}
+
+		void CSSLContext::CCertificateOptions::f_AddExtension_BasicConstraints(bool _bCA, bool _bCritical)
+		{
+			using namespace NMib::NStr;
+			auto &Extension = m_Extensions["2.5.29.19"].f_Insert();
+			Extension.m_bCritical = _bCritical;
+			Extension.m_Value = "CA:{}"_f << (_bCA ? "TRUE" : "FALSE");
+		}
+
+		void CSignOptions::f_AddExtension_SubjectKeyIdentifier(bool _bCritical)
+		{
+			auto &Extension = m_Extensions["2.5.29.14"].f_Insert();
+			Extension.m_bCritical = _bCritical;
+			Extension.m_Value = "hash";
+		}
+
+		void CSignOptions::f_AddExtension_AuthorityKeyIdentifier(bool _bCritical)
+		{
+			using namespace NStr;
+			auto &Extension = m_Extensions["2.5.29.35"].f_Insert();
+			Extension.m_Value = "keyid:always";
+		}
+
+		void CSSLContext::CCertificateOptions::f_AddExtension_KeyUsage(EKeyUsage _KeyUsage, bool _bCritical)
+		{
+			NStr::CStr KeyUsage;
+			if (_KeyUsage & EKeyUsage_DigitalSignature)
+				fg_AddStrSep(KeyUsage, "digitalSignature", ",");
+			if (_KeyUsage & EKeyUsage_NonRepudiation)
+				fg_AddStrSep(KeyUsage, "nonRepudiation", ",");
+			if (_KeyUsage & EKeyUsage_KeyEncipherment)
+				fg_AddStrSep(KeyUsage, "keyEncipherment", ",");
+			if (_KeyUsage & EKeyUsage_DataEncipherment)
+				fg_AddStrSep(KeyUsage, "dataEncipherment", ",");
+			if (_KeyUsage & EKeyUsage_KeyAgreement)
+				fg_AddStrSep(KeyUsage, "keyAgreement", ",");
+			if (_KeyUsage & EKeyUsage_CertificateSign)
+				fg_AddStrSep(KeyUsage, "keyCertSign", ",");
+			if (_KeyUsage & EKeyUsage_CRLSign)
+				fg_AddStrSep(KeyUsage, "cRLSign", ",");
+			if (_KeyUsage & EKeyUsage_EncipherOnly)
+				fg_AddStrSep(KeyUsage, "encipherOnly", ",");
+			if (_KeyUsage & EKeyUsage_DecipherOnly)
+				fg_AddStrSep(KeyUsage, "decipherOnly", ",");
+
+			auto &Extension = m_Extensions["2.5.29.15"].f_Insert();
+			Extension.m_bCritical = _bCritical;
+			Extension.m_Value = KeyUsage;
+		}
+
+		bool CCertificateExtension::operator == (CCertificateExtension const &_Right) const
+		{
+			return NContainer::fg_TupleReferences(m_bCritical, m_Value) == NContainer::fg_TupleReferences(_Right.m_bCritical, _Right.m_Value);
 		}
 		
-		bool CSSLContext::CCertificateExtension::operator < (CCertificateExtension const &_Right) const
+		bool CCertificateExtension::operator < (CCertificateExtension const &_Right) const
 		{
 			return NContainer::fg_TupleReferences(m_bCritical, m_Value) < NContainer::fg_TupleReferences(_Right.m_bCritical, _Right.m_Value); 
 		}
@@ -2145,7 +2200,7 @@ namespace NMib
 			;
 		}
 		
-		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
+		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> CSSLContext::fs_GetCertificateExtensions(NContainer::TCVector<uint8> const &_CertificateData)
 		{
 			return fg_RunProtectRegisters
 				(
@@ -2157,7 +2212,7 @@ namespace NMib
 			;
 		}
 
-		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> CSSLContext::fs_GetCertificateRequestExtensions
+		NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> CSSLContext::fs_GetCertificateRequestExtensions
 			(
 				NContainer::TCVector<uint8> const &_CertificateData
 			)
@@ -2246,16 +2301,19 @@ namespace NMib
 
 		namespace
 		{
-			X509_EXTENSION *fg_CreateExtension(X509V3_CTX &_Context, int _nID, CSSLContext::CCertificateExtension _Extension)
+			X509_EXTENSION *fg_CreateExtension(X509V3_CTX &_Context, int _nID, CCertificateExtension _Extension)
 			{
 				X509_EXTENSION *pExtension = nullptr;
 
+				int Critical = _Extension.m_bCritical;
 				ERR_clear_error();
 				pExtension = X509V3_EXT_conf_nid(nullptr, &_Context, _nID, _Extension.m_Value.f_GetStrUniqueWritable());
 				if (pExtension)
-					return pExtension; 
+				{
+					X509_EXTENSION_set_critical(pExtension, Critical);
+					return pExtension;
+				}
 
-				int Critical = _Extension.m_bCritical;
 				ASN1_UTF8STRING *pValue = nullptr;
 
 				ERR_clear_error();
@@ -2276,10 +2334,10 @@ namespace NMib
 				pExtension = X509_EXTENSION_create_by_NID(&pExtension, _nID, Critical, pValue);
 				if (!pExtension)
 					DMibErrorNetSSL(fg_GetExceptionStr("Failed to create extension"));
-						
+
 				return pExtension;
 			}
-			void fg_AddExtension(X509V3_CTX &_Context, X509 *_pCert, int _nID, CSSLContext::CCertificateExtension _Extension)
+			void fg_AddExtension(X509V3_CTX &_Context, X509 *_pCert, int _nID, CCertificateExtension _Extension)
 			{
 				X509_EXTENSION *pExtension = nullptr;
 				pExtension = fg_CreateExtension(_Context, _nID, _Extension);
@@ -2295,7 +2353,7 @@ namespace NMib
 					DMibErrorNetSSL(fg_GetExceptionStr("Error adding x509 extension"));
 			}
 			
-			void fg_AddExtension(X509V3_CTX &_Context, X509_EXTENSIONS *&_pExtensions, int _nID, CSSLContext::CCertificateExtension _Extension)
+			void fg_AddExtension(X509V3_CTX &_Context, X509_EXTENSIONS *&_pExtensions, int _nID, CCertificateExtension _Extension)
 			{
 				X509_EXTENSION *pExtension = fg_CreateExtension(_Context, _nID, _Extension);
 				auto Cleanup = g_OnScopeExit > [&]
@@ -2322,13 +2380,13 @@ namespace NMib
 						Output += NStr::CStr::CFormat(",DNS:{}") << (*Iter);
 				}
 				
-				CSSLContext::CCertificateExtension Extension;
+				CCertificateExtension Extension;
 				Extension.m_Value = Output;
 				fg_AddExtension(_Context, _pObject, NID_subject_alt_name, Extension);
 			}
 			
 			template <typename tf_CObject>
-			void fg_AddExtensions(X509V3_CTX &_Context, tf_CObject *&_pObject, NContainer::TCMap<NStr::CStr, NContainer::TCVector<CSSLContext::CCertificateExtension>> const &_Extensions)
+			void fg_AddExtensions(X509V3_CTX &_Context, tf_CObject *&_pObject, NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> const &_Extensions)
 			{
 				for (auto iExtension = _Extensions.f_GetIterator(); iExtension; ++iExtension)
 				{
@@ -2389,6 +2447,21 @@ namespace NMib
 				return EVP_sha384();
 			}
 		}
+
+		static void fg_GenerateSubject(X509_NAME *_pName, CSSLContext::CCertificateOptions const &_Options)
+		{
+			ERR_clear_error();
+			if (!X509_NAME_add_entry_by_txt(_pName, "CN", MBSTRING_UTF8, (const unsigned char*)_Options.m_CommonName.f_GetStr(), -1, -1, 0))
+				DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
+
+			for (auto &Value : _Options.m_RelativeDistinguishedNames)
+			{
+				auto &Subject = _Options.m_RelativeDistinguishedNames.fs_GetKey(Value);
+				ERR_clear_error();
+				if (!X509_NAME_add_entry_by_txt(_pName, Subject, MBSTRING_UTF8, (const unsigned char*)Value.f_GetStr(), -1, -1, 0))
+					DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Error adding {} entry", Subject)));
+			}
+		}
 		
 		// openssl genrsa -des3 -out client.key 4096
 		// openssl req -new -key client.key -out client.csr
@@ -2438,11 +2511,9 @@ namespace NMib
 
 						if (bGenerateNewKey)
 							CSSLContext::CInternal::fs_GenerateKey(pKey, _Options);
-			
-						ERR_clear_error();
-						if (!X509_NAME_add_entry_by_txt(X509_REQ_get_subject_name(pCertificateRequest), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
-							DMibErrorNetSSL(fg_GetExceptionStr("Error adding CN entry"));
-			
+
+						fg_GenerateSubject(X509_REQ_get_subject_name(pCertificateRequest), _Options);
+
 						X509_EXTENSIONS *pExtensions = nullptr;
 			
 						auto Cleanup2 = g_OnScopeExit > [&]
@@ -2692,7 +2763,14 @@ namespace NMib
 							}
 						}
 
-			
+						if (!_SignOptions.m_Extensions.f_IsEmpty())
+						{
+							X509V3_CTX Context;
+							X509V3_set_ctx_nodb(&Context);
+							X509V3_set_ctx(&Context, pCACertificate, pCertificate, nullptr, nullptr, 0);
+							fg_AddExtensions(Context, pCertificate, _SignOptions.m_Extensions);
+						}
+
 						ERR_clear_error();
 						if (!X509_check_private_key(pCACertificate, pCAKey))
 							DMibErrorNetSSL(fg_GetExceptionStr("CA certificate and CA private key do not match"));
@@ -2766,11 +2844,9 @@ namespace NMib
 						ERR_clear_error();
 						if (!X509_set_pubkey(pCertificate, pKey))
 							DMibErrorNetSSL(fg_GetExceptionStr("Error setting x509 public key"));
-				
-						ERR_clear_error();
-						if (!X509_NAME_add_entry_by_txt(X509_get_subject_name(pCertificate), "CN", MBSTRING_ASC, (const unsigned char*)_Options.m_Subject.f_GetStr(), -1, -1, 0))
-							DMibErrorNetSSL(fg_GetExceptionStr(fg_Format("Error adding x509 CN '{}'", _Options.m_Subject)));
-				
+
+						fg_GenerateSubject(X509_get_subject_name(pCertificate), _Options);
+
 						// Self signed.
 						ERR_clear_error();
 						if (!X509_set_issuer_name(pCertificate, X509_get_subject_name(pCertificate)))
@@ -2787,6 +2863,9 @@ namespace NMib
 
 							if (!_Options.m_Extensions.f_IsEmpty())
 								fg_AddExtensions(Context, pCertificate, _Options.m_Extensions);
+
+							if (!_SignOptions.m_Extensions.f_IsEmpty())
+								fg_AddExtensions(Context, pCertificate, _SignOptions.m_Extensions);
 						}
 
 						ERR_clear_error();
@@ -3929,19 +4008,32 @@ namespace NMib
 						[&]() -> decltype(auto)
 						{
 							g_SSLLowLevel->f_UseInThread();
-							f_GenerateKey(_Password, _pSalt, _nRounds);
+							f_GenerateKey((unsigned char const *)_Password.f_GetStr(), _Password.f_GetLen(), _pSalt, _nRounds);
 						}
 					)
 				;
 			}
-			
+
+			CInternal(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds)
+			{
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							f_GenerateKey(_Key.f_GetArray(), _Key.f_GetLen(), _pSalt, _nRounds);
+						}
+					)
+				;
+			}
+
 			~CInternal()
 			{
 				NMem::fg_MemClear(m_Key, EVP_MAX_KEY_LENGTH);
 				NMem::fg_MemClear(m_IV, EVP_MAX_IV_LENGTH);
 			}
 			
-			void f_GenerateKey(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
+			void f_GenerateKey(unsigned char const *_pKey, mint _Len, CSalt const *_pSalt, mint _nRounds)
 			{
 				fg_RunProtectRegisters
 					(
@@ -3958,8 +4050,8 @@ namespace NMib
 										pCipher
 										, pDigest
 										, _pSalt ? _pSalt->m_Salt : nullptr
-										, (unsigned char const *)_Password.f_GetStr()
-										, _Password.f_GetLen()
+										, _pKey
+										, _Len
 										, _nRounds
 										, m_Key
 										, m_IV
@@ -4063,7 +4155,12 @@ namespace NMib
 			: mp_pInternal(fg_Construct(_Password, _pSalt, _nRounds))
 		{
 		}
-		
+
+		CEncryptAES::CEncryptAES(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds)
+			: mp_pInternal(fg_Construct(_Key, _pSalt, _nRounds))
+		{
+		}
+
 		CEncryptAES::~CEncryptAES()
 		{
 		}

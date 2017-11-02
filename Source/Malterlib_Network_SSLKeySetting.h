@@ -60,12 +60,31 @@ namespace NMib
 			, ESSLDigest_SHA384
 			, ESSLDigest_SHA512
 		};
-		
+
+		struct CCertificateExtension
+		{
+			bool operator == (CCertificateExtension const &_Right) const;
+			bool operator < (CCertificateExtension const &_Right) const;
+
+			template <typename tf_CFormatInto>
+			void f_Format(tf_CFormatInto &o_FormatInto) const
+			{
+				o_FormatInto += typename tf_CFormatInto::CFormat("{}{}") << m_Value << (m_bCritical ? " - critical" : "");
+			}
+
+			NStr::CStr m_Value;
+			bool m_bCritical = false;
+		};
+
 		struct CSignOptions
 		{
+			void f_AddExtension_SubjectKeyIdentifier(bool _bCritical = false);
+			void f_AddExtension_AuthorityKeyIdentifier(bool _bCritical = false);
+ 
 			ESSLDigest m_Digest = ESSLDigest_Automatic;
 			int32 m_Serial = 1;
 			int32 m_Days = 365;
+			NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> m_Extensions;
 		};
 	}
 }

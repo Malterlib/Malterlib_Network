@@ -281,24 +281,29 @@ namespace NMib
 				EState_InvalidCertificateAuthorityData = DMibBit(7),
 			};
 
-			struct CCertificateExtension
+			enum EKeyUsage
 			{
-				NStr::CStr m_Value;
-				bool m_bCritical = false;
-				
-				bool operator == (CCertificateExtension const &_Right) const; 
-				bool operator < (CCertificateExtension const &_Right) const;
-				
-				template <typename tf_CFormatInto>
-				void f_Format(tf_CFormatInto &o_FormatInto) const
-				{
-					o_FormatInto += typename tf_CFormatInto::CFormat("{}{}") << m_Value << (m_bCritical ? " - critical" : "");
-				}
+				EKeyUsage_None = 0
+				, EKeyUsage_DigitalSignature = DMibBit(0)
+				, EKeyUsage_NonRepudiation = DMibBit(1)
+				, EKeyUsage_KeyEncipherment = DMibBit(2)
+				, EKeyUsage_DataEncipherment = DMibBit(3)
+				, EKeyUsage_KeyAgreement = DMibBit(4)
+				, EKeyUsage_CertificateSign = DMibBit(5)
+				, EKeyUsage_CRLSign = DMibBit(6)
+				, EKeyUsage_EncipherOnly = DMibBit(7)
+				, EKeyUsage_DecipherOnly = DMibBit(8)
 			};
+
 
 			struct CCertificateOptions
 			{
-				NStr::CStr m_Subject;
+				void f_AddExtension_BasicConstraints(bool _bCA, bool _bCritical = true);
+				void f_AddExtension_KeyUsage(EKeyUsage _KeyUsage, bool _bCritical = true);
+ 				void f_MakeCA();
+				
+				NStr::CStr m_CommonName; // CN
+				NContainer::TCMap<NStr::CStr, NStr::CStr> m_RelativeDistinguishedNames;
 				NContainer::TCVector<NStr::CStr> m_Hostnames;
 				NContainer::TCMap<NStr::CStr, NContainer::TCVector<CCertificateExtension>> m_Extensions;
 				CSSLKeySetting m_KeySetting;
@@ -383,6 +388,7 @@ namespace NMib
 			};
 			
 			CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds = 1 << 17);
+			CEncryptAES(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds = 1 << 17);
 			~CEncryptAES();
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
