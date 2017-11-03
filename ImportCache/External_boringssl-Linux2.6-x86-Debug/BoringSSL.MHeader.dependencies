@@ -40,6 +40,7 @@
 ../../../../External/boringssl/decrepit/bio/CMakeLists.txt
 ../../../../External/boringssl/decrepit/blowfish/CMakeLists.txt
 ../../../../External/boringssl/decrepit/cast/CMakeLists.txt
+../../../../External/boringssl/decrepit/cfb/CMakeLists.txt
 ../../../../External/boringssl/decrepit/des/CMakeLists.txt
 ../../../../External/boringssl/decrepit/dh/CMakeLists.txt
 ../../../../External/boringssl/decrepit/dsa/CMakeLists.txt

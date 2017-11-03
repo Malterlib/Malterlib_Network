@@ -1781,7 +1781,7 @@ namespace NMib
 			{
 				g_SSLLowLevel->f_UseInThread();
 				
-				X509_STORE* pStore = mp_pContext->cert_store;
+				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 
 				auto fl_LoadFromStore = [&] (LPCWSTR _pStore)
 				{
@@ -1834,7 +1834,7 @@ namespace NMib
 			{
 				g_SSLLowLevel->f_UseInThread();
 
-				X509_STORE* pStore = mp_pContext->cert_store;
+				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 				
 				auto fAddTrustStore = [&](CFArrayRef pCerts)
 					{
