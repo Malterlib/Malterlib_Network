@@ -48,7 +48,7 @@ Property
 {
 	!!MalterlibSSLLibrary BoringSSL
 
-	Import.CMake_FullRebuildVersion 6
+	Import.CMake_FullRebuildVersion 8
 	Compile
 	{
 		!!MalterlibCompileSupportTabSetings true

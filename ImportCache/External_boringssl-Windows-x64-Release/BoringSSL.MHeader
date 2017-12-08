@@ -13,7 +13,10 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	Target.BaseName gtest
 	%Group third_party
 	{
-		Compile.Type C++
+		%File "../../../../External/boringssl/third_party/googletest/src/gtest-all.cc"
+		{
+			Compile.Type C++
+		}
 	}
 }
 %Target Lib_crypto
@@ -40,6 +43,13 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	Target.Group "External/BoringSSL"
 	Target.Type StaticLibrary
 	Target.BaseName crypto
+	%Group third_party
+	{
+		%File "../../../../External/boringssl/third_party/fiat/curve25519.c"
+		{
+			Compile.Type C
+		}
+	}
 	%Group crypto
 	{
 		%Group fipsmodule
@@ -853,10 +863,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		}
 		%Group curve25519
 		{
-			%File "../../../../External/boringssl/crypto/curve25519/curve25519.c"
-			{
-				Compile.Type C
-			}
 			%File "../../../../External/boringssl/crypto/curve25519/spake25519.c"
 			{
 				Compile.Type C
@@ -1659,7 +1665,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		}
 	}
 	%Dependency Lib_crypto
-	%Dependency Lib_gtest
 	%Group Windows
 	{
 		%Group x64
@@ -1684,6 +1689,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 			}
 		}
 	}
+	%Dependency Lib_gtest
 }
 %Target Lib_ssl
 {

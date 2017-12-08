@@ -56,4 +56,5 @@
 ../../../../External/boringssl/sources.cmake
 ../../../../External/boringssl/ssl/CMakeLists.txt
 ../../../../External/boringssl/ssl/test/CMakeLists.txt
+../../../../External/boringssl/third_party/fiat/CMakeLists.txt
 ../../../../External/boringssl/tool/CMakeLists.txt
