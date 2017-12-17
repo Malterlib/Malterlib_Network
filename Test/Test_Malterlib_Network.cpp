@@ -1,4 +1,4 @@
-﻿// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB 
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 /*
@@ -75,7 +75,7 @@ public:
 		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&_Other, (uint8 const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
 
 		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Localhost)) == DMibExpr(0));
-		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Other)) == DMibExpr(-1));
+		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Other)) < DMibExpr(0));
 
 		fg_FreeAddress(Localhost);
 		fg_FreeAddress(Other);
