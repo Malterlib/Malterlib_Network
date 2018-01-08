@@ -1,0 +1,2232 @@
+Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
+%Target Lib_gtest
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest'->MakeAbsolute());@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type StaticLibrary
+	Target.BaseName gtest
+	%Group third_party
+	{
+		%File "../../../../External/boringssl/third_party/googletest/src/gtest-all.cc"
+		{
+			Compile.Type C++
+		}
+	}
+}
+%Target Lib_crypto
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Compile
+	{
+		!!Compile.Type C
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;_XOPEN_SOURCE=700;@(Compile.PreprocessorDefines)"
+	}
+	Compile
+	{
+		!!Compile.Type Assembler
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type StaticLibrary
+	Target.BaseName crypto
+	%Group third_party
+	{
+		%File "../../../../External/boringssl/third_party/fiat/curve25519.c"
+		{
+			Compile.Type C
+		}
+	}
+	%Group crypto
+	{
+		%Group fipsmodule
+		{
+			%File "../../../../External/boringssl/crypto/fipsmodule/bcm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/fipsmodule/is_fips.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group pkcs8
+		{
+			%File "../../../../External/boringssl/crypto/pkcs8/pkcs8.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pkcs8/pkcs8_x509.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pkcs8/p5_pbev2.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group pkcs7
+		{
+			%File "../../../../External/boringssl/crypto/pkcs7/pkcs7.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pkcs7/pkcs7_x509.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group x509v3
+		{
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_cache.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_data.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_lib.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_map.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_node.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/pcy_tree.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_akey.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_akeya.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_alt.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_bcons.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_bitst.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_conf.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_cpols.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_crld.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_enum.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_extku.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_genn.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_ia5.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_info.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_int.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_lib.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_ncons.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_pci.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_pcia.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_pcons.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_pku.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_pmaps.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_prn.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_purp.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_skey.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_sxnet.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3_utl.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group x509
+		{
+			%File "../../../../External/boringssl/crypto/x509/a_digest.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/a_sign.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/a_strex.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/a_verify.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/algorithm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/asn1_gen.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/by_dir.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/by_file.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/i2d_pr.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/rsa_pss.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/t_crl.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/t_req.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/t_x509.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/t_x509a.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_att.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_cmp.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_d2.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_def.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_ext.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_lu.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_obj.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_r2x.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_req.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_set.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_trs.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_txt.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_v3.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_vfy.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509_vpm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509cset.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509name.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509rset.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x509spki.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_algor.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_all.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_attrib.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_crl.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_exten.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_info.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_name.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_pkey.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_pubkey.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_req.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_sig.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_spki.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_val.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_x509.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/x509/x_x509a.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group pem
+		{
+			%File "../../../../External/boringssl/crypto/pem/pem_all.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_info.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_lib.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_oth.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_pk8.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_pkey.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_x509.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/pem/pem_xaux.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group hkdf
+		{
+			%File "../../../../External/boringssl/crypto/hkdf/hkdf.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group evp
+		{
+			%File "../../../../External/boringssl/crypto/evp/digestsign.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/evp.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/evp_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/evp_ctx.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_dsa_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_ec.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_ec_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_ed25519.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_ed25519_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_rsa.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/p_rsa_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/pbkdf.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/print.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/scrypt.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/evp/sign.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group cmac
+		{
+			%File "../../../../External/boringssl/crypto/cmac/cmac.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group ecdsa_extra
+		{
+			%File "../../../../External/boringssl/crypto/ecdsa_extra/ecdsa_asn1.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group ecdh
+		{
+			%File "../../../../External/boringssl/crypto/ecdh/ecdh.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group ec_extra
+		{
+			%File "../../../../External/boringssl/crypto/ec_extra/ec_asn1.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group rsa_extra
+		{
+			%File "../../../../External/boringssl/crypto/rsa_extra/rsa_asn1.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group dsa
+		{
+			%File "../../../../External/boringssl/crypto/dsa/dsa.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/dsa/dsa_asn1.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group dh
+		{
+			%File "../../../../External/boringssl/crypto/dh/dh.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/dh/params.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/dh/check.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/dh/dh_asn1.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group engine
+		{
+			%File "../../../../External/boringssl/crypto/engine/engine.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group asn1
+		{
+			%File "../../../../External/boringssl/crypto/asn1/a_bitstr.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_bool.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_d2i_fp.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_dup.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_enum.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_gentm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_i2d_fp.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_int.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_mbstr.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_object.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_octet.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_print.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_strnid.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_time.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_type.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_utctm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/a_utf8.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/asn1_lib.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/asn1_par.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/asn_pack.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/f_enum.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/f_int.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/f_string.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_dec.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_enc.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_fre.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_new.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_typ.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/tasn_utl.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/asn1/time_support.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group obj
+		{
+			%File "../../../../External/boringssl/crypto/obj/obj.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/obj/obj_xref.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group bn_extra
+		{
+			%File "../../../../External/boringssl/crypto/bn_extra/bn_asn1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bn_extra/convert.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group bio
+		{
+			%File "../../../../External/boringssl/crypto/bio/bio.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/bio_mem.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/connect.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/fd.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/file.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/hexdump.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/pair.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/printf.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/socket.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bio/socket_helper.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group rand_extra
+		{
+			%File "../../../../External/boringssl/crypto/rand_extra/deterministic.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/rand_extra/forkunsafe.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/rand_extra/fuchsia.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/rand_extra/rand_extra.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/rand_extra/windows.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group cipher_extra
+		{
+			%File "../../../../External/boringssl/crypto/cipher_extra/cipher_extra.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/derive_key.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_null.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_rc2.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_rc4.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_aesgcmsiv.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_aesctrhmac.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_chacha20poly1305.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/tls_cbc.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_tls.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/e_ssl3.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group digest_extra
+		{
+			%File "../../../../External/boringssl/crypto/digest_extra/digest_extra.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group curve25519
+		{
+			%File "../../../../External/boringssl/crypto/curve25519/spake25519.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/curve25519/x25519-x86_64.c"
+			{
+				Compile.Type C
+			}
+			%Group asm
+			{
+				%File "../../../../External/boringssl/crypto/curve25519/asm/x25519-asm-x86_64.S"
+				{
+					Compile.Type Assembler
+				}
+			}
+		}
+		%Group poly1305
+		{
+			%File "../../../../External/boringssl/crypto/poly1305/poly1305.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/poly1305/poly1305_arm.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/poly1305/poly1305_vec.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group chacha
+		{
+			%File "../../../../External/boringssl/crypto/chacha/chacha.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group conf
+		{
+			%File "../../../../External/boringssl/crypto/conf/conf.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group rc4
+		{
+			%File "../../../../External/boringssl/crypto/rc4/rc4.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group pool
+		{
+			%File "../../../../External/boringssl/crypto/pool/pool.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group bytestring
+		{
+			%File "../../../../External/boringssl/crypto/bytestring/asn1_compat.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bytestring/ber.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bytestring/cbs.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/crypto/bytestring/cbb.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group base64
+		{
+			%File "../../../../External/boringssl/crypto/base64/base64.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group buf
+		{
+			%File "../../../../External/boringssl/crypto/buf/buf.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group err
+		{
+			%File "../../../../External/boringssl/crypto/err/err.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group lhash
+		{
+			%File "../../../../External/boringssl/crypto/lhash/lhash.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group stack
+		{
+			%File "../../../../External/boringssl/crypto/stack/stack.c"
+			{
+				Compile.Type C
+			}
+		}
+		%File "../../../../External/boringssl/crypto/cpu-aarch64-linux.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/cpu-arm.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/cpu-arm-linux.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/cpu-intel.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/cpu-ppc64le.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/crypto.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/ex_data.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/mem.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/refcount_c11.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/refcount_lock.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/thread.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/thread_none.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/thread_pthread.c"
+		{
+			Compile.Type C
+		}
+		%File "../../../../External/boringssl/crypto/thread_malterlib.cpp"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/crypto/thread_win.c"
+		{
+			Compile.Type C
+		}
+	}
+	%Group OSX10.13
+	{
+		%Group x64
+		{
+			%Group "@(FullConfiguration)"
+			{
+				%Group crypto
+				{
+					%Group fipsmodule
+					{
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-gcm-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aes-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/bsaes-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/ghash-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/md5-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/p256-x86_64-asm.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rdrand-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rsaz-avx2.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha1-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha256-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha512-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/vpaes-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont5.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "crypto/fipsmodule/aesni-gcm-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-gcm-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/modes/asm/aesni-gcm-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-gcm-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/aesni-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/aes/asm/aesni-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/aes/asm/aesni-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aesni-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/aes-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aes-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/aes/asm/aes-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/aes/asm/aes-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/aes-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/bsaes-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/bsaes-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/aes/asm/bsaes-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/aes/asm/bsaes-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/bsaes-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/ghash-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/ghash-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/modes/asm/ghash-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/modes/asm/ghash-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/ghash-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/md5-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/md5-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/md5/asm/md5-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/md5/asm/md5-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/md5-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/p256-x86_64-asm.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/p256-x86_64-asm.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/ec/asm/p256-x86_64-asm.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/p256-x86_64-asm.S"
+							}
+						}
+						%File "crypto/fipsmodule/rdrand-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rdrand-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/rand/asm/rdrand-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/rand/asm/rdrand-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rdrand-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/rsaz-avx2.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rsaz-avx2.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/bn/asm/rsaz-avx2.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/bn/asm/rsaz-avx2.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/rsaz-avx2.S"
+							}
+						}
+						%File "crypto/fipsmodule/sha1-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha1-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha1-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha1-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha1-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/sha256-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha256-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha512-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha512-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha256-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/sha512-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha512-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha512-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/sha/asm/sha512-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/sha512-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/vpaes-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/vpaes-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/aes/asm/vpaes-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/vpaes-x86_64.S"
+							}
+						}
+						%File "crypto/fipsmodule/x86_64-mont5.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont5.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/bn/asm/x86_64-mont5.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/bn/asm/x86_64-mont5.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont5.S"
+							}
+						}
+						%File "crypto/fipsmodule/x86_64-mont.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/fipsmodule'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/fipsmodule/bn/asm/x86_64-mont.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/fipsmodule/bn/asm/x86_64-mont.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/fipsmodule/x86_64-mont.S"
+							}
+						}
+					}
+					%Group cipher_extra
+					{
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/aes128gcmsiv-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/chacha20_poly1305_x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "crypto/cipher_extra/aes128gcmsiv-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/cipher_extra'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/aes128gcmsiv-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/cipher_extra/asm/aes128gcmsiv-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/aes128gcmsiv-x86_64.S"
+							}
+						}
+						%File "crypto/cipher_extra/chacha20_poly1305_x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/cipher_extra'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/chacha20_poly1305_x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/cipher_extra/asm/chacha20_poly1305_x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/cipher_extra/chacha20_poly1305_x86_64.S"
+							}
+						}
+					}
+					%Group chacha
+					{
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86_64.S"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type Assembler
+						}
+						%File "crypto/chacha/chacha-x86_64.S.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('crypto/chacha'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86_64.S"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/chacha/asm/chacha-x86_64.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/arm-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/ppc-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86_64-xlate.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86asm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86gas.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86masm.pl'->MakeAbsolute());@('../../../../External/boringssl/crypto/perlasm/x86nasm.pl'->MakeAbsolute())"
+								Custom_CommandLine "perl @('../../../../External/boringssl/crypto/chacha/asm/chacha-x86_64.pl'->MakeAbsolute()) macosx @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/chacha/chacha-x86_64.S"
+							}
+						}
+					}
+					%Group err
+					{
+						%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
+						{
+							Compile.AllowNonExisting true
+							Compile.Type C
+						}
+						%File "crypto/err/err_data.c.rule"
+						{
+							Compile
+							{
+								Custom_WorkingDirectory "@('../../../../External/boringssl/crypto/err'->MakeAbsolute())"
+								Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
+								Custom_Inputs "@('../../../../External/boringssl/crypto/err/err_data_generate.go'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/asn1.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/bio.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/bn.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/cipher.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/conf.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/dh.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/digest.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/dsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ecdh.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ecdsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ec.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/engine.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/evp.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/hkdf.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/obj.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/pem.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/pkcs7.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/pkcs8.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/rsa.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/ssl.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/x509.errordata'->MakeAbsolute());@('../../../../External/boringssl/crypto/err/x509v3.errordata'->MakeAbsolute())"
+								Custom_CommandLine "go run err_data_generate.go > @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto/err/err_data.c"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+%Target Exe_crypto_test
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type ConsoleExecutable
+	Target.BaseName crypto_test
+	%Group crypto
+	{
+		%Group asn1
+		{
+			%File "../../../../External/boringssl/crypto/asn1/asn1_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group base64
+		{
+			%File "../../../../External/boringssl/crypto/base64/base64_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group buf
+		{
+			%File "../../../../External/boringssl/crypto/buf/buf_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group bio
+		{
+			%File "../../../../External/boringssl/crypto/bio/bio_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group bytestring
+		{
+			%File "../../../../External/boringssl/crypto/bytestring/bytestring_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group chacha
+		{
+			%File "../../../../External/boringssl/crypto/chacha/chacha_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group cipher_extra
+		{
+			%File "../../../../External/boringssl/crypto/cipher_extra/aead_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/cipher_extra/cipher_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group cmac
+		{
+			%File "../../../../External/boringssl/crypto/cmac/cmac_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%File "../../../../External/boringssl/crypto/compiler_test.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/crypto/constant_time_test.cc"
+		{
+			Compile.Type C++
+		}
+		%Group curve25519
+		{
+			%File "../../../../External/boringssl/crypto/curve25519/ed25519_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/curve25519/spake25519_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/curve25519/x25519_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group ecdh
+		{
+			%File "../../../../External/boringssl/crypto/ecdh/ecdh_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group dh
+		{
+			%File "../../../../External/boringssl/crypto/dh/dh_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group digest_extra
+		{
+			%File "../../../../External/boringssl/crypto/digest_extra/digest_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group dsa
+		{
+			%File "../../../../External/boringssl/crypto/dsa/dsa_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group err
+		{
+			%File "../../../../External/boringssl/crypto/err/err_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group evp
+		{
+			%File "../../../../External/boringssl/crypto/evp/evp_extra_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/evp/evp_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/evp/pbkdf_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/evp/scrypt_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group fipsmodule
+		{
+			%Group aes
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/aes/aes_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+			%Group bn
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/bn/bn_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+			%Group ec
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/ec/ec_test.cc"
+				{
+					Compile.Type C++
+				}
+				%File "../../../../External/boringssl/crypto/fipsmodule/ec/p256-x86_64_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+			%Group ecdsa
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/ecdsa/ecdsa_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+			%Group modes
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/modes/gcm_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+			%Group rand
+			{
+				%File "../../../../External/boringssl/crypto/fipsmodule/rand/ctrdrbg_test.cc"
+				{
+					Compile.Type C++
+				}
+			}
+		}
+		%Group hkdf
+		{
+			%File "../../../../External/boringssl/crypto/hkdf/hkdf_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group hmac_extra
+		{
+			%File "../../../../External/boringssl/crypto/hmac_extra/hmac_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group lhash
+		{
+			%File "../../../../External/boringssl/crypto/lhash/lhash_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group obj
+		{
+			%File "../../../../External/boringssl/crypto/obj/obj_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group pkcs7
+		{
+			%File "../../../../External/boringssl/crypto/pkcs7/pkcs7_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group pkcs8
+		{
+			%File "../../../../External/boringssl/crypto/pkcs8/pkcs8_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/pkcs8/pkcs12_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group poly1305
+		{
+			%File "../../../../External/boringssl/crypto/poly1305/poly1305_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group pool
+		{
+			%File "../../../../External/boringssl/crypto/pool/pool_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%File "../../../../External/boringssl/crypto/refcount_test.cc"
+		{
+			Compile.Type C++
+		}
+		%Group rsa_extra
+		{
+			%File "../../../../External/boringssl/crypto/rsa_extra/rsa_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group test
+		{
+			%File "../../../../External/boringssl/crypto/test/file_test_gtest.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/gtest_main.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/file_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/malloc.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/test_util.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%File "../../../../External/boringssl/crypto/thread_test.cc"
+		{
+			Compile.Type C++
+		}
+		%Group x509
+		{
+			%File "../../../../External/boringssl/crypto/x509/x509_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group x509v3
+		{
+			%File "../../../../External/boringssl/crypto/x509v3/tab_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/x509v3/v3name_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_crypto
+	%Group OSX10.13
+	{
+		%Group x64
+		{
+			%Group "@(FullConfiguration)"
+			{
+				%File "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto_test_data.cc"
+				{
+					Compile.AllowNonExisting true
+					Compile.Type C++
+				}
+				%File "crypto_test_data.cc.rule"
+				{
+					Compile
+					{
+						Custom_WorkingDirectory "@('../../../../External/boringssl'->MakeAbsolute())"
+						Custom_Outputs "@(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto_test_data.cc"
+						Custom_Inputs "@('../../../../External/boringssl/util/embed_test_data.go'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_cbc_sha1_ssl3_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_cbc_sha1_tls_implicit_iv_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_cbc_sha1_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_cbc_sha256_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_ctr_hmac_sha256.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_gcm_siv_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_128_gcm_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_cbc_sha1_ssl3_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_cbc_sha1_tls_implicit_iv_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_cbc_sha1_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_cbc_sha256_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_cbc_sha384_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_ctr_hmac_sha256.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_gcm_siv_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/aes_256_gcm_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/chacha20_poly1305_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/cipher_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/des_ede3_cbc_sha1_ssl3_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/des_ede3_cbc_sha1_tls_implicit_iv_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/des_ede3_cbc_sha1_tls_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_128_cbc.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_128_ctr.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_128_gcm.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_192_cbc.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_192_ctr.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_256_cbc.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_256_ctr.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/aes_256_gcm.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/tdes_cbc.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/cipher_extra/test/nist_cavp/tdes_ecb.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/curve25519/ed25519_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/ecdh/ecdh_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/evp/evp_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/evp/scrypt_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/aes/aes_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/bn/bn_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/ec/p256-x86_64_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/ecdsa/ecdsa_sign_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/ecdsa/ecdsa_verify_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/modes/gcm_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/fipsmodule/rand/ctrdrbg_vectors.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/hmac_extra/hmac_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/poly1305/poly1305_tests.txt'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/many_constraints.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/many_names1.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/many_names2.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/many_names3.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/some_names1.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/some_names2.pem'->MakeAbsolute());@('../../../../External/boringssl/crypto/x509/some_names3.pem'->MakeAbsolute())"
+						Custom_CommandLine "go run util/embed_test_data.go crypto/cipher_extra/test/aes_128_cbc_sha1_ssl3_tests.txt crypto/cipher_extra/test/aes_128_cbc_sha1_tls_implicit_iv_tests.txt crypto/cipher_extra/test/aes_128_cbc_sha1_tls_tests.txt crypto/cipher_extra/test/aes_128_cbc_sha256_tls_tests.txt crypto/cipher_extra/test/aes_128_ctr_hmac_sha256.txt crypto/cipher_extra/test/aes_128_gcm_siv_tests.txt crypto/cipher_extra/test/aes_128_gcm_tests.txt crypto/cipher_extra/test/aes_256_cbc_sha1_ssl3_tests.txt crypto/cipher_extra/test/aes_256_cbc_sha1_tls_implicit_iv_tests.txt crypto/cipher_extra/test/aes_256_cbc_sha1_tls_tests.txt crypto/cipher_extra/test/aes_256_cbc_sha256_tls_tests.txt crypto/cipher_extra/test/aes_256_cbc_sha384_tls_tests.txt crypto/cipher_extra/test/aes_256_ctr_hmac_sha256.txt crypto/cipher_extra/test/aes_256_gcm_siv_tests.txt crypto/cipher_extra/test/aes_256_gcm_tests.txt crypto/cipher_extra/test/chacha20_poly1305_tests.txt crypto/cipher_extra/test/cipher_tests.txt crypto/cipher_extra/test/des_ede3_cbc_sha1_ssl3_tests.txt crypto/cipher_extra/test/des_ede3_cbc_sha1_tls_implicit_iv_tests.txt crypto/cipher_extra/test/des_ede3_cbc_sha1_tls_tests.txt crypto/cipher_extra/test/nist_cavp/aes_128_cbc.txt crypto/cipher_extra/test/nist_cavp/aes_128_ctr.txt crypto/cipher_extra/test/nist_cavp/aes_128_gcm.txt crypto/cipher_extra/test/nist_cavp/aes_192_cbc.txt crypto/cipher_extra/test/nist_cavp/aes_192_ctr.txt crypto/cipher_extra/test/nist_cavp/aes_256_cbc.txt crypto/cipher_extra/test/nist_cavp/aes_256_ctr.txt crypto/cipher_extra/test/nist_cavp/aes_256_gcm.txt crypto/cipher_extra/test/nist_cavp/tdes_cbc.txt crypto/cipher_extra/test/nist_cavp/tdes_ecb.txt crypto/curve25519/ed25519_tests.txt crypto/ecdh/ecdh_tests.txt crypto/evp/evp_tests.txt crypto/evp/scrypt_tests.txt crypto/fipsmodule/aes/aes_tests.txt crypto/fipsmodule/bn/bn_tests.txt crypto/fipsmodule/ec/p256-x86_64_tests.txt crypto/fipsmodule/ecdsa/ecdsa_sign_tests.txt crypto/fipsmodule/ecdsa/ecdsa_verify_tests.txt crypto/fipsmodule/modes/gcm_tests.txt crypto/fipsmodule/rand/ctrdrbg_vectors.txt crypto/hmac_extra/hmac_tests.txt crypto/poly1305/poly1305_tests.txt crypto/x509/many_constraints.pem crypto/x509/many_names1.pem crypto/x509/many_names2.pem crypto/x509/many_names3.pem crypto/x509/some_names1.pem crypto/x509/some_names2.pem crypto/x509/some_names3.pem > @(Target:Target.IntermediateDirectory->MakeAbsolute())/crypto_test_data.cc"
+					}
+				}
+			}
+		}
+	}
+	%Dependency Lib_gtest
+}
+%Target Lib_ssl
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type StaticLibrary
+	Target.BaseName ssl
+	%Group ssl
+	{
+		%File "../../../../External/boringssl/ssl/bio_ssl.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/custom_extensions.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/d1_both.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/d1_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/d1_pkt.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/d1_srtp.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/dtls_method.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/dtls_record.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/handshake.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/handshake_client.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/handshake_server.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/s3_both.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/s3_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/s3_pkt.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_aead_ctx.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_asn1.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_buffer.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_cert.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_cipher.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_file.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_key_share.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_privkey.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_session.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_stat.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_transcript.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_versions.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_x509.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/t1_enc.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/t1_lib.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls_method.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls_record.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_both.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_client.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_enc.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/tls13_server.cc"
+		{
+			Compile.Type C++
+		}
+	}
+	%Dependency Lib_crypto
+	{
+		Dependency.Indirect true
+	}
+}
+%Target Exe_ssl_test
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type ConsoleExecutable
+	Target.BaseName ssl_test
+	%Group ssl
+	{
+		%File "../../../../External/boringssl/ssl/span_test.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/ssl/ssl_test.cc"
+		{
+			Compile.Type C++
+		}
+	}
+	%Dependency Lib_ssl
+	%Group crypto
+	{
+		%Group test
+		{
+			%File "../../../../External/boringssl/crypto/test/gtest_main.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/file_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/malloc.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/test_util.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_crypto
+	%Dependency Lib_gtest
+}
+%Target Exe_bssl_shim
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type ConsoleExecutable
+	Target.BaseName bssl_shim
+	%Group ssl
+	{
+		%Group test
+		{
+			%File "../../../../External/boringssl/ssl/test/async_bio.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/ssl/test/bssl_shim.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/ssl/test/packeted_bio.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/ssl/test/test_config.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_ssl
+	%Group crypto
+	{
+		%Group test
+		{
+			%File "../../../../External/boringssl/crypto/test/file_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/malloc.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/test_util.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_crypto
+}
+%Target Exe_bssl
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type ConsoleExecutable
+	Target.BaseName bssl
+	%Group tool
+	{
+		%File "../../../../External/boringssl/tool/args.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/ciphers.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/client.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/const.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/digest.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/file.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/generate_ed25519.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/genrsa.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/pkcs12.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/rand.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/server.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/sign.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/speed.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/tool.cc"
+		{
+			Compile.Type C++
+		}
+		%File "../../../../External/boringssl/tool/transport_common.cc"
+		{
+			Compile.Type C++
+		}
+	}
+	%Dependency Lib_ssl
+	%Dependency Lib_crypto
+}
+%Target Exe_decrepit_test
+{
+	Compile
+	{
+		!!Compile.Type C++
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type ConsoleExecutable
+	Target.BaseName decrepit_test
+	%Group decrepit
+	{
+		%Group ripemd
+		{
+			%File "../../../../External/boringssl/decrepit/ripemd/ripemd_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+		%Group cfb
+		{
+			%File "../../../../External/boringssl/decrepit/cfb/cfb_test.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_decrepit
+	%Dependency Lib_ssl
+	%Group crypto
+	{
+		%Group test
+		{
+			%File "../../../../External/boringssl/crypto/test/gtest_main.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/file_test.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/malloc.cc"
+			{
+				Compile.Type C++
+			}
+			%File "../../../../External/boringssl/crypto/test/test_util.cc"
+			{
+				Compile.Type C++
+			}
+		}
+	}
+	%Dependency Lib_crypto
+	%Dependency Lib_gtest
+}
+%Target Lib_decrepit
+{
+	Compile
+	{
+		!!Compile.Type C
+		SearchPath "@('../../../../External/boringssl/third_party/googletest/include'->MakeAbsolute());@('../../../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
+		PreprocessorDefines "BORINGSSL_IMPLEMENTATION;NDEBUG;_XOPEN_SOURCE=700;@(Compile.PreprocessorDefines)"
+	}
+	Property.MalterlibTargetNameType Normal
+	Target.Group "External/BoringSSL"
+	Target.Type StaticLibrary
+	Target.BaseName decrepit
+	%Group decrepit
+	{
+		%Group xts
+		{
+			%File "../../../../External/boringssl/decrepit/xts/xts.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group x509
+		{
+			%File "../../../../External/boringssl/decrepit/x509/x509_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group ssl
+		{
+			%File "../../../../External/boringssl/decrepit/ssl/ssl_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group rsa
+		{
+			%File "../../../../External/boringssl/decrepit/rsa/rsa_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group ripemd
+		{
+			%File "../../../../External/boringssl/decrepit/ripemd/ripemd.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group rc4
+		{
+			%File "../../../../External/boringssl/decrepit/rc4/rc4_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group obj
+		{
+			%File "../../../../External/boringssl/decrepit/obj/obj_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group evp
+		{
+			%File "../../../../External/boringssl/decrepit/evp/dss1.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/decrepit/evp/evp_do_all.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group dsa
+		{
+			%File "../../../../External/boringssl/decrepit/dsa/dsa_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group dh
+		{
+			%File "../../../../External/boringssl/decrepit/dh/dh_decrepit.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group des
+		{
+			%File "../../../../External/boringssl/decrepit/des/cfb64ede.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group cfb
+		{
+			%File "../../../../External/boringssl/decrepit/cfb/cfb.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group cast
+		{
+			%File "../../../../External/boringssl/decrepit/cast/cast.c"
+			{
+				Compile.Type C
+			}
+			%File "../../../../External/boringssl/decrepit/cast/cast_tables.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group blowfish
+		{
+			%File "../../../../External/boringssl/decrepit/blowfish/blowfish.c"
+			{
+				Compile.Type C
+			}
+		}
+		%Group bio
+		{
+			%File "../../../../External/boringssl/decrepit/bio/base64_bio.c"
+			{
+				Compile.Type C
+			}
+		}
+	}
+	%Dependency Lib_ssl
+	{
+		Dependency.Indirect true
+	}
+	%Dependency Lib_crypto
+	{
+		Dependency.Indirect true
+	}
+}
