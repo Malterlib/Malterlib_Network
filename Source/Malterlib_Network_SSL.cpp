@@ -176,11 +176,11 @@ namespace NMib
 										}
 										, [](void *_pPtr, size_t _Size) -> void *
 										{
-											return NMem::fg_Resize(_pPtr, _Size);
+											return NMem::fg_Resize(_pPtr, _Size, 0);
 										}
 										, [](void *_pPtr)
 										{
-											return NMem::fg_Free(_pPtr);
+											return NMem::fg_FreeNoSize(_pPtr);
 										}
 									)
 								;
