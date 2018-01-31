@@ -17,6 +17,7 @@ extern "C"
 #	include <openssl/err.h>
 #	include <openssl/conf.h>
 #	include <openssl/engine.h>
+#	include <openssl/hkdf.h>
 #	undef X509_NAME
 #	include <openssl/x509v3.h>
 
@@ -3998,30 +3999,151 @@ namespace NMib
 
 			return false;
 		}
-				
-		struct CEncryptAES::CInternal
+
+		namespace
 		{
-			CInternal(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
+			EVP_CIPHER const *fg_GetCipher(ESSLCrypto _Crypto)
 			{
-				fg_RunProtectRegisters
-					(
-						[&]() -> decltype(auto)
-						{
-							g_SSLLowLevel->f_UseInThread();
-							f_GenerateKey((unsigned char const *)_Password.f_GetStr(), _Password.f_GetLen(), _pSalt, _nRounds);
-						}
-					)
-				;
+				switch (_Crypto)
+				{
+				case ESSLCrypto_AES_256_CBC: return EVP_aes_256_cbc();
+				case ESSLCrypto_AES_128_CBC: return EVP_aes_128_cbc();
+				case ESSLCrypto_AES_256_OFB: return EVP_aes_256_ofb();
+				case ESSLCrypto_AES_128_OFB: return EVP_aes_128_ofb();
+				case ESSLCrypto_DES_EDE3_CBC: return EVP_des_ede3_cbc();
+				case ESSLCrypto_AES_256_ECB: return EVP_aes_256_ecb();
+				case ESSLCrypto_AES_128_ECB: return EVP_aes_128_ecb();
+				//case ESSLCrypto_AES_128_CTR: return EVP_aes_128_ctr();
+				//case ESSLCrypto_AES_256_CTR: return EVP_aes_256_ctr();
+				//case ESSLCrypto_AES_256_XTS: return EVP_aes_256_xts();
+				default: DMibErrorNetSSL(fg_GetExceptionStr("Unknown cipher"));
+				}
 			}
 
-			CInternal(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds)
+			EVP_MD const *fg_GetDigest(ESSLDigest _Digest)
+			{
+				switch (_Digest)
+				{
+				case ESSLDigest_SHA256: return EVP_sha256();
+				case ESSLDigest_SHA384: return EVP_sha384();
+				case ESSLDigest_SHA512: return EVP_sha512();
+				case ESSLDigest_SHA224: return EVP_sha224();
+				case ESSLDigest_MD4: return EVP_md4();
+				case ESSLDigest_MD5: return EVP_md5();
+				case ESSLDigest_SHA1: return EVP_sha1();
+				default: DMibErrorNetSSL(fg_GetExceptionStr("Unknown digest"));
+				}
+			}
+		};
+
+		CEncryptKeyIV::CEncryptKeyIV(NContainer::CSecureByteVector const &_Key, NContainer::CSecureByteVector const &_IV, NNet::ESSLCrypto _Crypto)
+			: m_Key(_Key)
+			, m_IV(_IV)
+			, m_Crypto(_Crypto)
+		{
+		}
+
+		CEncryptKeyIV CEncryptKeyIV::fs_GenerateKeyIV
+			(
+			 	NStr::CStrSecure const &_Password
+				, NContainer::CSecureByteVector const &_Salt
+			 	, CKeyDerivationSettings_PKCS5_Deprecated const &_Settings
+				, NNet::ESSLCrypto _Crypto
+			)
+		{
+
+			return fg_RunProtectRegisters
+				(
+					[&]() -> CEncryptKeyIV
+					{
+						EVP_CIPHER const* pCipher = fg_GetCipher(_Crypto);
+						EVP_MD const *pDigest = fg_GetDigest(_Settings.m_Digest);
+						uint8 Key[EVP_MAX_KEY_LENGTH];
+						uint8 IV[EVP_MAX_IV_LENGTH];
+						if (!_Salt.f_IsEmpty() && _Salt.f_GetLen() != 8)
+							DMibErrorNetSSL("Salt needs to be 8 bytes for EKeyDerivationType_PKCS5_Deprecated");
+
+						ERR_clear_error();
+						if
+							(
+								!EVP_BytesToKey
+								(
+									pCipher
+									, pDigest
+									, !_Salt.f_IsEmpty() ? (uint8_t const *)_Salt.f_GetArray() : nullptr
+									, (uint8_t const *)_Password.f_GetStr()
+									, _Password.f_GetLen()
+									, _Settings.m_Rounds
+									, Key
+									, IV
+								)
+							)
+						{
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to generate key, iv for EKeyDerivationType_PKCS5_Deprecated"));
+						}
+						return {NContainer::CSecureByteVector(Key, EVP_CIPHER_key_length(pCipher)), NContainer::CSecureByteVector(IV, EVP_CIPHER_iv_length(pCipher)), _Crypto};
+					}
+				)
+			;
+		}
+
+		uint32 CEncryptKeyIV::fs_GetKeyLen(NNet::ESSLCrypto _Crypto)
+		{
+			return EVP_CIPHER_key_length(fg_GetCipher(_Crypto));
+		}
+
+		uint32 CEncryptKeyIV::fs_GetIVLen(NNet::ESSLCrypto _Crypto)
+		{
+			return EVP_CIPHER_iv_length(fg_GetCipher(_Crypto));
+		}
+
+		uint32 CEncryptKeyIV::fs_GetHMACKeyLen(ESSLDigest _Digest)
+		{
+			return EVP_MD_size(fg_GetDigest(_Digest));
+		}
+
+		uint32 CEncryptKeyIV::fs_GetBlockSize(NNet::ESSLCrypto _Crypto)
+		{
+			return EVP_CIPHER_block_size(fg_GetCipher(_Crypto));
+		}
+
+		NContainer::CSecureByteVector CEncryptKeyIV::fs_GetRandomKey(ESSLCrypto _Crypto)
+		{
+			NContainer::CSecureByteVector Key;
+			Key.f_SetLen(fs_GetKeyLen(_Crypto));
+			NSys::fg_Security_GenerateHighEntropyData(Key.f_GetArray(), Key.f_GetLen());
+			return fg_Move(Key);
+		}
+
+		NContainer::CSecureByteVector CEncryptKeyIV::fs_GetRandomIV(ESSLCrypto _Crypto)
+		{
+			NContainer::CSecureByteVector Key;
+			Key.f_SetLen(fs_GetIVLen(_Crypto));
+			NSys::fg_Security_GenerateHighEntropyData(Key.f_GetArray(), Key.f_GetLen());
+			return fg_Move(Key);
+		}
+
+		NContainer::CSecureByteVector CEncryptKeyIV::fs_GetRandomHMACKey(ESSLDigest _Digest)
+		{
+			NContainer::CSecureByteVector Key;
+			Key.f_SetLen(fs_GetHMACKeyLen(_Digest));
+			NSys::fg_Security_GenerateHighEntropyData(Key.f_GetArray(), Key.f_GetLen());
+			return fg_Move(Key);
+		}
+
+		struct CEncryptAES::CInternal
+		{
+			CInternal(CEncryptKeyIV const &_KeyIV)
 			{
 				fg_RunProtectRegisters
 					(
 						[&]() -> decltype(auto)
 						{
+							DMibCheck(_KeyIV.m_Key.f_GetLen() == 32);
+							DMibCheck(_KeyIV.m_IV.f_GetLen() == 16);
 							g_SSLLowLevel->f_UseInThread();
-							f_GenerateKey(_Key.f_GetArray(), _Key.f_GetLen(), _pSalt, _nRounds);
+							NMem::fg_MemCopy(m_Key, _KeyIV.m_Key.f_GetArray(), fg_Min(_KeyIV.m_Key.f_GetLen(), EVP_MAX_KEY_LENGTH));
+							NMem::fg_MemCopy(m_IV, _KeyIV.m_IV.f_GetArray(), fg_Min(_KeyIV.m_IV.f_GetLen(), EVP_MAX_IV_LENGTH));
 						}
 					)
 				;
@@ -4031,38 +4153,6 @@ namespace NMib
 			{
 				NMem::fg_MemClear(m_Key, EVP_MAX_KEY_LENGTH);
 				NMem::fg_MemClear(m_IV, EVP_MAX_IV_LENGTH);
-			}
-			
-			void f_GenerateKey(unsigned char const *_pKey, mint _Len, CSalt const *_pSalt, mint _nRounds)
-			{
-				fg_RunProtectRegisters
-					(
-						[&]() -> decltype(auto)
-						{
-							EVP_CIPHER const* pCipher = EVP_get_cipherbyname("aes-256-cbc");
-							EVP_MD const* pDigest = EVP_get_digestbyname("sha256");
-				
-							ERR_clear_error();
-							if
-								(
-									!EVP_BytesToKey
-									(
-										pCipher
-										, pDigest
-										, _pSalt ? _pSalt->m_Salt : nullptr
-										, _pKey
-										, _Len
-										, _nRounds
-										, m_Key
-										, m_IV
-									)
-								)
-							{
-								DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
-							}
-						}
-					)
-				;
 			}
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const
@@ -4151,13 +4241,8 @@ namespace NMib
 			uint8 m_IV[EVP_MAX_IV_LENGTH];
 		};
 		
-		CEncryptAES::CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds)
-			: mp_pInternal(fg_Construct(_Password, _pSalt, _nRounds))
-		{
-		}
-
-		CEncryptAES::CEncryptAES(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds)
-			: mp_pInternal(fg_Construct(_Key, _pSalt, _nRounds))
+		CEncryptAES::CEncryptAES(CEncryptKeyIV const &_KeyIV)
+			: mp_pInternal(fg_Construct(_KeyIV))
 		{
 		}
 
@@ -4174,7 +4259,471 @@ namespace NMib
 		{
 			return mp_pInternal->f_Decrypt(_pSource, _SourceLen, _pDest);
 		}
-		
+
+		NContainer::CSecureByteVector fg_DeriveKey
+			(
+				NStr::CStrSecure const &_Password
+				, NContainer::CSecureByteVector const &_PasswordSalt
+				, CKeyDerivationSettings const &_Settings
+				, mint _KeyLen
+			)
+		{
+			return fg_RunProtectRegisters
+				(
+					[&]() -> NContainer::CSecureByteVector
+				 	{
+						NContainer::CSecureByteVector Key;
+						Key.f_SetLen(_KeyLen);
+						switch (_Settings.f_GetTypeID())
+						{
+						case EKeyDerivationType_Scrypt:
+							{
+								auto const &Settings = _Settings.f_Get<EKeyDerivationType_Scrypt>();
+								ERR_clear_error();
+								if
+									(
+									 	!EVP_PBE_scrypt
+										(
+											_Password.f_GetStr()
+											, _Password.f_GetLen()
+											, _PasswordSalt.f_GetArray()
+											, _PasswordSalt.f_GetLen()
+											, Settings.m_Workload
+											, Settings.m_Ratio
+											, Settings.m_Parallel
+											, Settings.m_MaxMemory
+											, fg_GetDigest(Settings.m_Digest)
+											, Key.f_GetArray()
+											, _KeyLen
+										)
+									)
+								{
+									DMibErrorNetSSL(fg_GetExceptionStr("Failed to generate key using scrypt"));
+								}
+							}
+							break;
+						case EKeyDerivationType_PKCS5_PBKDF2_HMAC:
+							{
+								auto const &Settings = _Settings.f_Get<EKeyDerivationType_PKCS5_PBKDF2_HMAC>();
+								ERR_clear_error();
+								if
+									(
+									 	!PKCS5_PBKDF2_HMAC
+										(
+											_Password.f_GetStr()
+											, _Password.f_GetLen()
+											, _PasswordSalt.f_GetArray()
+											, _PasswordSalt.f_GetLen()
+											, Settings.m_Rounds
+											, fg_GetDigest(Settings.m_Digest)
+											, _KeyLen
+											, Key.f_GetArray()
+										 )
+									)
+								{
+									DMibErrorNetSSL(fg_GetExceptionStr("Failed to generate key using PKCS5_PBKDF2_HMAC"));
+								}
+							}
+							break;
+						default:
+							DMibError("Unknown key derivation type");
+							break;
+						}
+						return Key;
+					}
+				)
+			;
+		}
+
+		CKeyExpansion::CKeyExpansion
+			(
+				NStr::CStrSecure const &_Password
+				, NContainer::CSecureByteVector const &_PasswordSalt
+				, CKeyDerivationSettings const &_Settings
+				, NContainer::CSecureByteVector const &_ExpansionSalt
+				, NNet::ESSLDigest _Digest
+			)
+			: CKeyExpansion{fg_DeriveKey(_Password, _PasswordSalt, _Settings, EVP_MD_size(fg_GetDigest(_Digest))), _ExpansionSalt, _Digest}
+		{
+		}
+
+		CKeyExpansion::CKeyExpansion
+			(
+				NContainer::CSecureByteVector const &_Key
+				, NContainer::CSecureByteVector const &_ExpansionSalt
+				, NNet::ESSLDigest _Digest
+			)
+			: mp_Digest{_Digest}
+		{
+			fg_RunProtectRegisters
+				(
+					[&]()
+				 	{
+						EVP_MD const *pDigest = fg_GetDigest(_Digest);
+						mint ExpectedKeySize = EVP_MD_size(pDigest);
+						mp_PseudoRandomKey.f_SetLen(ExpectedKeySize);
+						size_t KeySize = 0;
+						if (!HKDF_extract(mp_PseudoRandomKey.f_GetArray(), &KeySize, pDigest, _Key.f_GetArray(), _Key.f_GetLen(), _ExpansionSalt.f_GetArray(), _ExpansionSalt.f_GetLen()))
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to call HKDF_extract"));
+						DMibCheck(KeySize == ExpectedKeySize);
+					}
+				)
+			;
+		}
+
+		CKeyExpansion::~CKeyExpansion() = default;
+
+		CEncryptKeyIV CKeyExpansion::f_GetKeyIV(NNet::ESSLCrypto _Crypto) const
+		{
+			EVP_CIPHER const *pCipher = fg_GetCipher(_Crypto);
+			return {f_GetKey("EncryptKey", EVP_CIPHER_key_length(pCipher)), f_GetKey("EncryptIV", EVP_CIPHER_iv_length(pCipher)), _Crypto};
+		}
+
+		NContainer::CSecureByteVector CKeyExpansion::f_GetHMACKey(ESSLDigest _Digest) const
+		{
+			EVP_MD const *pDigest = fg_GetDigest(_Digest);
+			return f_GetKey("HMACKey", EVP_MD_size(pDigest));
+		}
+
+		NContainer::CSecureByteVector CKeyExpansion::f_GetKey(NStr::CStr const &_Label, mint _Length) const
+		{
+			return fg_RunProtectRegisters
+				(
+					[&]() -> NContainer::CSecureByteVector
+				 	{
+						EVP_MD const *pDigest = fg_GetDigest(mp_Digest);
+						NContainer::CSecureByteVector Result;
+						Result.f_SetLen(_Length);
+						if
+							(
+							 	!HKDF_expand
+							 	(
+								 	Result.f_GetArray()
+								 	, _Length
+								 	, pDigest
+								 	, mp_PseudoRandomKey.f_GetArray()
+								 	, mp_PseudoRandomKey.f_GetLen()
+								 	, (uint8_t const *)_Label.f_GetStr()
+								 	, _Label.f_GetLen()
+								)
+							)
+						{
+							DMibErrorNetSSL(fg_GetExceptionStr("Failed to get key from HKDF_expand"));
+						}
+						return Result;
+					}
+				)
+			;
+		}
+
+		struct CIncrementalEncrypt::CInternal
+		{
+			CInternal(NNet::ESSLCryptoFlags _Flags, CEncryptKeyIV const &_KeyIV)
+			{
+				EVP_CIPHER const *pCipher = fg_GetCipher(_KeyIV.m_Crypto);
+				if (_KeyIV.m_Key.f_GetLen() < EVP_CIPHER_key_length(pCipher))
+					DMibErrorNetSSL(NStr::fg_Format("Key too short. Must be at least {} bytes", EVP_CIPHER_key_length(pCipher)));
+
+				if (_KeyIV.m_IV.f_GetLen() < EVP_CIPHER_iv_length(pCipher))
+					DMibErrorNetSSL(NStr::fg_Format("IV too short. Must be at least {} bytes", EVP_CIPHER_iv_length(pCipher)));
+
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+
+							if ((_Flags & (ESSLCryptoFlags_Encrypt | ESSLCryptoFlags_Decrypt)) == (ESSLCryptoFlags_Encrypt | ESSLCryptoFlags_Decrypt))
+								DMibErrorNetSSL("Cannot handle both ESSLCryptoFlags_Encrypt and ESSLCryptoFlags_Decrypt");
+
+							ERR_clear_error();
+							if (!(m_pCipherContext = EVP_CIPHER_CTX_new()))
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to create cipher context"));
+
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									this->~CInternal();
+								}
+							;
+
+							ERR_clear_error();
+							if (_Flags & ESSLCryptoFlags_Encrypt)
+							{
+								if (EVP_EncryptInit_ex(m_pCipherContext, pCipher, nullptr, _KeyIV.m_Key.f_GetArray(), _KeyIV.m_IV.f_GetArray()) != 1)
+									DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+							}
+							else if (_Flags & ESSLCryptoFlags_Decrypt)
+							{
+								if (EVP_DecryptInit_ex(m_pCipherContext, pCipher, nullptr, _KeyIV.m_Key.f_GetArray(), _KeyIV.m_IV.f_GetArray()) != 1)
+									DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize cipher context"));
+							}
+							else
+								DMibErrorNetSSL("Must specify either ESSLCryptoFlags_Encrypt or ESSLCryptoFlags_Decrypt");
+
+							ERR_clear_error();
+							if (_Flags & ESSLCryptoFlags_UsePadding)
+								EVP_CIPHER_CTX_set_padding(m_pCipherContext, 1);
+							else
+								EVP_CIPHER_CTX_set_padding(m_pCipherContext, 0);
+
+							Cleanup.f_Clear();
+						}
+					)
+				;
+			}
+
+			~CInternal()
+			{
+				EVP_CIPHER_CTX_free(m_pCipherContext);
+			}
+
+			uint32 f_Encrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest) const
+			{
+				if (!m_pCipherContext)
+					DMibErrorNetSSL("No encryption context. Please initialize before calling f_Encrypt.");
+
+				DMibRequire(m_pCipherContext->encrypt);
+
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+
+							int EncryptedLen = 0;
+							ERR_clear_error();
+							if (EVP_EncryptUpdate(m_pCipherContext, _pDest, &EncryptedLen, _pSource, (int)_SourceLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to encrypt data"));
+
+							return EncryptedLen;
+						}
+					)
+				;
+			}
+
+			uint32 f_Decrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest) const
+			{
+				if (!m_pCipherContext)
+					DMibErrorNetSSL("No encryption context. Please initialize before calling f_Decrypt.");
+
+				DMibRequire(!m_pCipherContext->encrypt);
+
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							int DecryptedLen = 0;
+							ERR_clear_error();
+							if (EVP_DecryptUpdate(m_pCipherContext, _pDest, &DecryptedLen, _pSource, (int)_SourceLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to decrypt"));
+
+							return DecryptedLen;
+						}
+					)
+				;
+			}
+
+			uint32 f_FinalizePaddedEncrypt(uint8 *_pDest, uint32 _DestLen)
+			{
+				if (!m_pCipherContext)
+					DMibErrorNetSSL("No encryption context. Please initialize before calling f_FinalizeEncrypt.");
+
+				auto nNeededBytes = EVP_CIPHER_CTX_block_size(m_pCipherContext);
+				if (_DestLen < nNeededBytes)
+					DMibErrorNetSSL(NStr::fg_Format("Buffer is too short. Need at least {} bytes",  nNeededBytes));
+
+				DMibRequire(m_pCipherContext->encrypt);
+
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							int FinalizeLen = 0;
+							ERR_clear_error();
+							if (EVP_EncryptFinal_ex(m_pCipherContext, _pDest, &FinalizeLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize encrypted data"));
+
+							return FinalizeLen;
+						}
+					)
+				;
+			}
+
+			uint32 f_FinalizePaddedDecrypt(uint8 *_pDest, uint32 _DestLen)
+			{
+				if (!m_pCipherContext)
+					DMibErrorNetSSL("No encryption context. Please initialize before calling f_FinalizeDecrypt.");
+
+				auto nNeededBytes = EVP_CIPHER_CTX_block_size(m_pCipherContext);
+				if (_DestLen < nNeededBytes)
+					DMibErrorNetSSL(NStr::fg_Format("Buffer is too short. Need at least {} bytes",  nNeededBytes));
+
+				DMibRequire(!m_pCipherContext->encrypt);
+				
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							int FinalizeLen = 0;
+							ERR_clear_error();
+							if (EVP_DecryptFinal_ex(m_pCipherContext, _pDest, &FinalizeLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize decryption"));
+
+							return FinalizeLen;
+						}
+					)
+				;
+			}
+
+			EVP_CIPHER_CTX *m_pCipherContext = nullptr;
+		};
+
+		CIncrementalEncrypt::CIncrementalEncrypt(NNet::ESSLCryptoFlags _Flags, CEncryptKeyIV const &_KeyIV)
+			: mp_pInternal(fg_Construct(_Flags, _KeyIV))
+		{
+		}
+
+		CIncrementalEncrypt::~CIncrementalEncrypt()
+		{
+		}
+
+		uint32 CIncrementalEncrypt::f_Encrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest)
+		{
+			return mp_pInternal->f_Encrypt(_pSource, _SourceLen, _pDest);
+		}
+
+		uint32 CIncrementalEncrypt::f_Decrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest)
+		{
+			return mp_pInternal->f_Decrypt(_pSource, _SourceLen, _pDest);
+		}
+
+		uint32 CIncrementalEncrypt::f_FinalizePaddedEncrypt(uint8 *_pDest, uint32 _DestLen)
+		{
+			return mp_pInternal->f_FinalizePaddedEncrypt(_pDest, _DestLen);
+		}
+
+		uint32 CIncrementalEncrypt::f_FinalizePaddedDecrypt(uint8 *_pDest, uint32 _DestLen)
+		{
+			return mp_pInternal->f_FinalizePaddedDecrypt(_pDest, _DestLen);
+		}
+
+		struct CIncrementalHMAC::CInternal
+		{
+			CInternal(ESSLDigest _Digest, NContainer::CSecureByteVector const &_Key)
+			{
+				const EVP_MD *Md = fg_GetDigest(_Digest);
+				int const RequiredKeyLength = EVP_MD_size(Md);
+				if (_Key.f_GetLen() < RequiredKeyLength)
+					DMibErrorNetSSL(NStr::fg_Format("HMAC key should be at least {} bytes", RequiredKeyLength));
+
+				fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+							ERR_clear_error();
+							if (!(m_pHMACContext = HMAC_CTX_new()))
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to create HMAC context"));
+
+							auto Cleanup = g_OnScopeExit > [&]
+								{
+									this->~CInternal();
+								}
+							;
+
+							ERR_clear_error();
+							if (HMAC_Init_ex(m_pHMACContext, _Key.f_GetArray(), _Key.f_GetLen(), Md, nullptr) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to initialize HMAC context"));
+
+							Cleanup.f_Clear();
+						}
+					)
+				;
+			}
+
+			~CInternal()
+			{
+				HMAC_CTX_free(m_pHMACContext);
+			}
+
+			int32 f_GetHMACSize()
+			{
+				if (!m_pHMACContext)
+					DMibErrorNetSSL("No HMAC context. Please initialize before calling f_HMACSize.");
+
+				return HMAC_size(m_pHMACContext);
+			}
+
+			void f_Update(uint8 const *_pSource, uint32 _SourceLen) const
+			{
+				if (!m_pHMACContext)
+					DMibErrorNetSSL("No HMAC context. Please initialize before calling f_Update.");
+
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+
+							ERR_clear_error();
+							if (HMAC_Update(m_pHMACContext, _pSource, (int)_SourceLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to update HMAC"));
+						}
+					)
+				;
+			}
+
+			uint32 f_Finalize(uint8 *_pDest, uint32 _DestLen)
+			{
+				if (!m_pHMACContext)
+					DMibErrorNetSSL("No HMAC context. Please initialize before calling f_Finalize.");
+				if (_DestLen < HMAC_size(m_pHMACContext))
+					DMibErrorNetSSL(NStr::fg_Format("Buffer is too short. The HMAC is {} bytes",  HMAC_size(m_pHMACContext)));
+
+				return fg_RunProtectRegisters
+					(
+						[&]() -> decltype(auto)
+						{
+							g_SSLLowLevel->f_UseInThread();
+
+							unsigned int FinalizeLen = 0;
+							ERR_clear_error();
+							if (HMAC_Final(m_pHMACContext, _pDest, &FinalizeLen) != 1)
+								DMibErrorNetSSL(fg_GetExceptionStr("Failed to finalize HMAC data"));
+
+							return FinalizeLen;
+						}
+					)
+				;
+			}
+
+			HMAC_CTX *m_pHMACContext = nullptr;
+		};
+
+		CIncrementalHMAC::CIncrementalHMAC(ESSLDigest _Digest, NContainer::CSecureByteVector const &_Key)
+			: mp_pInternal(fg_Construct(_Digest, _Key))
+		{
+		}
+
+		CIncrementalHMAC::~CIncrementalHMAC()
+		{
+		}
+
+		void CIncrementalHMAC::f_Update(uint8 const *_pSource, uint32 _SourceLen)
+		{
+			mp_pInternal->f_Update(_pSource, _SourceLen);
+		}
+
+		uint32 CIncrementalHMAC::f_Finalize(uint8 *_pDest, uint32 _DestLen)
+		{
+			return mp_pInternal->f_Finalize(_pDest, _DestLen);
+		}
+
+		uint32 CIncrementalHMAC::f_GetHMACSize() const
+		{
+			return mp_pInternal->f_GetHMACSize();
+		}
+
 		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key)
 		{
 			NDataProcessing::CHashDigest_SHA256 Return;

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <Mib/Cryptography/Hashes/SHA>
+#include "Malterlib_Network.h"
 #include "Malterlib_Network_Exception.h"
 #include "Malterlib_Network_SSLKeySetting.h"
 #include <Mib/Memory/Allocators/Secure>
@@ -377,28 +378,128 @@ namespace NMib
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 
 		};
-		
+
+		struct CEncryptKeyIV
+		{
+			CEncryptKeyIV
+				(
+				 	NContainer::CSecureByteVector const &_Key
+				 	, NContainer::CSecureByteVector const &_IV
+				 	, NNet::ESSLCrypto _Crypto = ESSLCrypto_AES_256_CBC
+				)
+			;
+
+			static CEncryptKeyIV fs_GenerateKeyIV
+				(
+				 	NStr::CStrSecure const &_Password
+				 	, NContainer::CSecureByteVector const &_Salt
+				 	, CKeyDerivationSettings_PKCS5_Deprecated const &_Settings
+					, NNet::ESSLCrypto _Crypto = ESSLCrypto_AES_256_CBC
+				)
+			;
+
+			static uint32 fs_GetKeyLen(NNet::ESSLCrypto _Crypto);
+			static uint32 fs_GetIVLen(NNet::ESSLCrypto _Crypto);
+			static uint32 fs_GetHMACKeyLen(NNet::ESSLDigest _Digest);
+			static uint32 fs_GetBlockSize(NNet::ESSLCrypto _Crypto);
+			static NContainer::CSecureByteVector fs_GetRandomKey(NNet::ESSLCrypto _Crypto);
+			static NContainer::CSecureByteVector fs_GetRandomIV(NNet::ESSLCrypto _Crypto);
+			static NContainer::CSecureByteVector fs_GetRandomHMACKey(NNet::ESSLDigest _Digest);
+
+			NContainer::CSecureByteVector const m_Key;
+			NContainer::CSecureByteVector const m_IV;
+			NNet::ESSLCrypto m_Crypto;
+		};
+
+		NContainer::CSecureByteVector fg_DeriveKey
+			(
+				NStr::CStrSecure const &_Password
+				, NContainer::CSecureByteVector const &_PasswordSalt
+				, CKeyDerivationSettings const &_Settings
+			 	, mint _KeyLen
+			)
+		;
+
+		struct CKeyExpansion
+		{
+			CKeyExpansion
+				(
+				 	NStr::CStrSecure const &_Password
+				 	, NContainer::CSecureByteVector const &_PasswordSalt
+				 	, CKeyDerivationSettings const &_Settings
+				 	, NContainer::CSecureByteVector const &_ExpansionSalt
+				 	, NNet::ESSLDigest _Digest = ESSLDigest_SHA512
+				)
+			;
+			CKeyExpansion
+				(
+				 	NContainer::CSecureByteVector const &_Key
+				 	, NContainer::CSecureByteVector const &_ExpansionSalt
+				 	, NNet::ESSLDigest _Digest = ESSLDigest_SHA512
+				)
+			;
+			~CKeyExpansion();
+
+			CEncryptKeyIV f_GetKeyIV(NNet::ESSLCrypto _Crypto = ESSLCrypto_AES_256_CBC) const;
+			NContainer::CSecureByteVector f_GetHMACKey(ESSLDigest _Digest = ESSLDigest_SHA512) const;
+
+			NContainer::CSecureByteVector f_GetKey(NStr::CStr const &_Label, mint _Length) const;
+
+		private:
+			NNet::ESSLDigest mp_Digest = NNet::ESSLDigest_None;
+			NContainer::CSecureByteVector mp_PseudoRandomKey;
+		};
+
 		class CEncryptAES
 		{
 		public:
 			
-			struct CSalt
-			{
-				uint8 m_Salt[8];
-			};
-			
-			CEncryptAES(NStr::CStrSecure const &_Password, CSalt const *_pSalt, mint _nRounds = 1 << 17);
-			CEncryptAES(NContainer::CSecureByteVector const &_Key, CSalt const *_pSalt, mint _nRounds = 1 << 17);
+			CEncryptAES(CEncryptKeyIV const &_KeyIV);
 			~CEncryptAES();
 			
 			uint32 f_Encrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
 			uint32 f_Decrypt(uint8 *_pSource, uint32 _SourceLen, uint8 *_pDest) const;
-		
+
 		private:
 			struct CInternal;
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 		};
-		
+
+		// If all the data is available at once, use CEncryptAES. CIncrementalEncrypt does the same job but can operate on piecemeal data.
+		//
+		// When padding is used, feed the Encrypter all the data (while (!EndOfData) Encrypter.f_{De,En}crypt(Data);) and then call Encrypter.f_FinalizePadded{De,En}crypt
+		// to get the final block from the Encrypter.
+		class CIncrementalEncrypt
+		{
+		public:
+			CIncrementalEncrypt(NNet::ESSLCryptoFlags _Flags, CEncryptKeyIV const &_KeyIV);
+			~CIncrementalEncrypt();
+
+			uint32 f_Encrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest);
+			uint32 f_Decrypt(uint8 const *_pSource, uint32 _SourceLen, uint8 *_pDest);
+			uint32 f_FinalizePaddedEncrypt(uint8 *_pDest, uint32 _DestLen);
+			uint32 f_FinalizePaddedDecrypt(uint8 *_pDest, uint32 _DestLen);
+
+		private:
+			struct CInternal;
+			NPtr::TCUniquePointer<CInternal> mp_pInternal;
+		};
+
+		class CIncrementalHMAC
+		{
+		public:
+			CIncrementalHMAC(ESSLDigest _Digest, NContainer::CSecureByteVector const &_Key);
+			~CIncrementalHMAC();
+
+			void f_Update(uint8 const *_pSource, uint32 _SourceLen);
+			uint32 f_Finalize(uint8 *_pDest, uint32 _DestLen);
+			uint32 f_GetHMACSize() const;
+
+		private:
+			struct CInternal;
+			NPtr::TCUniquePointer<CInternal> mp_pInternal;
+		};
+
 		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
 		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
 	}
