@@ -4142,8 +4142,8 @@ namespace NMib
 							DMibCheck(_KeyIV.m_Key.f_GetLen() == 32);
 							DMibCheck(_KeyIV.m_IV.f_GetLen() == 16);
 							g_SSLLowLevel->f_UseInThread();
-							NMem::fg_MemCopy(m_Key, _KeyIV.m_Key.f_GetArray(), fg_Min(_KeyIV.m_Key.f_GetLen(), EVP_MAX_KEY_LENGTH));
-							NMem::fg_MemCopy(m_IV, _KeyIV.m_IV.f_GetArray(), fg_Min(_KeyIV.m_IV.f_GetLen(), EVP_MAX_IV_LENGTH));
+							NMem::fg_MemCopy(m_Key, _KeyIV.m_Key.f_GetArray(), fg_Min(_KeyIV.m_Key.f_GetLen(), (mint)EVP_MAX_KEY_LENGTH));
+							NMem::fg_MemCopy(m_IV, _KeyIV.m_IV.f_GetArray(), fg_Min(_KeyIV.m_IV.f_GetLen(), (mint)EVP_MAX_IV_LENGTH));
 						}
 					)
 				;
@@ -4612,7 +4612,7 @@ namespace NMib
 			CInternal(ESSLDigest _Digest, NContainer::CSecureByteVector const &_Key)
 			{
 				const EVP_MD *Md = fg_GetDigest(_Digest);
-				int const RequiredKeyLength = EVP_MD_size(Md);
+				mint const RequiredKeyLength = EVP_MD_size(Md);
 				if (_Key.f_GetLen() < RequiredKeyLength)
 					DMibErrorNetSSL(NStr::fg_Format("HMAC key should be at least {} bytes", RequiredKeyLength));
 
