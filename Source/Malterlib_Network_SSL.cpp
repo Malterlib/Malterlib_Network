@@ -4099,7 +4099,7 @@ namespace NMib
 
 		uint32 CEncryptKeyIV::fs_GetHMACKeyLen(ESSLDigest _Digest)
 		{
-			return EVP_MD_size(fg_GetDigest(_Digest));
+			return (uint32)EVP_MD_size(fg_GetDigest(_Digest));
 		}
 
 		uint32 CEncryptKeyIV::fs_GetBlockSize(NNet::ESSLCrypto _Crypto)
@@ -4651,7 +4651,7 @@ namespace NMib
 				if (!m_pHMACContext)
 					DMibErrorNetSSL("No HMAC context. Please initialize before calling f_HMACSize.");
 
-				return HMAC_size(m_pHMACContext);
+				return (int32)HMAC_size(m_pHMACContext);
 			}
 
 			void f_Update(uint8 const *_pSource, uint32 _SourceLen) const
