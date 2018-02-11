@@ -13,6 +13,15 @@ using namespace NMib::NContainer;
 class CSSL_Tests : public NMib::NTest::CTest
 {
 public:
+	CSecureByteVector f_GetRandomBuffer(mint _Len, uint32 _Seed)
+	{
+		CSecureByteVector Buffer;
+		Buffer.f_SetLen(_Len);
+		NMisc::CRandomShiftRNG Rng{_Seed};
+		for (auto &Char : Buffer)
+			Char = Rng.f_GetValue<uint8>();
+		return Buffer;
+	}
 
 	void f_DoTests()
 	{
@@ -100,18 +109,16 @@ public:
 		{
 			CStrSecure Password("MalterlibPasswordTest");
 			
-			CSecureByteVector Salt;
-			NMib::NSys::fg_Security_GenerateHighEntropyData(Salt.f_GetArray(8), 8);
-			
+			CSecureByteVector Salt = f_GetRandomBuffer(8, 1);
+
 			CEncryptAES EncryptAES(NNet::CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 			
 			TCVector<uint8> PlainText;
 			TCVector<uint8> Decrypted;
 			TCVector<uint8> Encrypted;
 			
-			PlainText.f_SetLen(32);
-			NMib::NSys::fg_Security_GenerateHighEntropyData(PlainText.f_GetArray(), PlainText.f_GetLen());
-			
+			PlainText = f_GetRandomBuffer(32, 7);
+
 			uint32 EncryptedLen = EncryptAES.f_Encrypt(PlainText.f_GetArray(), PlainText.f_GetLen(), Encrypted.f_GetArray(32));
 			uint32 DecryptedLen = EncryptAES.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray(32));
 			
@@ -130,9 +137,8 @@ public:
 			
 			{
 				DMibTestPath("IncorrectSalt");
-				CSecureByteVector IncorrectSalt;
-				NMib::NSys::fg_Security_GenerateHighEntropyData(IncorrectSalt.f_GetArray(8), 8);
-				
+				CSecureByteVector IncorrectSalt = f_GetRandomBuffer(8, 2);
+
 				CEncryptAES EncryptAES2(NNet::CEncryptKeyIV::fs_GenerateKeyIV(Password, IncorrectSalt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 				EncryptAES2.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, !=, PlainText);
@@ -199,8 +205,7 @@ public:
 				}
 			;
 
-			CSecureByteVector Salt;
-			NMib::NSys::fg_Security_GenerateHighEntropyData(Salt.f_GetArray(8), 8);
+			CSecureByteVector Salt = f_GetRandomBuffer(8, 3);
 
 			TCVector<uint8> PlainText;
 			TCVector<uint8> Decrypted;
@@ -215,10 +220,7 @@ public:
 			for (auto Length : Lengths)
 			{
 				DMibTestPath(fg_Format("Buffer length: {}", Length));
-				PlainText.f_SetLen(Length);
-				NMisc::CRandomShiftRNG Rng;
-				for (auto &Char : PlainText)
-					Char = Rng.f_GetValue<uint8>();
+				PlainText = f_GetRandomBuffer(Length, 8);
 				auto KeyIV = CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{});
 				CIncrementalEncrypt EncryptAES(ESSLCryptoFlags_Encrypt | ESSLCryptoFlags_UsePadding, KeyIV);
 				CIncrementalEncrypt DecryptAES(ESSLCryptoFlags_Decrypt | ESSLCryptoFlags_UsePadding, KeyIV);
@@ -259,8 +261,7 @@ public:
 
  			{
 				DMibTestPath("IncorrectSalt");
-				CSecureByteVector IncorrectSalt;
-				NMib::NSys::fg_Security_GenerateHighEntropyData(IncorrectSalt.f_GetArray(8), 8);
+				CSecureByteVector IncorrectSalt = f_GetRandomBuffer(8, 4);
 				auto KeyIV = CEncryptKeyIV::fs_GenerateKeyIV(Password, IncorrectSalt, CKeyDerivationSettings_PKCS5_Deprecated{});
 				CIncrementalEncrypt EncryptAES2(ESSLCryptoFlags_Decrypt | ESSLCryptoFlags_UsePadding, KeyIV);
  				DecryptedLen = EncryptAES2.f_Decrypt(Encrypted.f_GetArray(), EncryptedLen, Decrypted.f_GetArray());
@@ -333,8 +334,7 @@ public:
 				}
 			;
 
-			CSecureByteVector Salt;
-			NMib::NSys::fg_Security_GenerateHighEntropyData(Salt.f_GetArray(8), 8);
+			CSecureByteVector Salt = f_GetRandomBuffer(8, 5);
 
 			TCMap<ESSLCrypto, CStr> Ciphers =
 				{
@@ -357,13 +357,9 @@ public:
 
 			for (auto Length : Lengths)
 			{
-				PlainText.f_SetLen(Length);
 				Encrypted.f_SetLen(Length);
 				Decrypted.f_SetLen(Length);
-
-				NMisc::CRandomShiftRNG Rng;
-				for (auto &Char : PlainText)
-					Char = Rng.f_GetValue<uint8>();
+				PlainText = f_GetRandomBuffer(Length, 9);
 
 				for (auto const &Cipher : Ciphers)
 				{
@@ -388,8 +384,7 @@ public:
 		{
 			CStrSecure Password("MalterlibPasswordTest");
 
-			CSecureByteVector Salt;
-			NMib::NSys::fg_Security_GenerateHighEntropyData(Salt.f_GetArray(8), 8);
+			CSecureByteVector Salt = f_GetRandomBuffer(8, 6);
 
 			static const char *Text = "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.";
 			static const char *KeyBytes = "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz012345";
