@@ -1,4 +1,4 @@
-﻿// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB 
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #pragma once
@@ -123,6 +123,11 @@ namespace NMib
 
 				return *this;
 			}
+
+			void f_SetLocalhost()
+			{
+				*this = {127, 0, 0, 1};
+			}
 		};
 
 		class CNetAddressIPv6
@@ -160,6 +165,11 @@ namespace NMib
 				NMem::fg_MemCopy(this, &_Src, sizeof(*this));
 
 				return *this;
+			}
+
+			void f_SetLocalhost()
+			{
+				*this = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
 			}
 		};
 

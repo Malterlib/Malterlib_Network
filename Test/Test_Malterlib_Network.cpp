@@ -259,6 +259,7 @@ public:
 	//					DMibTraceRaw("ConnectListen Server Thread\n");
 	//					return f_InternalConnectListen_Server<t_CNetAddress, _Type>(_Port, ServerReady);
 						t_CNetAddress AnyAddr; // = _Localhost;
+						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
 						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));
@@ -545,6 +546,7 @@ public:
 					try
 					{
 						t_CNetAddress AnyAddr; // = _Localhost;
+						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
 						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));

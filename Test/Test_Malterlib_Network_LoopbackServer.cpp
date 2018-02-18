@@ -1,4 +1,4 @@
-﻿// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB 
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include <Mib/Core/Core>
@@ -214,9 +214,11 @@ namespace
 			
 			{
 				CNetAddressTCPv4 ListenV4;
+				ListenV4.f_SetLocalhost();
 				ListenV4.m_Port = 20679;
 
 				CNetAddressTCPv6 ListenV6;
+				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20679;
 				
 				m_ListenSocketV4.f_Listen
@@ -237,9 +239,11 @@ namespace
 
 			{
 				CNetAddressTCPv4 ListenV4;
+				ListenV4.f_SetLocalhost();
 				ListenV4.m_Port = 20677;
 
 				CNetAddressTCPv6 ListenV6;
+				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20677;
 				
 				m_EchoListenSocketV4.f_Listen
@@ -260,9 +264,11 @@ namespace
 
 			{
 				CNetAddressTCPv4 ListenV4;
+				ListenV4.f_SetLocalhost();
 				ListenV4.m_Port = 20678;
 
 				CNetAddressTCPv6 ListenV6;
+				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20678;
 				
 				m_MirrorListenSocketV4.f_Listen
