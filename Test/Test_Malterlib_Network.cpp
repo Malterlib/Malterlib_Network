@@ -44,7 +44,7 @@ using namespace NMib;
 using namespace NMib::NSys::NNet;
 using namespace NMib::NNet;
 
-static fp32 const gc_Timeout = 10.0f;
+static fp32 const gc_Timeout = 60.0f;
 
 class CSysNet_Tests : public NMib::NTest::CTest
 {
@@ -211,8 +211,9 @@ public:
 				nReceived += nBytes;
 			}
 
-			DMibTest(DMibExpr(nBytes) != DMibExpr(-1));
-			DMibTest(DMibExpr(NMem::fg_MemCmp(Incoming, Message, nMessageBytes)) == DMibExpr(0));
+			DMibExpect(nBytes, !=, -1);
+			DMibExpect(nReceived, ==, nMessageBytes);
+			DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 		}
 	}
 
@@ -370,9 +371,9 @@ public:
 							nReceived += nBytes;
 						}
 
-						DMibTest(DMibExpr(nBytes) != DMibExpr(-1));
-
-						DMibTest( DMibExpr(NMem::fg_MemCmp(Incoming, Message, nMessageBytes)) == DMibExpr(0));
+						DMibExpect(nBytes, !=, -1);
+						DMibExpect(nReceived, ==, nMessageBytes);
+						DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
 				}
 				catch (CExceptionNet const& _Exception)
@@ -674,9 +675,9 @@ public:
 							nReceived += nBytes;
 						}
 
-						DMibTest(DMibExpr(nBytes) != DMibExpr(-1));
-
-						DMibTest( DMibExpr(NMem::fg_MemCmp(Incoming, Message, nMessageBytes)) == DMibExpr(0));
+						DMibExpect(nBytes, !=, -1);
+						DMibExpect(nReceived, ==, nMessageBytes);
+						DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
 				}
 				catch (CExceptionNet const& _Exception)
