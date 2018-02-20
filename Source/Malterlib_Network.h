@@ -245,6 +245,8 @@ namespace NMib
 		};
 
 		class CNetAddress;
+
+		NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
 	}
 	namespace NStream
 	{

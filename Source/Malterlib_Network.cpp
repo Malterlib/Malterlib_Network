@@ -2,6 +2,7 @@
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include "Malterlib_Network.h"
+#include <Mib/Cryptography/UUID>
 
 namespace NMib::NNet
 {
@@ -34,6 +35,29 @@ namespace NMib::NNet
 			}
 		}
 		return true;
+	}
+
+	namespace
+	{
+		NDataProcessing::CUniversallyUniqueIdentifier g_HostnameRootUUID("D2C365F0-3F5E-4056-9BBB-0724C411D2FA", NDataProcessing::EUniversallyUniqueIdentifierFormat_Bare);
+	}
+
+	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath)
+	{
+		using namespace NStr;
+
+		mint MaxLength = NSys::NNet::fg_GetMaxUnixSocketNameLength();
+		if (_WantedPath.f_GetLen() <= aint(MaxLength))
+			return _WantedPath;
+
+		CStr ConfigHash = fg_GetHashedUuidString(NFile::CFile::fs_GetPath(_WantedPath), g_HostnameRootUUID, NDataProcessing::EUniversallyUniqueIdentifierFormat_AlphaNum);
+
+		CStr TempDir = NFile::CFile::fs_GetTemporaryDirectory();
+		CStr Path = "{}/{}.sock"_f << TempDir << ConfigHash;
+		if (Path.f_GetLen() <= aint(MaxLength))
+			return Path;
+
+		return "/tmp/{}.sock"_f << ConfigHash;
 	}
 
 	CSocketOperationResult &CSocketOperationResult::operator += (CSocketOperationResult const &_Other)
