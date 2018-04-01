@@ -448,7 +448,7 @@ namespace NMib
 								if (f_IsClientContext())
 									mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
 								else
-									mp_pContext = fg_CreateSSLContext(SSLv3_server_method());
+									mp_pContext = fg_CreateSSLContext(SSLv23_server_method());
 							}
 							
 							SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
