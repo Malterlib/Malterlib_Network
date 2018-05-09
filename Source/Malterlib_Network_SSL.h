@@ -367,6 +367,27 @@ namespace NMib
 			;
 			static void fs_VerifyCertificateRequestSameKeyAsCertificate(NContainer::TCVector<uint8> const &_CertRequestData, NContainer::TCVector<uint8> const &_CertData);
 
+			static NContainer::CSecureByteVector fs_SignMessage
+				(
+					NContainer::CSecureByteVector const &_Message
+					, NContainer::CSecureByteVector const &_KeyData
+					, ESSLDigest _Digest = ESSLDigest_Automatic
+				);
+			static bool fs_VerifySignature
+				(
+					NContainer::CSecureByteVector const &_Message
+					, NContainer::CSecureByteVector const &_KeyData
+					, NContainer::CSecureByteVector const &_Signature
+					, ESSLDigest _Digest = ESSLDigest_Automatic
+				);
+			static void fs_GenerateKeys
+				(
+					NContainer::CSecureByteVector &o_PrivateKeyData
+					, NContainer::CSecureByteVector &o_PublicKeyData
+					, NNet::CSSLKeySetting _KeySetting = CSSLKeySettings_EC_secp521r1{}
+				)
+			;
+
 		protected:
 			class CSession;
 			NPtr::TCUniquePointer<CSession> fp_CreateSession();

@@ -426,6 +426,59 @@ public:
 				DMibExpect(nBytes, ==, ContinuousHMAC.fs_GetSize());
 			}
 		};
+
+		DMibTestSuite("Public Key Signing and Verifying")
+		{
+			static const char *Text = "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.";
+			CSecureByteVector Message;
+			NMem::fg_MemCopy(Message.f_GetArray(fg_StrLen(Text)), Text, fg_StrLen(Text));
+			CSecureByteVector Truncated(Message);
+			Truncated.f_SetLen(Truncated.f_GetLen() - 1);
+
+			// Apparently we cannot create ESSLKeyType_EC_X25519 keys
+			for (aint KeyType = ESSLKeyType_RSA; KeyType <= ESSLKeyType_EC_secp521r1; ++KeyType)
+			{
+				DMibTestPath("KeySetting {}"_f << KeyType);
+
+				CSSLKeySetting KeySettings;
+				switch (KeyType)
+				{
+				case ESSLKeyType_RSA:          KeySettings = CSSLKeySettings_RSA{};          break;
+				case ESSLKeyType_EC_secp256r1: KeySettings = CSSLKeySettings_EC_secp256r1{}; break;
+				case ESSLKeyType_EC_secp384r1: KeySettings = CSSLKeySettings_EC_secp384r1{}; break;
+				case ESSLKeyType_EC_secp521r1: KeySettings = CSSLKeySettings_EC_secp521r1{}; break;
+				case ESSLKeyType_EC_X25519:    KeySettings = CSSLKeySettings_EC_X25519{};    break;
+				}
+
+				NContainer::CSecureByteVector PrivateKey;
+				NContainer::CSecureByteVector PublicKey;
+				CSSLContext::fs_GenerateKeys(PrivateKey, PublicKey, KeySettings);
+				NContainer::CSecureByteVector Signature = NNet::CSSLContext::fs_SignMessage(Message, PrivateKey);
+				DMibExpectTrue(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature));
+
+				// Different message - should not be verified
+				DMibExpectFalse(CSSLContext::fs_VerifySignature(Truncated, PublicKey, Signature));
+
+				// Tamper with signature - outcome differs depending on the key type. RSA fails verification, but EC throws and exception about a broken signature
+				Signature[0] ^= 0x1;
+				if (KeyType == ESSLKeyType_RSA)
+					DMibExpectFalse(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature));
+				else
+					DMibExpectExceptionType(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature), CExceptionNetSSL);
+			}
+			{
+				NContainer::CSecureByteVector PrivateKey;
+				NContainer::CSecureByteVector PublicKey;
+				CSSLContext::fs_GenerateKeys(PrivateKey, PublicKey);
+				ESSLDigest DigestsTypes[] = { ESSLDigest_SHA512, ESSLDigest_SHA384, ESSLDigest_SHA256 };
+				for (auto DigestType : DigestsTypes)
+				{
+					DMibTestPath("DigestType {}"_f << DigestType);
+					NContainer::CSecureByteVector Signature = NNet::CSSLContext::fs_SignMessage(Message, PrivateKey, DigestType);
+					DMibExpectTrue(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature, DigestType));
+				}
+			}
+		};
 	}
 };
 
