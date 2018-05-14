@@ -38,7 +38,7 @@ Property
 			DefaultMalterlibSSLLibrary ""
 		}
 	}
-	MalterlibSSLLibrary "@(DefaultMalterlibSSLLibrary)" // User: OpenSSL library to use. Currently BoringSSL is the default, and OpenSSL can be used but is deprecated
+	MalterlibSSLLibrary "@(DefaultMalterlibSSLLibrary)"
 	{
 		!!MalterlibSSLLibrary ""
 	}
