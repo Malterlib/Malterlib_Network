@@ -1246,7 +1246,7 @@ namespace NMib
 				return Return;
 			}
 
-			static NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> fs_ConvertKeyToBinary(EVP_PKEY *_pKey)
+			static NContainer::CSecureByteVector fs_ConvertKeyToBinary(EVP_PKEY *_pKey)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				if (!_pKey)
@@ -1266,7 +1266,7 @@ namespace NMib
 				if (!PEM_write_bio_PrivateKey(pMemoryBio, _pKey, nullptr, nullptr, 0, nullptr, nullptr))
 					DMibErrorNetSSL(fg_GetExceptionStr("Error writing private key to BIO"));
 
-				NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> Return;
+				NContainer::CSecureByteVector Return;
 				Return.f_SetLen(pMemoryBio->num_write);
 				ERR_clear_error();
 				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
@@ -1322,7 +1322,7 @@ namespace NMib
 				if (!i2d_PUBKEY_bio(pMemoryBio, _pKey))
 					DMibErrorNetSSL(fg_GetExceptionStr("Error writing public key to BIO"));
 
-				NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> Return;
+				NContainer::CSecureByteVector Return;
 				Return.f_SetLen(pMemoryBio->num_write);
 				ERR_clear_error();
 				if (!BIO_read(pMemoryBio, Return.f_GetArray(), Return.f_GetLen()))
@@ -1330,7 +1330,7 @@ namespace NMib
 				return Return;
 			}
 
-			static EVP_PKEY *fs_LoadPrivateKey(NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Data)
+			static EVP_PKEY *fs_LoadPrivateKey(NContainer::CSecureByteVector const &_Data)
 			{
 				g_SSLLowLevel->f_UseInThread();
 				ERR_clear_error();
@@ -2570,7 +2570,7 @@ namespace NMib
 			(
 				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertRequestData
-				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+				, NContainer::CSecureByteVector &o_KeyData
 				, ESSLDigest _Digest
 			)
 		{
@@ -2707,7 +2707,7 @@ namespace NMib
 		void CSSLContext::fs_SignClientCertificate
 			(
 				NContainer::TCVector<uint8> const &_CACertificate
-				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
+				, NContainer::CSecureByteVector const &_CAKey
 				, NContainer::TCVector<uint8> const &_CertRequestData
 				, NContainer::TCVector<uint8> &o_SignedCertificateData
 				, CSignOptions const &_SignOptions
@@ -2893,7 +2893,7 @@ namespace NMib
 			(
 				CCertificateOptions const &_Options
 				, NContainer::TCVector<uint8> &o_CertData
-				, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+				, NContainer::CSecureByteVector &o_KeyData
 				, CSignOptions const &_SignOptions
 			)
 		{
@@ -5029,11 +5029,11 @@ namespace NMib
 			return mp_pInternal->f_GetHMACSize();
 		}
 
-		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key)
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
 		{
 			NDataProcessing::CHashDigest_SHA256 Return;
 			unsigned int Size = Return.fs_GetSize();
-			if 
+			if
 				(
 					!HMAC
 					(
@@ -5041,7 +5041,7 @@ namespace NMib
 						, _Key.f_GetArray()
 						, _Key.f_GetLen()
 						, _Data.f_GetArray()
-						, _Data.f_GetLen() 
+						, _Data.f_GetLen()
 						, Return.f_GetData()
 						, &Size
 					)
@@ -5049,18 +5049,18 @@ namespace NMib
 			{
 				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA256"));
 			}
-			
+
 			if (Size != Return.fs_GetSize())
 				DMibErrorNetSSL("Failed to run HMAC-SHA256: Unexpected digest size");
-			
+
 			return Return;
 		}
 
-		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key)
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
 		{
 			NDataProcessing::CHashDigest_SHA1 Return;
 			unsigned int Size = Return.fs_GetSize();
-			if 
+			if
 				(
 					!HMAC
 					(
@@ -5068,7 +5068,7 @@ namespace NMib
 						, _Key.f_GetArray()
 						, _Key.f_GetLen()
 						, _Data.f_GetArray()
-						, _Data.f_GetLen() 
+						, _Data.f_GetLen()
 						, Return.f_GetData()
 						, &Size
 					)
@@ -5076,10 +5076,64 @@ namespace NMib
 			{
 				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
 			}
-			
+
 			if (Size != Return.fs_GetSize())
 				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
-			
+
+			return Return;
+		}
+
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
+		{
+			NDataProcessing::CHashDigest_SHA256 Return;
+			unsigned int Size = Return.fs_GetSize();
+			if
+				(
+					!HMAC
+					(
+						EVP_sha256()
+						, _Key.f_GetArray()
+						, _Key.f_GetLen()
+						, _Data.f_GetArray()
+						, _Data.f_GetLen()
+						, Return.f_GetData()
+						, &Size
+					)
+				)
+			{
+				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA256"));
+			}
+
+			if (Size != Return.fs_GetSize())
+				DMibErrorNetSSL("Failed to run HMAC-SHA256: Unexpected digest size");
+
+			return Return;
+		}
+
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
+		{
+			NDataProcessing::CHashDigest_SHA1 Return;
+			unsigned int Size = Return.fs_GetSize();
+			if
+				(
+					!HMAC
+					(
+						EVP_sha1()
+						, _Key.f_GetArray()
+						, _Key.f_GetLen()
+						, _Data.f_GetArray()
+						, _Data.f_GetLen()
+						, Return.f_GetData()
+						, &Size
+					)
+				)
+			{
+				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
+			}
+
+			if (Size != Return.fs_GetSize())
+				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
+
 			return Return;
 		}
 	}

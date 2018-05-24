@@ -92,7 +92,7 @@ namespace NMib
 			bool m_bDirty = false;
 
 			NContainer::TCVector<uint8> m_PublicCertificateData;
-			NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> m_PrivateKeyData;
+			NContainer::CSecureByteVector m_PrivateKeyData;
 			NContainer::TCVector<uint8> m_CRLData;
 			NContainer::TCVector<uint8> m_CACertificateData;
 
@@ -344,7 +344,7 @@ namespace NMib
 				(
 					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertData
-					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+					, NContainer::CSecureByteVector &o_KeyData
 					, CSignOptions const &_SignOptions = {}
 				)
 			;
@@ -352,14 +352,14 @@ namespace NMib
 				(
 					CCertificateOptions const &_Options
 					, NContainer::TCVector<uint8> &o_CertRequestData
-					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> &o_KeyData
+					, NContainer::CSecureByteVector &o_KeyData
 					, ESSLDigest _Digest = ESSLDigest_Automatic 
 				)
 			;
 			static void fs_SignClientCertificate
 				(
 					NContainer::TCVector<uint8> const &_CACertificate
-					, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_CAKey
+					, NContainer::CSecureByteVector const &_CAKey
 					, NContainer::TCVector<uint8> const &_CertRequestData
 					, NContainer::TCVector<uint8> &o_SignedCertificateData
 					, CSignOptions const &_SignOptions = {}
@@ -521,8 +521,10 @@ namespace NMib
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 		};
 
-		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
-		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::TCVector<uint8> const &_Data, NContainer::TCVector<uint8, NMem::CAllocator_HeapSecure> const &_Key);
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key);
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key);
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key);
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key);
 	}
 }
 
