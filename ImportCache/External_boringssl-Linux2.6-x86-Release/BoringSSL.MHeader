@@ -341,6 +341,7 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 		}
 	}
 	%Dependency Lib_crypto
+	%Dependency Lib_boringssl_gtest
 	%Group Linux2.6
 	{
 		%Group x86
@@ -365,7 +366,6 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 			}
 		}
 	}
-	%Dependency Lib_boringssl_gtest
 }
 %Target Lib_crypto
 {
