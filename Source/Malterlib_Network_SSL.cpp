@@ -350,14 +350,22 @@ namespace NMib
 				return Errors;
 			}
 
+		}
+
+		NStr::CStr fg_SSL_GetExceptionStr(NStr::CStr const &_Description)
+		{
+			NStr::CStr Errors = fg_GetErrors();
+
+			if (Errors.f_IsEmpty())
+				return _Description;
+
+			return fg_Format("{}: {}", _Description, Errors);
+		}
+		namespace
+		{
 			NStr::CStr fg_GetExceptionStr(NStr::CStr const &_Description)
 			{
-				NStr::CStr Errors = fg_GetErrors();
-				
-				if (Errors.f_IsEmpty())
-					return _Description;
-				
-				return fg_Format("{}: {}", _Description, Errors);
+				return fg_SSL_GetExceptionStr(_Description);
 			}
 		}
 
