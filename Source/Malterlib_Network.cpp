@@ -50,10 +50,10 @@ namespace NMib::NNet
 		if (_WantedPath.f_GetLen() <= aint(MaxLength))
 			return _WantedPath;
 
-		CStr ConfigHash = fg_GetHashedUuidString(NFile::CFile::fs_GetPath(_WantedPath), g_HostnameRootUUID, NDataProcessing::EUniversallyUniqueIdentifierFormat_AlphaNum);
+		CStr ConfigHash = fg_GetHashedUuidString(_WantedPath, g_HostnameRootUUID, NDataProcessing::EUniversallyUniqueIdentifierFormat_AlphaNum);
 
-		CStr TempDir = NFile::CFile::fs_GetTemporaryDirectory();
-		CStr Path = "{}/{}.sock"_f << TempDir << ConfigHash;
+		CStr TempDir = NFile::CFile::fs_GetRawTemporaryDirectory();
+		CStr Path = TempDir / ("{}.sock"_f << ConfigHash);
 		if (Path.f_GetLen() <= aint(MaxLength))
 			return Path;
 
