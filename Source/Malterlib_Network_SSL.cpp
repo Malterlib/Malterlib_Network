@@ -5037,7 +5037,7 @@ namespace NMib
 			return mp_pInternal->f_GetHMACSize();
 		}
 
-		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(uint8 const *_pData, mint _DataLen, uint8 const *_pKey, mint _KeyLen)
 		{
 			NDataProcessing::CHashDigest_SHA256 Return;
 			unsigned int Size = Return.fs_GetSize();
@@ -5046,10 +5046,10 @@ namespace NMib
 					!HMAC
 					(
 						EVP_sha256()
-						, _Key.f_GetArray()
-						, _Key.f_GetLen()
-						, _Data.f_GetArray()
-						, _Data.f_GetLen()
+						, _pKey
+						, _KeyLen
+						, _pData
+						, _DataLen
 						, Return.f_GetData()
 						, &Size
 					)
@@ -5062,87 +5062,53 @@ namespace NMib
 				DMibErrorNetSSL("Failed to run HMAC-SHA256: Unexpected digest size");
 
 			return Return;
+		}
+
+		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(uint8 const *_pData, mint _DataLen, uint8 const *_pKey, mint _KeyLen)
+		{
+			NDataProcessing::CHashDigest_SHA1 Return;
+			unsigned int Size = Return.fs_GetSize();
+			if
+				(
+					!HMAC
+					(
+						EVP_sha1()
+						, _pKey
+						, _KeyLen
+						, _pData
+						, _DataLen
+						, Return.f_GetData()
+						, &Size
+					)
+				)
+			{
+				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
+			}
+
+			if (Size != Return.fs_GetSize())
+				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
+
+			return Return;
+		}
+
+		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
+		{
+			return fg_MessageAuthenication_HMAC_SHA256(_Data.f_GetArray(), _Data.f_GetLen(), _Key.f_GetArray(), _Key.f_GetLen());
 		}
 
 		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CSecureByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
 		{
-			NDataProcessing::CHashDigest_SHA1 Return;
-			unsigned int Size = Return.fs_GetSize();
-			if
-				(
-					!HMAC
-					(
-						EVP_sha1()
-						, _Key.f_GetArray()
-						, _Key.f_GetLen()
-						, _Data.f_GetArray()
-						, _Data.f_GetLen()
-						, Return.f_GetData()
-						, &Size
-					)
-				)
-			{
-				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
-			}
-
-			if (Size != Return.fs_GetSize())
-				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
-
-			return Return;
+			return fg_MessageAuthenication_HMAC_SHA1(_Data.f_GetArray(), _Data.f_GetLen(), _Key.f_GetArray(), _Key.f_GetLen());
 		}
 
 		NDataProcessing::CHashDigest_SHA256 fg_MessageAuthenication_HMAC_SHA256(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
 		{
-			NDataProcessing::CHashDigest_SHA256 Return;
-			unsigned int Size = Return.fs_GetSize();
-			if
-				(
-					!HMAC
-					(
-						EVP_sha256()
-						, _Key.f_GetArray()
-						, _Key.f_GetLen()
-						, _Data.f_GetArray()
-						, _Data.f_GetLen()
-						, Return.f_GetData()
-						, &Size
-					)
-				)
-			{
-				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA256"));
-			}
-
-			if (Size != Return.fs_GetSize())
-				DMibErrorNetSSL("Failed to run HMAC-SHA256: Unexpected digest size");
-
-			return Return;
+			return fg_MessageAuthenication_HMAC_SHA256(_Data.f_GetArray(), _Data.f_GetLen(), _Key.f_GetArray(), _Key.f_GetLen());
 		}
 
 		NDataProcessing::CHashDigest_SHA1 fg_MessageAuthenication_HMAC_SHA1(NContainer::CByteVector const &_Data, NContainer::CSecureByteVector const &_Key)
 		{
-			NDataProcessing::CHashDigest_SHA1 Return;
-			unsigned int Size = Return.fs_GetSize();
-			if
-				(
-					!HMAC
-					(
-						EVP_sha1()
-						, _Key.f_GetArray()
-						, _Key.f_GetLen()
-						, _Data.f_GetArray()
-						, _Data.f_GetLen()
-						, Return.f_GetData()
-						, &Size
-					)
-				)
-			{
-				DMibErrorNetSSL(NNet::fg_GetExceptionStr("Failed to run HMAC-SHA1"));
-			}
-
-			if (Size != Return.fs_GetSize())
-				DMibErrorNetSSL("Failed to run HMAC-SHA1: Unexpected digest size");
-
-			return Return;
+			return fg_MessageAuthenication_HMAC_SHA1(_Data.f_GetArray(), _Data.f_GetLen(), _Key.f_GetArray(), _Key.f_GetLen());
 		}
 	}
 }
