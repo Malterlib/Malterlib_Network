@@ -385,229 +385,233 @@ namespace NMib
 
 		class CNetAddress
 		{			
-			protected:
-				NMib::NSys::NNet::CAddress mp_Address;
+		protected:
+			NMib::NSys::NNet::CAddress mp_Address;
 
-			public:
-				CNetAddress()
-					: mp_Address(nullptr)
-				{}
+		public:
+			CNetAddress()
+				: mp_Address(nullptr)
+			{}
 
-				explicit CNetAddress(NMib::NSys::NNet::CAddress _Address)
-					: mp_Address(_Address)
+			explicit CNetAddress(NMib::NSys::NNet::CAddress _Address)
+				: mp_Address(_Address)
+			{
+				// DMibLogCat(NNet);
+				// DMibLog(Debug, "CNetAddress::CNetAddress(CAddress)");
+			}
+
+			CNetAddress(CNetAddress&& _ToMove)
+				: mp_Address(_ToMove.mp_Address)
+			{
+				_ToMove.mp_Address = nullptr;
+				// DMibLogCat(NNet);
+				// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress&&)");
+			}
+
+			CNetAddress(CNetAddress const& _ToCopy)
+				: mp_Address(nullptr)
+			{
+				if (_ToCopy.mp_Address)
+					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
+				// DMibLogCat(NNet);
+				// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress const&)");
+			}
+
+			template<typename t_CAddress>
+			CNetAddress(t_CAddress const& _Address)
+				: mp_Address(NMib::NSys::NNet::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress)))
+			{
+			}
+
+			template<typename t_CAddress>
+			CNetAddress& operator= (t_CAddress const& _Address)
+			{
+				f_Clear();
+
+				mp_Address = NMib::NSys::NNet::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
+
+				return *this;
+			}
+
+			CNetAddress& operator= (CNetAddress&& _ToMove)
+			{
+				f_Clear();
+
+				mp_Address = _ToMove.mp_Address;
+				_ToMove.mp_Address = nullptr;
+
+				// DMibLogCat(NNet);
+				// DMibLog(Debug, "CNetAddress::operator =(CNetAddress &&)");
+
+				return *this;
+			}
+
+			CNetAddress& operator= (CNetAddress const& _ToCopy)
+			{
+				f_Clear();
+
+				if (_ToCopy.mp_Address)
+					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
+
+				// DMibLogCat(NNet);
+				// DMibLog(Debug, "CNetAddress::operator =(CNetAddress const&)");
+
+				return *this;
+			}
+
+			~CNetAddress()
+			{
+				f_Clear();
+			}
+
+			void f_Clear()
+			{
+				if (mp_Address)
 				{
-					// DMibLogCat(NNet);
-					// DMibLog(Debug, "CNetAddress::CNetAddress(CAddress)");
+					NMib::NSys::NNet::fg_FreeAddress(mp_Address);
+					mp_Address = nullptr;
 				}
+			}
 
-				CNetAddress(CNetAddress&& _ToMove)
-					: mp_Address(_ToMove.mp_Address)
-				{
-					_ToMove.mp_Address = nullptr;
-					// DMibLogCat(NNet);
-					// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress&&)");
-				}
+			void *f_Detach()
+			{
+				void *pRet = mp_Address;
+				mp_Address = nullptr;
+				return pRet;
+			}
 
-				CNetAddress(CNetAddress const& _ToCopy)
-					: mp_Address(nullptr)
-				{
-					if (_ToCopy.mp_Address)
-						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
-					// DMibLogCat(NNet);
-					// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress const&)");
-				}
+			void *f_AccessRaw() const
+			{
+				return mp_Address;
+			}
 
-				template<typename t_CAddress>
-				CNetAddress(t_CAddress const& _Address)
-					: mp_Address(NMib::NSys::NNet::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress)))
-				{
-				}
+			bint f_IsEmpty() const
+			{
+				return mp_Address == nullptr;
+			}
 
-				template<typename t_CAddress>
-				CNetAddress& operator= (t_CAddress const& _Address)
-				{
-					f_Clear();
+			NStr::CStr f_GetString(bint _bIncludeType = false) const
+			{
+				if (mp_Address == nullptr)
+					return "";
+				return NMib::NSys::NNet::fg_GetAddressString(mp_Address, _bIncludeType);
+			}
 
+			ENetAddressType f_GetType() const
+			{
+				return mp_Address ? NMib::NSys::NNet::fg_GetAddressType(mp_Address) : ENetAddressType_None;
+			}
+
+			template<typename t_CAddress>
+			bint f_Get(t_CAddress& _oAddress) const
+			{
+				return NMib::NSys::NNet::fg_GetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_oAddress, sizeof(t_CAddress));
+			}
+
+			bint f_Set(CNetAddress const& _Address)
+			{
+				f_Clear();
+				if (_Address.mp_Address)
+					mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_Address.mp_Address);
+
+				return mp_Address != nullptr;
+			}
+
+			template<typename t_CAddress>
+			bint f_Set(t_CAddress const& _Address)
+			{
+				f_Clear();
+
+				if (mp_Address)
+					mp_Address = NMib::NSys::NNet::fg_SetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
+				else
 					mp_Address = NMib::NSys::NNet::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
 
-					return *this;
-				}
-			
-				CNetAddress& operator= (CNetAddress&& _ToMove)
+				return mp_Address != nullptr;
+			}
+
+			bint f_SetPort(uint16 _Port)
+			{
+				if (!mp_Address)
+					return false;
+
+				switch(NMib::NSys::NNet::fg_GetAddressType(mp_Address))
 				{
-					f_Clear();
+					case ENetAddressType_TCPv4:
+						{
+							CNetAddressTCPv4 TCPv4;
+							if (!f_Get(TCPv4))
+								return false;
 
-					mp_Address = _ToMove.mp_Address;
-					_ToMove.mp_Address = nullptr;
+							TCPv4.m_Port = _Port;
 
-					// DMibLogCat(NNet);
-					// DMibLog(Debug, "CNetAddress::operator =(CNetAddress &&)");
+							return f_Set(TCPv4);
+						}
 
-					return *this;
-				}
+					case ENetAddressType_TCPv6:
+						{
+							CNetAddressTCPv6 TCPv6;
+							if (!f_Get(TCPv6))
+								return false;
 
-				CNetAddress& operator= (CNetAddress const& _ToCopy)
-				{
-					f_Clear();
+							TCPv6.m_Port = _Port;
 
-					if (_ToCopy.mp_Address)
-						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_ToCopy.mp_Address);
-
-					// DMibLogCat(NNet);
-					// DMibLog(Debug, "CNetAddress::operator =(CNetAddress const&)");
-
-					return *this;
-				}
-
-				~CNetAddress()
-				{
-					f_Clear();
-				}
-
-				void f_Clear()
-				{
-					if (mp_Address)
-					{
-						NMib::NSys::NNet::fg_FreeAddress(mp_Address);
-						mp_Address = nullptr;
-					}
-				}
-
-				void *f_Detach()
-				{
-					void *pRet = mp_Address;
-					mp_Address = nullptr;
-					return pRet;
-				}
-
-				void *f_AccessRaw() const
-				{
-					return mp_Address;
-				}
-
-				bint f_IsEmpty() const
-				{
-					return mp_Address == nullptr;
-				}
-
-				NStr::CStr f_GetString(bint _bIncludeType = false) const 
-				{
-					if (mp_Address == nullptr)
-						return "";
-					return NMib::NSys::NNet::fg_GetAddressString(mp_Address, _bIncludeType); 
-				}
-
-				ENetAddressType f_GetType() const
-				{
-					return mp_Address ? NMib::NSys::NNet::fg_GetAddressType(mp_Address) : ENetAddressType_None;
-				}
-
-				template<typename t_CAddress>
-				bint f_Get(t_CAddress& _oAddress) const
-				{
-					return NMib::NSys::NNet::fg_GetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_oAddress, sizeof(t_CAddress));
-				}
-
-				bint f_Set(CNetAddress const& _Address)
-				{
-					f_Clear();
-					if (_Address.mp_Address)
-						mp_Address = NMib::NSys::NNet::fg_DuplicateAddress(_Address.mp_Address);
-
-					return mp_Address != nullptr;
-				}
-
-				template<typename t_CAddress>
-				bint f_Set(t_CAddress const& _Address)
-				{
-					f_Clear();
-					
-					if (mp_Address)
-						mp_Address = NMib::NSys::NNet::fg_SetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
-					else
-						mp_Address = NMib::NSys::NNet::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
-
-					return mp_Address != nullptr;
-				}
-
-				bint f_SetPort(uint16 _Port)
-				{
-					if (!mp_Address)
+							return f_Set(TCPv6);
+						}
+					default:
 						return false;
-
-					switch(NMib::NSys::NNet::fg_GetAddressType(mp_Address))
-					{
-						case ENetAddressType_TCPv4:
-							{
-								CNetAddressTCPv4 TCPv4;
-								if (!f_Get(TCPv4))
-									return false;
-
-								TCPv4.m_Port = _Port;
-
-								return f_Set(TCPv4);
-							}
-
-						case ENetAddressType_TCPv6:
-							{
-								CNetAddressTCPv6 TCPv6;
-								if (!f_Get(TCPv6))
-									return false;
-
-								TCPv6.m_Port = _Port;
-
-								return f_Set(TCPv6);
-							}
-						default:
-							return false;
-					}
 				}
+			}
 
-				uint16 f_GetPort() const
+			uint16 f_GetPort() const
+			{
+				if (!mp_Address)
+					return 0;
+
+				switch(NMib::NSys::NNet::fg_GetAddressType(mp_Address))
 				{
-					if (!mp_Address)
+					case ENetAddressType_TCPv4:
+						{
+							CNetAddressTCPv4 TCPv4;
+							if (!f_Get(TCPv4))
+								return 0;
+
+							return TCPv4.m_Port;
+						}
+
+					case ENetAddressType_TCPv6:
+						{
+							CNetAddressTCPv6 TCPv6;
+							if (!f_Get(TCPv6))
+								return 0;
+
+							return TCPv6.m_Port;
+						}
+					default:
 						return 0;
-
-					switch(NMib::NSys::NNet::fg_GetAddressType(mp_Address))
-					{
-						case ENetAddressType_TCPv4:
-							{
-								CNetAddressTCPv4 TCPv4;
-								if (!f_Get(TCPv4))
-									return 0;
-
-								return TCPv4.m_Port;
-							}
-
-						case ENetAddressType_TCPv6:
-							{
-								CNetAddressTCPv6 TCPv6;
-								if (!f_Get(TCPv6))
-									return 0;
-
-								return TCPv6.m_Port;
-							}
-						default:
-							return 0;
-					}
 				}
+			}
 
-				operator NMib::NSys::NNet::CAddress() const
-				{
-					return mp_Address;
-				}
+			operator NMib::NSys::NNet::CAddress() const
+			{
+				return mp_Address;
+			}
 
-				bint operator==(CNetAddress const& _Other)
-				{
-					return NMib::NSys::NNet::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
-				}
+			bint operator==(CNetAddress const& _Other)
+			{
+				return NMib::NSys::NNet::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
+			}
 
-				bint operator<(CNetAddress const& _Other)
-				{
-					return NMib::NSys::NNet::fg_CompareAddresses(mp_Address, _Other.mp_Address) < 0;
-				}
+			bint operator<(CNetAddress const& _Other)
+			{
+				return NMib::NSys::NNet::fg_CompareAddresses(mp_Address, _Other.mp_Address) < 0;
+			}
 
-
+			template <typename tf_CStr>
+			void f_Format(tf_CStr &o_Str) const
+			{
+				o_Str += f_GetString();
+			}
 		};
 
 		class CAsyncResolver
