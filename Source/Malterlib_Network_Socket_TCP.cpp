@@ -143,7 +143,7 @@ namespace NMib
 		
 		FVirtualSocketFactory CSocket_TCP::fs_GetFactory()
 		{
-			return []() -> NPtr::TCUniquePointer<ICSocket>
+			return [](NStr::CStr const &_Hostname) -> NPtr::TCUniquePointer<ICSocket>
 				{
 					return fg_Construct<CSocket_TCP>();
 				}

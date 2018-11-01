@@ -25,6 +25,7 @@ namespace NMib
 					NPtr::TCSharedPointer<CSSLContext> const &_pContext
 					, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
 					, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
+				 	, NStr::CStr const &_Hostname
 				)
 			;
 			virtual ~CSocket_SSL() override;

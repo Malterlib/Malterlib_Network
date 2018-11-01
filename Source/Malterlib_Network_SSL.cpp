@@ -3198,9 +3198,16 @@ namespace NMib
 		{
 		public:
 
-			CInternal(CSSLConnection *_pSSL, NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustCallback)
+			CInternal
+				(
+				 	CSSLConnection *_pSSL
+				 	, NPtr::TCSharedPointer<CSSLContext> const &_pContext
+				 	, FAuthenticationResultCallback &&_AuthenticationResultCallback
+				 	, FUserTrustDecisionCallback &&_UserTrustCallback
+				 	, NStr::CStr const &_Hostname
+				)
 				: mp_pSSL(_pSSL)
-				, mp_pSession(nullptr)
+				, mp_pSession(mp_pContext->fp_CreateSession())
 				, mp_pContext(_pContext)
 				, mp_State(EState_None)
 				, mp_bConnected(false)
@@ -3209,7 +3216,12 @@ namespace NMib
 				, mp_bHandshakeInProgress(false)
 				, mp_bUsingTrustDecision(false)
 			{
-				mp_pSession = mp_pContext->fp_CreateSession();
+				if (_Hostname)
+				{
+					ERR_clear_error();
+					if (!SSL_set_tlsext_host_name(mp_pSession->f_GetSSL(), _Hostname.f_GetStr()))
+						DMibErrorNetSSL(fg_GetExceptionStr("Failed to set hostname in SSL"));
+				}
 			}
 
 			~CInternal()
@@ -3471,7 +3483,6 @@ namespace NMib
 		protected:
 
 			CSSLConnection* mp_pSSL;
-			NPtr::TCUniquePointer<CSSLContext::CSession> mp_pSession;
 			NPtr::TCSharedPointer<CSSLContext> mp_pContext;
 
 			NStr::CStr mp_Hostname;
@@ -3481,6 +3492,7 @@ namespace NMib
 			FUserTrustDecisionCallback mp_UserTrustCallback;
 
 			CSSLConnectionResult mp_ExpectedResultCallback;
+			NPtr::TCUniquePointer<CSSLContext::CSession> mp_pSession;
 
 			bool mp_bConnected;
 			bool mp_bHandshakeInProgress;
@@ -3664,14 +3676,20 @@ namespace NMib
 
 		};
 
-		CSSLConnection::CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustDecisionCallback)
+		CSSLConnection::CSSLConnection
+			(
+			 	NPtr::TCSharedPointer<CSSLContext> const &_pContext
+			 	, FAuthenticationResultCallback &&_AuthenticationResultCallback
+			 	, FUserTrustDecisionCallback &&_UserTrustDecisionCallback
+			 	, NStr::CStr const &_Hostname
+			)
 			: mp_pInternal(nullptr)
 		{
 			fg_RunProtectRegisters
 				(
 					[&]() -> decltype(auto)
 					{
-						mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback));
+						mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback), _Hostname);
 					}
 				)
 			;

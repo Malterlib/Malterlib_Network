@@ -43,7 +43,7 @@ namespace NMib
 			virtual NPtr::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;
 		};
 		
-		using FVirtualSocketFactory = NFunction::TCFunction<NPtr::TCUniquePointer<ICSocket> ()>;
+		using FVirtualSocketFactory = NFunction::TCFunction<NPtr::TCUniquePointer<ICSocket> (NStr::CStr const &_Hostname)>;
 	}
 }
 

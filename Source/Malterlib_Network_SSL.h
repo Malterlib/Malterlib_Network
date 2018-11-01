@@ -223,7 +223,14 @@ namespace NMib
 			typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)> FAuthenticationResultCallback;
 			typedef NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)> FUserTrustDecisionCallback;
 
-			CSSLConnection(NPtr::TCSharedPointer<CSSLContext> const &_pContext, FAuthenticationResultCallback &&_AuthenticationResultCallback, FUserTrustDecisionCallback &&_UserTrustDecisionCallback);
+			CSSLConnection
+				(
+				 	NPtr::TCSharedPointer<CSSLContext> const &_pContext
+				 	, FAuthenticationResultCallback &&_AuthenticationResultCallback
+				 	, FUserTrustDecisionCallback &&_UserTrustDecisionCallback
+				 	, NStr::CStr const &_Hostname
+				)
+			;
 			~CSSLConnection();
 
 			bool f_GiveSocket(void *_pSocket);

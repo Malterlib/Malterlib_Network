@@ -10,11 +10,12 @@ namespace NMib
 				NPtr::TCSharedPointer<CSSLContext> const &_pContext
 				, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
 				, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
+			 	, NStr::CStr const &_Hostname
 			)
 			: mp_pSSLContext(_pContext)
 			, mp_AuthenticationResultCallback(_AuthenticationResultCallback)
 			, mp_UserTrustDecisionCallback(_UserTrustDecisionCallback)
-			, mp_SSLConnection(_pContext, fg_TempCopy(_AuthenticationResultCallback), fg_TempCopy(_UserTrustDecisionCallback))
+			, mp_SSLConnection(_pContext, fg_TempCopy(_AuthenticationResultCallback), fg_TempCopy(_UserTrustDecisionCallback), _Hostname)
 		{
 		}
 
@@ -104,7 +105,7 @@ namespace NMib
 
 		NPtr::TCUniquePointer<ICSocket> CSocket_SSL::f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange)
 		{
-			NPtr::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_AuthenticationResultCallback, mp_UserTrustDecisionCallback);
+			NPtr::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_AuthenticationResultCallback, mp_UserTrustDecisionCallback, "");
 			pSocket->mp_OnStateChange = fg_Move(_OnStateChange);
 			pSocket->mp_Socket.f_Accept(&mp_Socket, pSocket->fp_SharedOnStateChange());
 			if (!pSocket->mp_Socket.f_IsValid())
@@ -241,9 +242,9 @@ namespace NMib
 				, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
 			)
 		{
-			return [=]() -> NPtr::TCUniquePointer<ICSocket>
+			return [=](NStr::CStr const &_Hostname) -> NPtr::TCUniquePointer<ICSocket>
 				{
-					return fg_Construct<CSocket_SSL>(_pContext, _AuthenticationResultCallback, _UserTrustDecisionCallback);
+					return fg_Construct<CSocket_SSL>(_pContext, _AuthenticationResultCallback, _UserTrustDecisionCallback, _Hostname);
 				}
 			;
 		}
