@@ -7,6 +7,11 @@
 #include "Malterlib_Network_SSLKeySetting.h"
 #include <Mib/Memory/Allocators/Secure>
 
+extern "C"
+{
+	typedef struct x509_store_st X509_STORE;
+}
+
 namespace NMib
 {
 	namespace NNet
@@ -394,6 +399,8 @@ namespace NMib
 					, NNet::CSSLKeySetting _KeySetting = CSSLKeySettings_EC_secp521r1{}
 				)
 			;
+
+			static void fs_GetSystemCertificates(X509_STORE *_pCertificateStoreStore);
 
 		protected:
 			class CSession;

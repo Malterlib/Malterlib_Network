@@ -212,6 +212,9 @@ namespace NMib
 #ifndef DMibSSLLibrary_BoringSSL
 				~CSSLLowLevel()
 				{
+					if (m_pSystemCertStore)
+						X509_STORE_free(m_pSystemCertStore);
+
 					fg_RunProtectRegisters
 						(
 							[&]() -> decltype(auto)
@@ -271,14 +274,22 @@ namespace NMib
 					(void)Test;
 				}
 #else
+				~CSSLLowLevel()
+				{
+					if (m_pSystemCertStore)
+						X509_STORE_free(m_pSystemCertStore);
+				}
+
 				void f_UseInThread()
 				{
 				}
 #endif
-				
+
+ 				NMib::NThread::CMutual m_SystemCertStoreLock;
+				X509_STORE *m_pSystemCertStore = nullptr;
 			};
 
-			NAggregate::TCAggregate<CSSLLowLevel> g_SSLLowLevel = {DAggregateInit};
+			NAggregate::TCAggregate<CSSLLowLevel, 129> g_SSLLowLevel = {DAggregateInit};
 			
 			struct CSSLLowLevelDataIndex
 			{
@@ -289,7 +300,7 @@ namespace NMib
 				int m_ExDataIndex = 0;
 			};
 			
-			NAggregate::TCAggregate<CSSLLowLevelDataIndex> g_SSLLowLevelDataIndex = {DAggregateInit};
+			NAggregate::TCAggregate<CSSLLowLevelDataIndex, 129> g_SSLLowLevelDataIndex = {DAggregateInit};
 
 #ifndef DMibSSLLibrary_BoringSSL
 			static void fg_SSLLockingCallback(int _Mode, int _Type, char const* _File, int _Line)
@@ -1881,178 +1892,11 @@ namespace NMib
 					DMibErrorNetSSL(fg_GetExceptionStr("Certificate private and public key verfication failed"));
 			}
 
-		#if defined(DPlatformFamily_Windows)
-
-			#include <Wincrypt.h>
-			#pragma comment(lib, "crypt32.lib")
-
 			void fp_LoadTrustedStoreFromOS()
 			{
 				g_SSLLowLevel->f_UseInThread();
-				
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
-
-				auto fl_LoadFromStore = [&] (LPCWSTR _pStore)
-				{
-					HCERTSTORE hStore = CertOpenSystemStore(NULL, _pStore);
-					for (PCCERT_CONTEXT pCertContext = CertEnumCertificatesInStore(hStore, nullptr); pCertContext; pCertContext = CertEnumCertificatesInStore(hStore, pCertContext))
-					{
-						NStr::CStr OutputType = fsp_IsPKCS7(pCertContext->dwCertEncodingType) ? "PKCS7" : "CERTIFICATE";
-						NContainer::TCVector<uint8> Data;
-						Data.f_Insert(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
-						NStr::CStr CertData = NDataProcessing::fg_Base64Encode(Data);
-						NStr::CStr CertAsString = NStr::CStr::CFormat("-----BEGIN {}-----\n{}\n-----END {}-----\n") << OutputType << CertData << OutputType;
-
-						NContainer::TCVector<uint8> lCertData;
-						lCertData.f_SetLen(CertAsString.f_GetLen());
-						NMem::fg_MemCopy(lCertData.f_GetArray(), CertAsString.f_GetStr(), CertAsString.f_GetLen());
-
-						X509 *pCertificate;
-						try
-						{
-							pCertificate = fs_LoadCertificate(lCertData);
-						}
-						catch (CExceptionNetSSL const &)
-						{
-							continue;
-						}
-						auto Cleanup0 = g_OnScopeExit > [&]
-							{
-								X509_free(pCertificate);
-							}
-						;
-
-						X509_STORE_add_cert(pStore, pCertificate);
-					}
-
-					CertCloseStore(hStore, 0);
-				};
-
-				fl_LoadFromStore(L"ROOT");
-				fl_LoadFromStore(L"CA");
-			}
-
-			static bool fsp_IsPKCS7(DWORD _EncodeType)
-			{
-				return ((_EncodeType & PKCS_7_ASN_ENCODING) == PKCS_7_ASN_ENCODING);
-			}
-
-		#elif defined(DPlatformFamily_OSX)
-			
-			void fp_LoadTrustedStoreFromOS()
-			{
-				g_SSLLowLevel->f_UseInThread();
-
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
-				
-				auto fAddTrustStore = [&](CFArrayRef pCerts)
-					{
-						for (int i = 0; i < CFArrayGetCount(pCerts); ++i)
-						{
-							SecCertificateRef CertRef = reinterpret_cast<SecCertificateRef>(const_cast<void*>(CFArrayGetValueAtIndex(pCerts, i)));
-							
-							X509 *pCertificate;
-			#if DPlatformVersionMax >= 1060
-							if (CSystem::ms_PlatformVersion >= 10'06'00)
-							{
-								CFDataRef DERCert = SecCertificateCopyData(CertRef);
-								if (!DERCert)
-									continue;
-								
-								unsigned const char *pDERCert = CFDataGetBytePtr(DERCert);
-								mint DataLength = CFDataGetLength(DERCert);
-								pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
-								CFRelease(DERCert);
-							}
-							else
-			#endif
-							{
-								DMibDeprecatedSupressStart;
-								// This code is not tested. Is it in the right format?
-								CSSM_DATA certCSSMData;
-								if (SecCertificateGetData(CertRef, &certCSSMData) != 0 || certCSSMData.Length == 0)
-									continue;
-								unsigned const char *pDERCert = certCSSMData.Data;
-								mint DataLength = certCSSMData.Length;
-								pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
-								DMibDeprecatedSupressStop;
-							}
-							
-							if (!pCertificate)
-								continue;
-							
-							auto Cleanup = g_OnScopeExit > [&]
-								{
-									X509_free(pCertificate);
-								}
-							;
-
-							X509_STORE_add_cert(pStore, pCertificate);
-						}
-						CFRelease(pCerts);
-					}
-				;
-
-				if (CSystem::ms_PlatformVersion >= 10'05'00)
-				{
-					CFArrayRef pCerts;
-					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainSystem, &pCerts) == 0)
-						fAddTrustStore(pCerts);
-					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainAdmin, &pCerts) == 0)
-						fAddTrustStore(pCerts);
-					if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainUser, &pCerts) == 0)
-						fAddTrustStore(pCerts);
- 				}
-				else
-				{
-					CFArrayRef pCerts;
-					if (SecTrustCopyAnchorCertificates(&pCerts) == 0)
-						fAddTrustStore(pCerts);
-				}
-			}
-			
-		#else
-
-			void fp_LoadTrustedStoreFromOS()
-			{
-				g_SSLLowLevel->f_UseInThread();
-				auto fl_LoadCerts =
-					[&](NStr::CStr const  &_File) -> bool
-					{
-						try
-						{
-							if (!NFile::CFile::fs_FileExists(_File, NFile::EFileAttrib_File))
-							{
-								DMibLog(Debug, "Unable to find: {}", _File);
-								return false;
-							}
-						}
-						catch (NFile::CExceptionFile const  &_Exception)
-						{
-							DMibLog(Debug, "Exception trying to check file exists on: {}. The error reported was {}", _File, _Exception.f_GetErrorStr());
-							return false;
-						}
-				
-						int Ret = SSL_CTX_load_verify_locations(mp_pContext, _File.f_GetStr(), nullptr);
-						if (Ret == 0)
-						{
-							DMibLog(Debug, "Failed to load SSL verify location: {}. The error reported was {}", _File, fg_GetErrors());
-							return false;
-						}
-						else
-						{
-							DMibLog(Debug, "Successfully added {} to SSL verify locations", _File);
-							return true;
-						}
-					};
-				
-				if (fl_LoadCerts("/etc/ssl/certs/ca-certificates.crt"))
-					return;
-				else if (fl_LoadCerts("/etc/ssl/certs/ca-bundle.crt"))
-					return;
-			}
-
-		#endif
+				fs_GetSystemCertificates(SSL_CTX_get_cert_store(mp_pContext));
+			};
 
 			SSL_CTX* mp_pContext;
 
@@ -3191,6 +3035,197 @@ namespace NMib
  					}
 				)
 			;
+		}
+
+		namespace
+		{
+			X509_STORE *fg_ExtractSystemCertificates()
+			{
+				auto pStore = X509_STORE_new();
+
+				g_SSLLowLevel->f_UseInThread();
+
+				#if defined(DPlatformFamily_Windows)
+
+					#include <Wincrypt.h>
+					#pragma comment(lib, "crypt32.lib")
+
+					auto fIsPKCS7 = [](DWORD _EncodeType)
+						{
+							return ((_EncodeType & PKCS_7_ASN_ENCODING) == PKCS_7_ASN_ENCODING);
+						}
+					;
+
+					auto fLoadFromStore = [&] (LPCWSTR _pStore)
+					{
+						HCERTSTORE hStore = CertOpenSystemStore(NULL, _pStore);
+						for (PCCERT_CONTEXT pCertContext = CertEnumCertificatesInStore(hStore, nullptr); pCertContext; pCertContext = CertEnumCertificatesInStore(hStore, pCertContext))
+						{
+							NStr::CStr OutputType = fIsPKCS7(pCertContext->dwCertEncodingType) ? "PKCS7" : "CERTIFICATE";
+							NContainer::TCVector<uint8> Data;
+							Data.f_Insert(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded);
+							NStr::CStr CertData = NDataProcessing::fg_Base64Encode(Data);
+							NStr::CStr CertAsString = NStr::CStr::CFormat("-----BEGIN {}-----\n{}\n-----END {}-----\n") << OutputType << CertData << OutputType;
+
+							NContainer::TCVector<uint8> lCertData;
+							lCertData.f_SetLen(CertAsString.f_GetLen());
+							NMem::fg_MemCopy(lCertData.f_GetArray(), CertAsString.f_GetStr(), CertAsString.f_GetLen());
+
+							X509 *pCertificate;
+							try
+							{
+								pCertificate = fs_LoadCertificate(lCertData);
+							}
+							catch (CExceptionNetSSL const &)
+							{
+								continue;
+							}
+							auto Cleanup0 = g_OnScopeExit > [&]
+								{
+									X509_free(pCertificate);
+								}
+							;
+
+							X509_STORE_add_cert(pStore, pCertificate);
+						}
+
+						CertCloseStore(hStore, 0);
+					};
+
+					fLoadFromStore(L"ROOT");
+					fLoadFromStore(L"CA");
+
+				#elif defined(DPlatformFamily_OSX)
+
+					auto fAddTrustStore = [&](CFArrayRef pCerts)
+						{
+							for (int i = 0; i < CFArrayGetCount(pCerts); ++i)
+							{
+								SecCertificateRef CertRef = reinterpret_cast<SecCertificateRef>(const_cast<void*>(CFArrayGetValueAtIndex(pCerts, i)));
+
+								X509 *pCertificate;
+				#if DPlatformVersionMax >= 1060
+								if (CSystem::ms_PlatformVersion >= 10'06'00)
+								{
+									CFDataRef DERCert = SecCertificateCopyData(CertRef);
+									if (!DERCert)
+										continue;
+
+									unsigned const char *pDERCert = CFDataGetBytePtr(DERCert);
+									mint DataLength = CFDataGetLength(DERCert);
+									pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
+									CFRelease(DERCert);
+								}
+								else
+				#endif
+								{
+									DMibDeprecatedSupressStart;
+									// This code is not tested. Is it in the right format?
+									CSSM_DATA certCSSMData;
+									if (SecCertificateGetData(CertRef, &certCSSMData) != 0 || certCSSMData.Length == 0)
+										continue;
+									unsigned const char *pDERCert = certCSSMData.Data;
+									mint DataLength = certCSSMData.Length;
+									pCertificate = d2i_X509(nullptr, &pDERCert, DataLength);
+									DMibDeprecatedSupressStop;
+								}
+
+								if (!pCertificate)
+									continue;
+
+								auto Cleanup = g_OnScopeExit > [&]
+									{
+										X509_free(pCertificate);
+									}
+								;
+
+								X509_STORE_add_cert(pStore, pCertificate);
+							}
+							CFRelease(pCerts);
+						}
+					;
+
+					if (CSystem::ms_PlatformVersion >= 10'05'00)
+					{
+						CFArrayRef pCerts;
+						if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainSystem, &pCerts) == 0)
+							fAddTrustStore(pCerts);
+						if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainAdmin, &pCerts) == 0)
+							fAddTrustStore(pCerts);
+						if (SecTrustSettingsCopyCertificates(kSecTrustSettingsDomainUser, &pCerts) == 0)
+							fAddTrustStore(pCerts);
+					}
+					else
+					{
+						CFArrayRef pCerts;
+						if (SecTrustCopyAnchorCertificates(&pCerts) == 0)
+							fAddTrustStore(pCerts);
+					}
+
+				#else
+
+					auto fLoadCerts =
+						[&](NStr::CStr const  &_File) -> bool
+						{
+							try
+							{
+								if (!NFile::CFile::fs_FileExists(_File, NFile::EFileAttrib_File))
+								{
+									DMibLog(Debug, "Unable to find: {}", _File);
+									return false;
+								}
+							}
+							catch (NFile::CExceptionFile const  &_Exception)
+							{
+								DMibLog(Debug, "Exception trying to check file exists on: {}. The error reported was {}", _File, _Exception.f_GetErrorStr());
+								return false;
+							}
+
+							int Ret = X509_STORE_load_locations(pStore, _File.f_GetStr(), nullptr);
+							if (Ret == 0)
+							{
+								DMibLog(Debug, "Failed to load SSL verify location: {}. The error reported was {}", _File, fg_GetErrors());
+								return false;
+							}
+							else
+							{
+								DMibLog(Debug, "Successfully added {} to SSL verify locations", _File);
+								return true;
+							}
+						}
+					;
+
+					if (fLoadCerts("/etc/ssl/certs/ca-certificates.crt"))
+						;
+					else if (fLoadCerts("/etc/ssl/certs/ca-bundle.crt"))
+						;
+
+				#endif
+
+				return pStore;
+			}
+		}
+
+		void CSSLContext::fs_GetSystemCertificates(X509_STORE *_pCertificateStoreStore)
+		{
+			auto &LowLevel = *g_SSLLowLevel;
+
+			if (!LowLevel.m_pSystemCertStore)
+			{
+				DMibLock(LowLevel.m_SystemCertStoreLock);
+				if (!LowLevel.m_pSystemCertStore)
+					LowLevel.m_pSystemCertStore = fg_ExtractSystemCertificates();
+			}
+
+			STACK_OF(X509_OBJECT) *certs = X509_STORE_get0_objects(LowLevel.m_pSystemCertStore);
+			/* Look for exact match */
+			for (int i = 0; i < sk_X509_OBJECT_num(certs); i++)
+			{
+				X509_OBJECT const *pObject = sk_X509_OBJECT_value(certs, i);
+				if (pObject->type != X509_LU_X509)
+					continue;
+				X509_STORE_add_cert(_pCertificateStoreStore, pObject->data.x509);
+			}
 		}
 
 		// CSSLConnection methods.
