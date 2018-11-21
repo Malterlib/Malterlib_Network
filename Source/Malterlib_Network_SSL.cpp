@@ -38,13 +38,19 @@ extern "C"
 #endif
 
 #if defined(DPlatformFamily_Windows)
-#include <Windows.h>
-#  undef X509_NAME
-#  undef X509_EXTENSIONS
-#  undef PKCS7_ISSUER_AND_SERIAL
-#  undef OCSP_REQUEST
-#  undef OCSP_RESPONSE
-#include <Mib/Core/PlatformSpecific/WindowsError>
+
+	#include <Windows.h>
+	#include <Wincrypt.h>
+
+	#undef X509_NAME
+	#undef X509_EXTENSIONS
+	#undef PKCS7_ISSUER_AND_SERIAL
+	#undef OCSP_REQUEST
+	#undef OCSP_RESPONSE
+
+	#include <Mib/Core/PlatformSpecific/WindowsError>
+
+	#pragma comment(lib, "crypt32.lib")
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
 	{
@@ -3046,9 +3052,6 @@ namespace NMib
 				g_SSLLowLevel->f_UseInThread();
 
 				#if defined(DPlatformFamily_Windows)
-
-					#include <Wincrypt.h>
-					#pragma comment(lib, "crypt32.lib")
 
 					auto fIsPKCS7 = [](DWORD _EncodeType)
 						{
