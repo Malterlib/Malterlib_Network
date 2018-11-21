@@ -402,13 +402,13 @@ namespace NMib
 
 			static void fs_GetSystemCertificates(X509_STORE *_pCertificateStoreStore);
 
+			class CInternal;
 		protected:
 			class CSession;
 			NPtr::TCUniquePointer<CSession> fp_CreateSession();
 
 			friend class CSSLConnectionResult;
 			friend class CSSLConnection::CInternal;
-			class CInternal;
 
 			NPtr::TCUniquePointer<CInternal> mp_pInternal;
 

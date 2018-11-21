@@ -3074,7 +3074,7 @@ namespace NMib
 							X509 *pCertificate;
 							try
 							{
-								pCertificate = fs_LoadCertificate(lCertData);
+								pCertificate = CSSLContext::CInternal::fs_LoadCertificate(lCertData);
 							}
 							catch (CExceptionNetSSL const &)
 							{
