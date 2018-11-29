@@ -3222,7 +3222,7 @@ namespace NMib
 
 			STACK_OF(X509_OBJECT) *certs = X509_STORE_get0_objects(LowLevel.m_pSystemCertStore);
 			/* Look for exact match */
-			for (int i = 0; i < sk_X509_OBJECT_num(certs); i++)
+			for (mint i = 0; i < sk_X509_OBJECT_num(certs); i++)
 			{
 				X509_OBJECT const *pObject = sk_X509_OBJECT_value(certs, i);
 				if (pObject->type != X509_LU_X509)
