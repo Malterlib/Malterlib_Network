@@ -6,7 +6,7 @@
 #include <Mib/Test/Exception>
 
 using namespace NMib;
-using namespace NMib::NNet;
+using namespace NMib::NNetwork;
 using namespace NMib::NStr;
 using namespace NMib::NContainer;
 
@@ -71,7 +71,7 @@ public:
 				ClientExtensionCritical.m_Value = "Test3";
 				ClientExtensionCritical.m_bCritical = true;
 				
-				TCVector<uint8> CertificateRequestData;
+				CByteVector CertificateRequestData;
 				CSSLContext::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
 				CSSLContext::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
 				
@@ -95,7 +95,7 @@ public:
 				ClientExtensionCritical.m_Value = "Test3";
 				ClientExtensionCritical.m_bCritical = true;
 				
-				TCVector<uint8> CertificateRequestData;
+				CByteVector CertificateRequestData;
 				CSSLContext::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
 				CSSLContext::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
 				
@@ -111,11 +111,11 @@ public:
 			
 			CSecureByteVector Salt = f_GetRandomBuffer(8, 1);
 
-			CEncryptAES EncryptAES(NNet::CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
+			CEncryptAES EncryptAES(NNetwork::CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 			
-			TCVector<uint8> PlainText;
-			TCVector<uint8> Decrypted;
-			TCVector<uint8> Encrypted;
+			CByteVector PlainText;
+			CByteVector Decrypted;
+			CByteVector Encrypted;
 			
 			PlainText = f_GetRandomBuffer(32, 7);
 
@@ -130,7 +130,7 @@ public:
 			{
 				DMibTestPath("IncorrectPassword");
 				CStrSecure IncorrectPassword("MalterlibPasswordTest2");
-				CEncryptAES EncryptAES1(NNet::CEncryptKeyIV::fs_GenerateKeyIV(IncorrectPassword, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
+				CEncryptAES EncryptAES1(NNetwork::CEncryptKeyIV::fs_GenerateKeyIV(IncorrectPassword, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 				EncryptAES1.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, !=, PlainText);
 			}
@@ -139,17 +139,17 @@ public:
 				DMibTestPath("IncorrectSalt");
 				CSecureByteVector IncorrectSalt = f_GetRandomBuffer(8, 2);
 
-				CEncryptAES EncryptAES2(NNet::CEncryptKeyIV::fs_GenerateKeyIV(Password, IncorrectSalt, CKeyDerivationSettings_PKCS5_Deprecated{}));
+				CEncryptAES EncryptAES2(NNetwork::CEncryptKeyIV::fs_GenerateKeyIV(Password, IncorrectSalt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 				EncryptAES2.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray());
 				DMibExpect(Decrypted, !=, PlainText);
 			}
 			
 			{
 				DMibTestPath("Unaligned Plaintext");
-				TCVector<uint8> Unaligned;
+				CByteVector Unaligned;
 				Unaligned.f_SetLen(14);
 				
-				CEncryptAES EncryptAES3(NNet::CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
+				CEncryptAES EncryptAES3(NNetwork::CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{}));
 				
 				DMibTest
 					(
@@ -169,16 +169,20 @@ public:
 					}
 				;
 				
-				TCVector<uint8> EncryptedOpenSSL;
+				CByteVector EncryptedOpenSSL;
 				EncryptedOpenSSL.f_SetLen(32);
-				NMem::fg_MemCopy(EncryptedOpenSSL.f_GetArray(), EncryptedByOpenSSL, 32);
+				NMemory::fg_MemCopy(EncryptedOpenSSL.f_GetArray(), EncryptedByOpenSSL, 32);
 				
-				TCVector<uint8> ToEncrypt;
+				CByteVector ToEncrypt;
 				ToEncrypt.f_SetLen(32);
-				NMem::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
+				NMemory::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
 				
 				NStr::CStrSecure OpenSSLPassword("ABCDEFGH");
-				CEncryptAES EncryptAES4(NNet::CEncryptKeyIV::fs_GenerateKeyIV(OpenSSLPassword, {}, CKeyDerivationSettings_PKCS5_Deprecated{ESSLDigest_SHA256, 1}, ESSLCrypto_AES_256_CBC));
+				CEncryptAES EncryptAES4
+					(
+					 	NNetwork::CEncryptKeyIV::fs_GenerateKeyIV(OpenSSLPassword, {}, CKeyDerivationSettings_PKCS5_Deprecated{ESSLDigest_SHA256, 1}, ESSLCrypto_AES_256_CBC)
+					)
+				;
 
 				EncryptAES4.f_Encrypt(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen(), Encrypted.f_GetArray());
 				DMibExpect(EncryptedOpenSSL, ==, Encrypted);
@@ -207,9 +211,9 @@ public:
 
 			CSecureByteVector Salt = f_GetRandomBuffer(8, 3);
 
-			TCVector<uint8> PlainText;
-			TCVector<uint8> Decrypted;
-			TCVector<uint8> Encrypted;
+			CByteVector PlainText;
+			CByteVector Decrypted;
+			CByteVector Encrypted;
 			uint32 EncryptedLen;
 			uint32 DecryptedLen;
 			uint32 BlockSize;
@@ -242,8 +246,8 @@ public:
 				{
 					// Check that we, after a re-initialize, can decrypt and finalize the last block to get the correct length
 					CSecureByteVector IV;
-					NMem::fg_MemCopy(IV.f_GetArray(BlockSize), Encrypted.f_GetArray() + EncryptedLen - 2 * BlockSize, BlockSize);
-					CIncrementalEncrypt DecryptAES2(ESSLCryptoFlags_Decrypt | ESSLCryptoFlags_UsePadding, NNet::CEncryptKeyIV{KeyIV.m_Key, IV});
+					NMemory::fg_MemCopy(IV.f_GetArray(BlockSize), Encrypted.f_GetArray() + EncryptedLen - 2 * BlockSize, BlockSize);
+					CIncrementalEncrypt DecryptAES2(ESSLCryptoFlags_Decrypt | ESSLCryptoFlags_UsePadding, NNetwork::CEncryptKeyIV{KeyIV.m_Key, IV});
 					DecryptedLen = DecryptAES2.f_Decrypt(Encrypted.f_GetArray() + EncryptedLen - BlockSize, BlockSize, Decrypted.f_GetArray(BlockSize * 2));
 					DecryptedLen += DecryptAES2.f_FinalizePaddedDecrypt(Decrypted.f_GetArray() + DecryptedLen, Decrypted.f_GetLen() - DecryptedLen);
 					DMibExpect(DecryptedLen, ==, Length % BlockSize);
@@ -300,13 +304,13 @@ public:
 					}
 				;
 
-				TCVector<uint8> EncryptedOpenSSL;
+				CByteVector EncryptedOpenSSL;
 				EncryptedOpenSSL.f_SetLen(32);
-				NMem::fg_MemCopy(EncryptedOpenSSL.f_GetArray(), EncryptedByOpenSSL, 32);
+				NMemory::fg_MemCopy(EncryptedOpenSSL.f_GetArray(), EncryptedByOpenSSL, 32);
 
-				TCVector<uint8> ToEncrypt;
+				CByteVector ToEncrypt;
 				ToEncrypt.f_SetLen(32);
-				NMem::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
+				NMemory::fg_MemClear(ToEncrypt.f_GetArray(), ToEncrypt.f_GetLen());
 
 				NStr::CStrSecure OpenSSLPassword("ABCDEFGH");
 				auto KeyIV = CEncryptKeyIV::fs_GenerateKeyIV(OpenSSLPassword, {}, CKeyDerivationSettings_PKCS5_Deprecated{ESSLDigest_SHA256, 1}, ESSLCrypto_AES_256_CBC);
@@ -347,9 +351,9 @@ public:
 					, {ESSLCrypto_AES_128_ECB, "ESSLCrypto_AES_128_ECB"}
 				}
 			;
-			TCVector<uint8> PlainText;
-			TCVector<uint8> Decrypted;
-			TCVector<uint8> Encrypted;
+			CByteVector PlainText;
+			CByteVector Decrypted;
+			CByteVector Encrypted;
 			uint32 EncryptedLen;
 			uint32 DecryptedLen;
 			// Use multiple lengths: We do not use paddingin this test so stick to blocks that are multiples of the block size
@@ -366,7 +370,7 @@ public:
 					ESSLCrypto const CipherKey = Ciphers.fs_GetKey(Cipher);
 					DMibTestPath(fg_Format("Cipher: {} Length: {}", Cipher, Length));
 
-					NNet::CEncryptKeyIV KeyIV{Buffer, Buffer, CipherKey};
+					NNetwork::CEncryptKeyIV KeyIV{Buffer, Buffer, CipherKey};
 					CIncrementalEncrypt EncryptAES(ESSLCryptoFlags_Encrypt, KeyIV);
 					CIncrementalEncrypt DecryptAES(ESSLCryptoFlags_Decrypt, KeyIV);
 					EncryptedLen = EncryptAES.f_Encrypt(PlainText.f_GetArray(), PlainText.f_GetLen(), Encrypted.f_GetArray());
@@ -388,10 +392,10 @@ public:
 
 			static const char *Text = "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.";
 			static const char *KeyBytes = "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz012345";
-			TCVector<uint8> PlainText;
-			NMem::fg_MemCopy(PlainText.f_GetArray(fg_StrLen(Text)), Text, fg_StrLen(Text));
+			CByteVector PlainText;
+			NMemory::fg_MemCopy(PlainText.f_GetArray(fg_StrLen(Text)), Text, fg_StrLen(Text));
 			CSecureByteVector Key;
-			NMem::fg_MemCopy(Key.f_GetArray(fg_StrLen(KeyBytes)), KeyBytes, fg_StrLen(KeyBytes));
+			NMemory::fg_MemCopy(Key.f_GetArray(fg_StrLen(KeyBytes)), KeyBytes, fg_StrLen(KeyBytes));
 
 			auto ContinuousHMAC =  fg_MessageAuthenication_HMAC_SHA256(PlainText, Key);
 
@@ -409,7 +413,7 @@ public:
 					int ThisTime = fg_Min(Lengths[0] - i, Lengths[i]);
 					IncrementalHMAC.f_Update(PlainText.f_GetArray() + i, ThisTime);
 				}
-				NDataProcessing::CHashDigest_SHA256 Result;
+				NCryptography::CHashDigest_SHA256 Result;
 				auto nBytes = IncrementalHMAC.f_Finalize(Result.f_GetData(), Result.fs_GetSize());
 				DMibExpect(Result, ==, ContinuousHMAC);
 				DMibExpect(nBytes, ==, ContinuousHMAC.fs_GetSize());
@@ -420,7 +424,7 @@ public:
 				Key[0] = 'A';
 				CIncrementalHMAC IncrementalHMAC(ESSLDigest_SHA256, Key);
 				IncrementalHMAC.f_Update(PlainText.f_GetArray(), Lengths[0]);
-				NDataProcessing::CHashDigest_SHA256 Result;
+				NCryptography::CHashDigest_SHA256 Result;
 				auto nBytes = IncrementalHMAC.f_Finalize(Result.f_GetData(), Result.fs_GetSize());
 				DMibExpect(Result, !=, ContinuousHMAC);
 				DMibExpect(nBytes, ==, ContinuousHMAC.fs_GetSize());
@@ -431,7 +435,7 @@ public:
 		{
 			static const char *Text = "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.";
 			CSecureByteVector Message;
-			NMem::fg_MemCopy(Message.f_GetArray(fg_StrLen(Text)), Text, fg_StrLen(Text));
+			NMemory::fg_MemCopy(Message.f_GetArray(fg_StrLen(Text)), Text, fg_StrLen(Text));
 			CSecureByteVector Truncated(Message);
 			Truncated.f_SetLen(Truncated.f_GetLen() - 1);
 
@@ -453,7 +457,7 @@ public:
 				NContainer::CSecureByteVector PrivateKey;
 				NContainer::CSecureByteVector PublicKey;
 				CSSLContext::fs_GenerateKeys(PrivateKey, PublicKey, KeySettings);
-				NContainer::CSecureByteVector Signature = NNet::CSSLContext::fs_SignMessage(Message, PrivateKey);
+				NContainer::CSecureByteVector Signature = NNetwork::CSSLContext::fs_SignMessage(Message, PrivateKey);
 				DMibExpectTrue(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature));
 
 				// Different message - should not be verified
@@ -474,7 +478,7 @@ public:
 				for (auto DigestType : DigestsTypes)
 				{
 					DMibTestPath("DigestType {}"_f << DigestType);
-					NContainer::CSecureByteVector Signature = NNet::CSSLContext::fs_SignMessage(Message, PrivateKey, DigestType);
+					NContainer::CSecureByteVector Signature = NNetwork::CSSLContext::fs_SignMessage(Message, PrivateKey, DigestType);
 					DMibExpectTrue(CSSLContext::fs_VerifySignature(Message, PublicKey, Signature, DigestType));
 				}
 			}

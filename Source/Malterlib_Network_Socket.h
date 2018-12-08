@@ -2,51 +2,60 @@
 
 #include "Malterlib_Network.h"
 
-namespace NMib
+namespace NMib::NNetwork
 {
-	namespace NNet
+	struct ICSocketConnectionInfo
 	{
-		struct ICSocketConnectionInfo 
+		virtual ~ICSocketConnectionInfo()
 		{
-			virtual ~ICSocketConnectionInfo()
-			{
-			}
-		};
-		
-		class ICSocket
-		{
-		public:
-			virtual ~ICSocket()
-			{
-			}
+		}
+	};
 
-			virtual bool f_IsValid() const = 0;
-			virtual void f_Close() = 0;
-			virtual void f_Shutdown() = 0;
-			virtual void f_Connect(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, CNetAddress const &_BindAddress = NMib::NNet::CNetAddress()) = 0;
-			virtual void f_AsyncConnect(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, CNetAddress const &_BindAddress = NMib::NNet::CNetAddress()) = 0;
-			virtual void f_Listen(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, ENetFlag _Flags) = 0;
-			virtual void f_ListenDatagram(NMib::NNet::CNetAddress const& _Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange, ENetFlag _Flags) = 0;
-			virtual NPtr::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange) = 0;
-			virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange) = 0;
-			virtual void *f_GiveUpForInherit() = 0;
-			virtual void *f_GetOSSocket() = 0;
-			virtual void f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)>&& _OnStateChange) = 0;
-			virtual ENetTCPState f_GetState() = 0;
-			virtual NStr::CStr f_GetCloseReason() = 0;
-			virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) = 0;
-			virtual CSocketOperationResult f_Send(const void *_pData, mint _DataLen) = 0;
-			virtual mint f_SendDatagram(NMib::NNet::CNetAddress const& _Address, const void *_pData, mint _DataLen) = 0;
-			virtual mint f_ReceiveDatagram(NMib::NNet::CNetAddress &_Address, void *_pData, mint _DataLen) = 0;
-			virtual NMib::NNet::CNetAddress f_GetPeerAddress() const = 0;
-			virtual uint32 f_GetListenPort() const = 0;
-			virtual NPtr::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;
-		};
-		
-		using FVirtualSocketFactory = NFunction::TCFunction<NPtr::TCUniquePointer<ICSocket> (NStr::CStr const &_Hostname)>;
-	}
+	class ICSocket
+	{
+	public:
+		virtual ~ICSocket()
+		{
+		}
+
+		virtual bool f_IsValid() const = 0;
+		virtual void f_Close() = 0;
+		virtual void f_Shutdown() = 0;
+		virtual void f_Connect
+			(
+			 	NMib::NNetwork::CNetAddress const &_Address
+			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+			) = 0
+		;
+		virtual void f_AsyncConnect
+			(
+			 	NMib::NNetwork::CNetAddress const &_Address
+			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+			) = 0
+		;
+		virtual void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
+		virtual void f_ListenDatagram(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
+		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual void *f_GiveUpForInherit() = 0;
+		virtual void *f_GetOSSocket() = 0;
+		virtual void f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual ENetTCPState f_GetState() = 0;
+		virtual NStr::CStr f_GetCloseReason() = 0;
+		virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) = 0;
+		virtual CSocketOperationResult f_Send(const void *_pData, mint _DataLen) = 0;
+		virtual mint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen) = 0;
+		virtual mint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen) = 0;
+		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const = 0;
+		virtual uint32 f_GetListenPort() const = 0;
+		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;
+	};
+
+	using FVirtualSocketFactory = NFunction::TCFunction<NStorage::TCUniquePointer<ICSocket> (NStr::CStr const &_Hostname)>;
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNet;
+	using namespace NMib::NNetwork;
 #endif

@@ -5,24 +5,24 @@
 #include <Mib/Concurrency/ThreadSafeQueue>
 
 using namespace NMib;
-using namespace NMib::NSys::NNet;
-using namespace NMib::NNet;
+using namespace NMib::NSys::NNetwork;
+using namespace NMib::NNetwork;
 
 namespace
 {
 	struct CLoopbackServer
 	{
-		NNet::CSocket m_ListenSocketV4;
-		NNet::CSocket m_ListenSocketV6;
-		NNet::CSocket m_EchoListenSocketV4;
-		NNet::CSocket m_EchoListenSocketV6;
-		NNet::CSocket m_MirrorListenSocketV4;
-		NNet::CSocket m_MirrorListenSocketV6;
+		NNetwork::CSocket m_ListenSocketV4;
+		NNetwork::CSocket m_ListenSocketV6;
+		NNetwork::CSocket m_EchoListenSocketV4;
+		NNetwork::CSocket m_EchoListenSocketV6;
+		NNetwork::CSocket m_MirrorListenSocketV4;
+		NNetwork::CSocket m_MirrorListenSocketV6;
 		
-		NPtr::TCUniquePointer<NThread::CThreadObject> m_pThread;
+		NStorage::TCUniquePointer<NThread::CThreadObject> m_pThread;
 		
 		NContainer::TCThreadSafeQueue<NFunction::TCFunction<void ()>> m_DispatchQueue;
-		NContainer::TCLinkedList<NPtr::TCSharedPointer<NPtr::TCSharedPointer<CSocket>>> m_ConnectedSockets;
+		NContainer::TCLinkedList<NStorage::TCSharedPointer<NStorage::TCSharedPointer<CSocket>>> m_ConnectedSockets;
 		
 		void f_Dispatch(NFunction::TCFunction<void ()> const &_fDispatch)
 		{
@@ -58,27 +58,27 @@ namespace
 			auto fHandlerFactory
 				= [=](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
 				{
-					return [=](NNet::ENetTCPState _StateAdded)
+					return [=](NNetwork::ENetTCPState _StateAdded)
 						{
 							f_Dispatch
 								(
 									[=]()
 									{
-										if (_StateAdded & NNet::ENetTCPState_Connection)
+										if (_StateAdded & NNetwork::ENetTCPState_Connection)
 										{
 											while (true)
 											{
 												auto pSocket = &m_ConnectedSockets.f_Insert();
 												*pSocket = fg_Construct(fg_Construct());
 												auto pSocketShared = *pSocket;
-												NPtr::TCSharedPointer<NContainer::TCVector<uint8>> pSendBuffer = fg_Construct();
+												NStorage::TCSharedPointer<NContainer::CByteVector> pSendBuffer = fg_Construct();
 												
 												try
 												{
 													(**pSocket)->f_Accept
 														(
 															_pListenSocket
-															, [=](NNet::ENetTCPState _StateAdded)
+															, [=](NNetwork::ENetTCPState _StateAdded)
 															{
 																f_Dispatch
 																	(
@@ -88,7 +88,7 @@ namespace
 																			{
 																				return;
 																			}
-																			if (_StateAdded & NNet::ENetTCPState_Read)
+																			if (_StateAdded & NNetwork::ENetTCPState_Read)
 																			{
 																				try
 																				{
@@ -115,7 +115,7 @@ namespace
 																					(*pSocketShared).f_Clear();
 																				}
 																			}
-																			if (_StateAdded & NNet::ENetTCPState_Closed)
+																			if (_StateAdded & NNetwork::ENetTCPState_Closed)
 																			{
 																				m_ConnectedSockets.f_Remove(*pSocket);
 																				(*pSocketShared)->f_Close();
@@ -137,7 +137,7 @@ namespace
 														auto pSocketMirror = &m_ConnectedSockets.f_Insert();
 														*pSocketMirror = fg_Construct(fg_Construct());
 														auto pSocketSharedMirror = *pSocketMirror;
-														NPtr::TCSharedPointer<NContainer::TCVector<uint8>> pSendBufferMirror = fg_Construct();
+														NStorage::TCSharedPointer<NContainer::CByteVector> pSendBufferMirror = fg_Construct();
 														
 														auto Peer = (*pSocketShared)->f_GetPeerAddress();
 														
@@ -146,7 +146,7 @@ namespace
 														(*pSocketSharedMirror)->f_AsyncConnect
 															(
 																Peer
-																, [=](NNet::ENetTCPState _StateAdded)
+																, [=](NNetwork::ENetTCPState _StateAdded)
 																{
 																	f_Dispatch
 																		(
@@ -154,7 +154,7 @@ namespace
 																			{
 																				if (!(*pSocketSharedMirror))
 																					return;
-																				if (_StateAdded & NNet::ENetTCPState_Read)
+																				if (_StateAdded & NNetwork::ENetTCPState_Read)
 																				{
 																					try
 																					{
@@ -181,7 +181,7 @@ namespace
 																						(*pSocketSharedMirror).f_Clear();
 																					}
 																				}
-																				if (_StateAdded & NNet::ENetTCPState_Closed)
+																				if (_StateAdded & NNetwork::ENetTCPState_Closed)
 																				{
 																					m_ConnectedSockets.f_Remove(*pSocketMirror);
 																					(*pSocketSharedMirror)->f_Close();
@@ -225,14 +225,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 				m_ListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 			}
@@ -250,14 +250,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 				m_EchoListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 			}
@@ -275,14 +275,14 @@ namespace
 					(
 						CNetAddress(ListenV4)
 						, fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 				m_MirrorListenSocketV6.f_Listen
 					(
 						CNetAddress(ListenV6)
 						, fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror)
-						, NNet::ENetFlag_None
+						, NNetwork::ENetFlag_None
 					)
 				;
 			}
@@ -302,26 +302,22 @@ namespace
 		}
 	};
 	
-	NPtr::TCUniquePointer<CLoopbackServer> g_pLoopbackServer;
+	NStorage::TCUniquePointer<CLoopbackServer> g_pLoopbackServer;
 }
 
-namespace NMib
+namespace NMib::NNetwork
 {
-	namespace NNet
+	NStr::CStr fg_GetLoopbackMachine()
 	{
-
-		NStr::CStr fg_GetLoopbackMachine()
+		NStr::CStr Machine = fg_GetSys()->f_GetEnvironmentVariable("MalterlibTestLoopbackMachine");
+		if (!Machine.f_IsEmpty())
+			return Machine;
+		else
 		{
-			NStr::CStr Machine = fg_GetSys()->f_GetEnvironmentVariable("MalterlibTestLoopbackMachine");
-			if (!Machine.f_IsEmpty())
-				return Machine;
-			else
-			{
-				if (!g_pLoopbackServer)
-					g_pLoopbackServer = fg_Construct();
-				return "localhost";
-			}
-
+			if (!g_pLoopbackServer)
+				g_pLoopbackServer = fg_Construct();
+			return "localhost";
 		}
+
 	}
 }

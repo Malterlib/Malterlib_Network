@@ -4,7 +4,7 @@
 #include "Malterlib_Network.h"
 #include <Mib/Cryptography/UUID>
 
-namespace NMib::NNet
+namespace NMib::NNetwork
 {
 	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars)
 	{
@@ -39,18 +39,18 @@ namespace NMib::NNet
 
 	namespace
 	{
-		NDataProcessing::CUniversallyUniqueIdentifier g_HostnameRootUUID("D2C365F0-3F5E-4056-9BBB-0724C411D2FA", NDataProcessing::EUniversallyUniqueIdentifierFormat_Bare);
+		NCryptography::CUniversallyUniqueIdentifier g_HostnameRootUUID("D2C365F0-3F5E-4056-9BBB-0724C411D2FA", NCryptography::EUniversallyUniqueIdentifierFormat_Bare);
 	}
 
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath)
 	{
 		using namespace NStr;
 
-		mint MaxLength = NSys::NNet::fg_GetMaxUnixSocketNameLength();
+		mint MaxLength = NSys::NNetwork::fg_GetMaxUnixSocketNameLength();
 		if (_WantedPath.f_GetLen() <= aint(MaxLength))
 			return _WantedPath;
 
-		CStr ConfigHash = fg_GetHashedUuidString(_WantedPath, g_HostnameRootUUID, NDataProcessing::EUniversallyUniqueIdentifierFormat_AlphaNum);
+		CStr ConfigHash = fg_GetHashedUuidString(_WantedPath, g_HostnameRootUUID, NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum);
 
 		CStr TempDir = NFile::CFile::fs_GetRawTemporaryDirectory();
 		CStr Path = TempDir / ("{}.sock"_f << ConfigHash);

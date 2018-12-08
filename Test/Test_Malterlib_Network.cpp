@@ -41,8 +41,8 @@
 #include "Test_Malterlib_Network.h"
 
 using namespace NMib;
-using namespace NMib::NSys::NNet;
-using namespace NMib::NNet;
+using namespace NMib::NSys::NNetwork;
+using namespace NMib::NNetwork;
 
 static fp32 const gc_Timeout = 60.0f;
 
@@ -64,7 +64,7 @@ public:
 		t_CNotNetAddress NotReturn;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Localhost, _NotType, &NotReturn, sizeof(NotReturn))) == DMibExpr((bint)false));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&_Localhost, (uint8 const*)&Return, sizeof(t_CNetAddress))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&_Localhost, (uint8 const*)&Return, sizeof(t_CNetAddress))) == DMibExpr(0));
 
 		CAddress Other = fg_CreateAddress(_Type, &_Other, sizeof(_Other));
 		DMibTest(DMibExpr(Other) != DMibExpr(nullptr));
@@ -72,7 +72,7 @@ public:
 		t_CNetAddress Return2;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Other, _Type, &Return2, sizeof(Return2))) == DMibExpr((bint)true));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&_Other, (uint8 const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&_Other, (uint8 const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
 
 		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Localhost)) == DMibExpr(0));
 		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Other)) < DMibExpr(0));
@@ -82,7 +82,7 @@ public:
 	}
 
 	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestResolve(NMib::NStr::CStr const& _Address, t_CNetAddress const& _Result)
+	void f_TestResolve(NMib::NStr::CStr const &_Address, t_CNetAddress const& _Result)
 	{
 		CAddress Resolved = fg_ResolveAddress("localhost", _Type);
 		DMibTest(DMibExpr(Resolved) != DMibExpr(nullptr));
@@ -90,13 +90,13 @@ public:
 		t_CNetAddress Return;
 		DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
 
-		DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
+		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
 
 		fg_FreeAddress(Resolved);
 	}
 
 	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestAsyncResolve(NMib::NStr::CStr const& _Address, t_CNetAddress const& _Result)
+	void f_TestAsyncResolve(NMib::NStr::CStr const &_Address, t_CNetAddress const& _Result)
 	{
 
 		NMib::NThread::CEventAutoResetReportable ResolveEvent;
@@ -122,7 +122,7 @@ public:
 			t_CNetAddress Return;
 			DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
 
-			DMibTest(DMibExpr(NMem::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
+			DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
 
 			fg_FreeAddress(Resolved);
 		}
@@ -199,7 +199,7 @@ public:
 			mint nReceived = 0;
 			mint nBytes = -1;
 			uint8 Incoming[nMessageBytes];
-			NMem::fg_MemClear(Incoming, nMessageBytes);
+			NMemory::fg_MemClear(Incoming, nMessageBytes);
 			NTime::CTimeout Timeout(gc_Timeout);
 			while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 			{
@@ -213,7 +213,7 @@ public:
 
 			DMibExpect(nBytes, !=, -1);
 			DMibExpect(nReceived, ==, nMessageBytes);
-			DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+			DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 		}
 	}
 
@@ -266,7 +266,7 @@ public:
 						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));
 						DMibTest(DMibExpr(BindAddress) != DMibExpr(nullptr));
 
-						void* pServer = fg_Listen(BindAddress, nullptr, NMib::NNet::ENetFlag_None);
+						void* pServer = fg_Listen(BindAddress, nullptr, NMib::NNetwork::ENetFlag_None);
 						auto CleanupServer
 							= fg_OnScopeExit
 							(
@@ -358,7 +358,7 @@ public:
 					{
 						mint nReceived = 0, nBytes;
 						uint8 Incoming[nMessageBytes];
-						NMem::fg_MemClear(Incoming, nMessageBytes);
+						NMemory::fg_MemClear(Incoming, nMessageBytes);
 						NTime::CTimeout Timeout(gc_Timeout);
 
 						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
@@ -373,7 +373,7 @@ public:
 
 						DMibExpect(nBytes, !=, -1);
 						DMibExpect(nReceived, ==, nMessageBytes);
-						DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+						DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
 				}
 				catch (CExceptionNet const& _Exception)
@@ -426,7 +426,7 @@ public:
 		void* pSocket = fg_Connect
 			(
 				Address
-				, [&SocketEvent](::NMib::NNet::ENetTCPState _StateAdded)
+				, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
 				{
 					SocketEvent.f_Signal();
 				}
@@ -451,9 +451,9 @@ public:
 			return;
 
 		static mint const nBufferBytes = 1024*1024*16;
-		NContainer::TCVector<uint8> lBuffer;
+		NContainer::CByteVector lBuffer;
 		lBuffer.f_SetLen(nBufferBytes);
-		NMem::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;
@@ -558,11 +558,11 @@ public:
 						void* pServer = fg_Listen
 							(
 								BindAddress
-								, [&ListenEvent](::NMib::NNet::ENetTCPState _StateAdded)
+								, [&ListenEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
 								{
 									ListenEvent.f_Signal();
 								}
-								, NMib::NNet::ENetFlag_None
+								, NMib::NNetwork::ENetFlag_None
 							)
 						;
 
@@ -662,7 +662,7 @@ public:
 					{
 						mint nReceived = 0, nBytes;
 						uint8 Incoming[nMessageBytes];
-						NMem::fg_MemClear(Incoming, nMessageBytes);
+						NMemory::fg_MemClear(Incoming, nMessageBytes);
 						NTime::CTimeout Timeout(gc_Timeout);
 
 						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
@@ -677,7 +677,7 @@ public:
 
 						DMibExpect(nBytes, !=, -1);
 						DMibExpect(nReceived, ==, nMessageBytes);
-						DMibExpect(NMem::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+						DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
 				}
 				catch (CExceptionNet const& _Exception)
@@ -757,7 +757,7 @@ public:
 			pSocket = fg_InheritHandle2
 				(
 					pOSSocket
-					, [&SocketEvent](::NMib::NNet::ENetTCPState _StateAdded)
+					, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
 					{
 						SocketEvent.f_Signal();
 					}
@@ -766,9 +766,9 @@ public:
 		}
 
 		static mint const nBufferBytes = 1024*1024*4;
-		NContainer::TCVector<uint8> lBuffer;
+		NContainer::CByteVector lBuffer;
 		lBuffer.f_SetLen(nBufferBytes);
-		NMem::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;
@@ -840,7 +840,7 @@ public:
 		void* pSocket = fg_AsyncConnect
 			(
 				Address
-				, [&SocketEvent](::NMib::NNet::ENetTCPState _StateAdded)
+				, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
 				{
 					SocketEvent.f_Signal();
 				}
@@ -873,9 +873,9 @@ public:
 		DMibTest(!DMibExpr(Timeout.f_TimedOut()))(ETest_FailAndStop);
 
 		static mint const nBufferBytes = 1024*1024*4;
-		NContainer::TCVector<uint8> lBuffer;
+		NContainer::CByteVector lBuffer;
 		lBuffer.f_SetLen(nBufferBytes);
-		NMem::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;

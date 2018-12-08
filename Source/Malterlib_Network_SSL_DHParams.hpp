@@ -1,5 +1,5 @@
 #pragma once
-namespace NMib::NNet
+namespace NMib::NNetwork
 {
 	namespace
 	{

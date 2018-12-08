@@ -3,21 +3,18 @@
 #include "Malterlib_Network.h"
 #include <Mib/Concurrency/ConcurrencyManager>
 
-namespace NMib
+namespace NMib::NNetwork
 {
-	namespace NNet
+	class CResolveActor : public NConcurrency::CActor
 	{
-		class CResolveActor : public NConcurrency::CActor
-		{
-		public:
-			NConcurrency::TCContinuation<NMib::NNet::CNetAddress> f_Resolve(NStr::CStr const &_Address, NNet::ENetAddressType _PreferType);
-			
-		private:
-			NContainer::TCLinkedList<NNet::CAsyncResolver> mp_PendingResolves;
-		};
-	}
+	public:
+		NConcurrency::TCContinuation<NMib::NNetwork::CNetAddress> f_Resolve(NStr::CStr const &_Address, NNetwork::ENetAddressType _PreferType);
+
+	private:
+		NContainer::TCLinkedList<NNetwork::CAsyncResolver> mp_PendingResolves;
+	};
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNet;
+	using namespace NMib::NNetwork;
 #endif
