@@ -6,6 +6,8 @@
 
 namespace NMib::NNetwork
 {
+	DMibImpErrorClassImplement(CExceptionNet);
+
 	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars)
 	{
 		if (_String.f_IsEmpty())

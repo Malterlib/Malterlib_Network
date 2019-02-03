@@ -7,7 +7,7 @@
 
 namespace NMib::NNetwork
 {
-	DMibImpErrorClass(CExceptionNet, NException::CException);
+	DMibImpErrorClassDefine(CExceptionNet, NException::CException);
 
 #	define DMibErrorNet(d_Description) DMibImpError(NMib::NNetwork::CExceptionNet, d_Description)
 

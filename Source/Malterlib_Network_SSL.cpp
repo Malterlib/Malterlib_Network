@@ -155,6 +155,8 @@ namespace
 
 namespace NMib::NNetwork
 {
+	DMibImpErrorClassImplement(CExceptionNetSSL);
+
 	namespace
 	{
 #ifndef DMibSSLLibrary_BoringSSL

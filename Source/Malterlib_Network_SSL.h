@@ -14,7 +14,7 @@ extern "C"
 
 namespace NMib::NNetwork
 {
-		DMibImpErrorClass(CExceptionNetSSL, CExceptionNet);
+	DMibImpErrorClassDefine(CExceptionNetSSL, CExceptionNet);
 #	define DMibErrorNetSSL(_Description) DMibImpError(NMib::NNetwork::CExceptionNetSSL, _Description)
 
 #	ifndef DMibPNoShortCuts
