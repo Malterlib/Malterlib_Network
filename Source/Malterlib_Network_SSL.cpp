@@ -102,18 +102,17 @@ namespace
 #if defined(DPlatformFamily_Windows) && defined(DArchitecture_x64)
 	struct COpenSSLBrokenRegistryHandlingScope
 	{
-		CRegisterState m_RegisterState;
-
 		inline_always COpenSSLBrokenRegistryHandlingScope()
 		{
-			DMibThreadLocalScopeEnter;
 			fg_Malterlib_Network_SSL_SaveRegisters_X86_64(&m_RegisterState);
 		}
 		inline_always ~COpenSSLBrokenRegistryHandlingScope()
 		{
 			fg_Malterlib_Network_SSL_RestoreRegisters_X86_64(&m_RegisterState);
-			DMibThreadLocalScopeExit;
 		}
+
+		DMibThreadLocalScopeDebugMember;
+		CRegisterState m_RegisterState;
 	};
 
 	template <typename t_FToRun>
