@@ -1,11 +1,11 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #pragma once
 
 /*---------------------------------------------------------------------------------------------*\
 	Author:			Erik Olofsson, Michael Wynne
-	
+
 	Contents:		NMib::NNetwork:
 						CNetAddressIPv4
 						CNetAddressIPv6
@@ -17,7 +17,7 @@
 
 					System Specifics in NMib::NSys::NNetwork:
 						typedef void* CAddress;
-				
+
 						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
 
 						::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
@@ -37,8 +37,6 @@
 						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bint _bIncludeType);
 
 					// Connection Operations
-						void *fg_Connect(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data
-
 						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 
 						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
@@ -51,15 +49,15 @@
 
 					// Socket Properties & State
 
-						void fg_SetReportTo(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data				
+						void fg_SetReportTo(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data
 
 						NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 						NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
-				
+
 						void *fg_InheritHandle2(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo);
 						void *fg_GiveUpForInherit(void *_pSocket);
 						void *fg_GetOSSocket(void *_pSocket);
-						
+
 						CAddress fg_GetPeerAddress(void *_pSocket);
 
 	Comments:			Non-Blocking Operation:
@@ -67,7 +65,7 @@
 						All reportable events are edge triggered. That is, they are signalled when
 						the sockets state changes.
 
-						When a reportable event is signalled you call fg_GetState(pSocket) to 
+						When a reportable event is signalled you call fg_GetState(pSocket) to
 						get the current state of the socket. The returned state bitfield represents
 						state changes since the last time fg_GetState was called on that socket,
 						NOT the current state of the socket.
@@ -76,10 +74,10 @@
 						This means that you should ALWAYS check the socket state after the event
 						is signalled.
 
-						TODO: 
+						TODO:
 							Typedef for sockets in NSys::NNetwork
 								typedef void* CSocket;
-	
+
 \*_____________________________________________________________________________________________*/
 #ifndef DMibSafety_IncMalterlib_H
 #	error "You have to include this file through <Mib/Core/Core>"
@@ -178,35 +176,37 @@ namespace NMib::NNetwork
 	};
 
 	template<typename t_CIPAddress, ENetAddressType t_Type>
-	class TNetAddressTCP : public t_CIPAddress
+	class TCNetAddressTCP : public t_CIPAddress
 	{
 	public:
 		uint16 m_Port;
 
-		TNetAddressTCP()
+		static constexpr ENetAddressType mc_Type = t_Type;
+
+		TCNetAddressTCP()
 			: m_Port(0)
 		{
 		}
 
-		TNetAddressTCP(const TNetAddressTCP &_Src)
+		TCNetAddressTCP(const TCNetAddressTCP &_Src)
 		{
 			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
 		}
 
-		TNetAddressTCP(const t_CIPAddress &_Src, uint16 _Port)
+		TCNetAddressTCP(const t_CIPAddress &_Src, uint16 _Port)
 			: t_CIPAddress(_Src)
 			, m_Port(_Port)
 		{
 		}
 
-		TNetAddressTCP &operator = (const TNetAddressTCP &_Src)
+		TCNetAddressTCP &operator = (const TCNetAddressTCP &_Src)
 		{
 			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
 
 			return *this;
 		}
 
-		TNetAddressTCP &operator = (const t_CIPAddress &_Src)
+		TCNetAddressTCP &operator = (const t_CIPAddress &_Src)
 		{
 			(*this) = _Src;
 
@@ -221,8 +221,8 @@ namespace NMib::NNetwork
 		}
 	};
 
-	typedef TNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4> CNetAddressTCPv4;
-	typedef TNetAddressTCP<CNetAddressIPv6, ENetAddressType_TCPv6> CNetAddressTCPv6;
+	typedef TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4> CNetAddressTCPv4;
+	typedef TCNetAddressTCP<CNetAddressIPv6, ENetAddressType_TCPv6> CNetAddressTCPv6;
 
 	enum ENetTCPState
 	{
@@ -232,6 +232,7 @@ namespace NMib::NNetwork
 		, ENetTCPState_Connection	= DMibBit(2) // A new connection is available for accept
 		, ENetTCPState_Connected	= DMibBit(3) // A async connection has completed
 		, ENetTCPState_Closed		= DMibBit(4) // The connection has been lost
+		, ENetTCPState_RemoteClosed	= DMibBit(5) // A connection closure was initiated by remote call f_Shutdown
 	};
 
 	enum ENetFlag
@@ -341,18 +342,16 @@ namespace NMib::NSys::NNetwork
 
 // Connection Operations
 
-	// Report to the supplied event when new data is received or when we are ready to send new data
-	void *fg_Connect(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
-
 	// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
-	void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
+	void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
+	void fg_StartSocket(void *_pSocket); // Starts the event loop
 
 	// Report to the supplied event when a new connection has arrived
-	void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
+	void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
 	// Report to the supplied event when new data is received or when we are ready to send new data
-	void *fg_ListenDatagram(CAddress _pAddr, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
+	void *fg_ListenDatagram(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
 	// Report to the supplied event when new data is received or when we are ready to send new data
-	void *fg_Accept(void *_pSocket, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	void *fg_Accept(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
 	void fg_Shutdown(void *_pSocket); // Closes the socket and connection
 
@@ -366,12 +365,12 @@ namespace NMib::NSys::NNetwork
 // Socket Properties & State
 
 	// Report to the supplied event when new data is received or when we are ready to send new data
-	void fg_SetOnStateChange(void *_pSocket, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	void fg_SetOnStateChange(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
 	NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 	NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
 
-	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 	void *fg_GiveUpForInherit(void *_pSocket);
 	void *fg_GetOSSocket(void *_pSocket);
 
@@ -394,16 +393,12 @@ namespace NMib::NNetwork
 		explicit CNetAddress(NMib::NSys::NNetwork::CAddress _Address)
 			: mp_Address(_Address)
 		{
-			// DMibLogCat(NNetwork);
-			// DMibLog(Debug, "CNetAddress::CNetAddress(CAddress)");
 		}
 
 		CNetAddress(CNetAddress&& _ToMove)
 			: mp_Address(_ToMove.mp_Address)
 		{
 			_ToMove.mp_Address = nullptr;
-			// DMibLogCat(NNetwork);
-			// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress&&)");
 		}
 
 		CNetAddress(CNetAddress const& _ToCopy)
@@ -411,8 +406,6 @@ namespace NMib::NNetwork
 		{
 			if (_ToCopy.mp_Address)
 				mp_Address = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_Address);
-			// DMibLogCat(NNetwork);
-			// DMibLog(Debug, "CNetAddress::CNetAddress(CNetAddress const&)");
 		}
 
 		template<typename t_CAddress>
@@ -438,9 +431,6 @@ namespace NMib::NNetwork
 			mp_Address = _ToMove.mp_Address;
 			_ToMove.mp_Address = nullptr;
 
-			// DMibLogCat(NNetwork);
-			// DMibLog(Debug, "CNetAddress::operator =(CNetAddress &&)");
-
 			return *this;
 		}
 
@@ -450,9 +440,6 @@ namespace NMib::NNetwork
 
 			if (_ToCopy.mp_Address)
 				mp_Address = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_Address);
-
-			// DMibLogCat(NNetwork);
-			// DMibLog(Debug, "CNetAddress::operator =(CNetAddress const&)");
 
 			return *this;
 		}
@@ -622,6 +609,24 @@ namespace NMib::NNetwork
 		}
 	public:
 
+		CAsyncResolver(CAsyncResolver const &) = delete;
+		CAsyncResolver &operator = (CAsyncResolver const &) = delete;
+
+		CAsyncResolver(CAsyncResolver &&_Other)
+			: mp_pResolver(_Other.mp_pResolver)
+		{
+			_Other.mp_pResolver = nullptr;
+		}
+
+		CAsyncResolver &operator = (CAsyncResolver &&_Other)
+		{
+			f_Close();
+			mp_pResolver = _Other.mp_pResolver;
+			_Other.mp_pResolver = nullptr;
+
+			return *this;
+		}
+
 		CAsyncResolver()
 		{
 			mp_pResolver = nullptr;
@@ -693,7 +698,7 @@ namespace NMib::NNetwork
 				DMibErrorNet("Socket is not valid");
 		}
 
-		static NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
 		{
 			if (_pReportTo)
 			{
@@ -703,7 +708,7 @@ namespace NMib::NNetwork
 					}
 				;
 			}
-			return NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
+			return NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
 		}
 		CSocket(CSocket const& _Other);
 		CSocket & operator =(CSocket const& _Other);
@@ -745,40 +750,37 @@ namespace NMib::NNetwork
 
 		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr)
 		{
-			f_Close();
-
-			mp_pSocket = NMib::NSys::NNetwork::fg_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			f_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
 		}
 
 		void f_Connect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+			 	, fp64 _Timeout = 15.0
 			)
-		{
-			f_Close();
-
-			mp_pSocket = NMib::NSys::NNetwork::fg_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
-		}
+		;
 
 		void f_AsyncConnect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr)
 		{
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void f_AsyncConnect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			)
 		{
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, ENetFlag _Flags)
@@ -786,20 +788,28 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
+		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
 		{
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_ListenDatagram(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
+		void f_ListenDatagram
+			(
+			 	NMib::NNetwork::CNetAddress const &_Address
+			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, ENetFlag _Flags
+			)
 		{
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
@@ -807,23 +817,29 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
+			if (mp_pSocket)
+				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_Accept(CSocket *_pAcceptFrom, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+		void f_Accept(CSocket *_pAcceptFrom, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
 		{
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fg_Move(_fOnStateChange));
+			if (mp_pSocket)
+				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
 		{
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fsp_GetChangeReportTo(_pReportTo));
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
 		{
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fg_Move(_fOnStateChange));
+			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void *f_GiveUpForInherit()
@@ -841,7 +857,7 @@ namespace NMib::NNetwork
 			NMib::NSys::NNetwork::fg_SetOnStateChange(mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
 		}
 
-		void f_SetOnStateChange(NMib::NFunction::TCFunction<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+		void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
 		{
 			NMib::NSys::NNetwork::fg_SetOnStateChange(mp_pSocket, fg_Move(_fOnStateChange));
 		}

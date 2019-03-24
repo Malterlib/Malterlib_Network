@@ -1,4 +1,4 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 /*
@@ -41,8 +41,12 @@
 #include "Test_Malterlib_Network.h"
 
 using namespace NMib;
-using namespace NMib::NSys::NNetwork;
 using namespace NMib::NNetwork;
+using namespace NMib::NStorage;
+using namespace NMib::NStr;
+using namespace NMib::NThread;
+using namespace NMib::NMemory;
+using namespace NMib::NTime;
 
 static fp32 const gc_Timeout = 60.0f;
 
@@ -50,160 +54,127 @@ class CSysNet_Tests : public NMib::NTest::CTest
 {
 public:
 
-	template<typename t_CNetAddress, ENetAddressType _Type, typename t_CNotNetAddress, ENetAddressType _NotType>
-	void f_TestAddress(t_CNetAddress const& _Localhost, t_CNetAddress const& _Other)
+	template <typename t_CNetAddress, typename t_CNotNetAddress>
+	void f_TestAddress(t_CNetAddress const &_Localhost, t_CNotNetAddress const &_Other)
 	{
-		CAddress Localhost = fg_CreateAddress(_Type, &_Localhost, sizeof(t_CNetAddress));
-		DMibTest(DMibExpr(Localhost) != DMibExpr(nullptr));
+		CNetAddress Localhost(_Localhost);
+		DMibExpectFalse(Localhost.f_IsEmpty());
+		DMibExpect(Localhost.f_GetType(), ==, t_CNetAddress::mc_Type);
 
-		DMibTest(DMibExpr(fg_GetAddressType(Localhost)) == DMibExpr(_Type));
-		
 		t_CNetAddress Return;
-		DMibTest(DMibExpr(fg_GetAddressRaw(Localhost, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+		DMibExpectTrue(Localhost.f_Get(Return));
+		DMibExpect(fg_MemCmp((uint8 const *)&Return, (uint8 const *)&_Localhost, sizeof(Return)), ==, 0);
 
 		t_CNotNetAddress NotReturn;
-		DMibTest(DMibExpr(fg_GetAddressRaw(Localhost, _NotType, &NotReturn, sizeof(NotReturn))) == DMibExpr((bint)false));
+		DMibExpectTrue(Localhost.f_Get(NotReturn));
 
-		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&_Localhost, (uint8 const*)&Return, sizeof(t_CNetAddress))) == DMibExpr(0));
-
-		CAddress Other = fg_CreateAddress(_Type, &_Other, sizeof(_Other));
-		DMibTest(DMibExpr(Other) != DMibExpr(nullptr));
+		CNetAddress Other(_Other);
+		DMibExpectFalse(Other.f_IsEmpty());
 
 		t_CNetAddress Return2;
-		DMibTest(DMibExpr(fg_GetAddressRaw(Other, _Type, &Return2, sizeof(Return2))) == DMibExpr((bint)true));
+		DMibExpectTrue(Other.f_Get(Return2));
+		DMibExpect(fg_MemCmp((uint8 const *)&Return2, (uint8 const *)&_Other, sizeof(Return2)), ==, 0);
 
-		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&_Other, (uint8 const*)&Return2, sizeof(t_CNetAddress))) == DMibExpr(0));
-
-		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Localhost)) == DMibExpr(0));
-		DMibTest(DMibExpr(fg_CompareAddresses(Localhost, Other)) < DMibExpr(0));
-
-		fg_FreeAddress(Localhost);
-		fg_FreeAddress(Other);
+		DMibExpect(Localhost, ==, Localhost);
+		DMibExpect(Localhost, <, Other);
 	}
 
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestResolve(NMib::NStr::CStr const &_Address, t_CNetAddress const& _Result)
+	template <typename t_CNetAddress>
+	void f_TestResolve(CStr const &_Address, t_CNetAddress const &_Result)
 	{
-		CAddress Resolved = fg_ResolveAddress("localhost", _Type);
-		DMibTest(DMibExpr(Resolved) != DMibExpr(nullptr));
+		CNetAddress Resolved = CSocket::fs_ResolveAddress("localhost", t_CNetAddress::mc_Type);
+		DMibExpectFalse(Resolved.f_IsEmpty());
 
 		t_CNetAddress Return;
-		DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
-
-		DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
-
-		fg_FreeAddress(Resolved);
+		DMibExpectTrue(Resolved.f_Get(Return));
+		DMibExpect(fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 	}
 
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestAsyncResolve(NMib::NStr::CStr const &_Address, t_CNetAddress const& _Result)
+	template <typename t_CNetAddress>
+	void f_TestAsyncResolve(CStr const &_Address, t_CNetAddress const& _Result)
 	{
+		NStorage::TCSharedPointer<CEventAutoResetReportable> pResolveEvent = fg_Construct();
 
-		NMib::NThread::CEventAutoResetReportable ResolveEvent;
-
-		void* pResolver = fg_AsyncResolveAddress_Open(_Address, _Type, [&]{ResolveEvent.f_Signal();});
-
-		if (ResolveEvent.f_WaitTimeout(gc_Timeout))
-			DMibTest(!DMibExpr("Timed out async resolving address"))(ETest_FailAndStop);
-
-		CAddress Resolved = nullptr;
-		NStr::CStr ErrorString;
-
-		bint bRet = fg_AsyncResolveAddress_GetResult(pResolver, Resolved, ErrorString);
-
-		DMibTest(DMibExpr(bRet) == DMibExpr((bint)true));
-
-		fg_AsyncResolveAddress_Close(pResolver);
-
-		DMibTest(DMibExpr(Resolved) != DMibExpr(nullptr));
-
-		if (Resolved != nullptr)
-		{
-			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Resolved, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
-
-			DMibTest(DMibExpr(NMemory::fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP()))) == DMibExpr(0));
-
-			fg_FreeAddress(Resolved);
-		}
-	}
-
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestConnect(NMib::NStr::CStr _Address, uint16 _Port)
-	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
-		{
-			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
-			Return.m_Port = _Port;
-
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
-
-			if (!Address)
-				return;
-		}
-
-		void* pSocket = fg_Connect(Address, nullptr, nullptr);
-
-		
-		if (pSocket != nullptr)
-		{
-			CAddress PeerAddress = nullptr;
-
-			PeerAddress = fg_GetPeerAddress(pSocket);
-
-			DMibTest(DMibExpr(PeerAddress) != DMibExpr(nullptr));
-
-			DMibTest( DMibExpr(fg_CompareAddresses(PeerAddress, Address)) == DMibExpr(0));
-
-			fg_FreeAddress(PeerAddress);
-		}
-
-		auto Cleanup
-			= fg_OnScopeExit
+		CAsyncResolver Resolver;
+		Resolver.f_Open
 			(
-				[&]()
-				{
-					if (pSocket)
-						fg_Close(pSocket);
+			 	_Address
+			 	, t_CNetAddress::mc_Type
+			 	, [pResolveEvent]
+			 	{
+					pResolveEvent->f_Signal();
 				}
 			)
 		;
-		
-		DMibTest(DMibExpr(pSocket) != DMibExpr(nullptr));
-		if (pSocket == nullptr)
+
+		if (pResolveEvent->f_WaitTimeout(gc_Timeout))
+			DMibTest(!DMibExpr("Timed out async resolving address"))(ETest_FailAndStop);
+
+		CNetAddress Resolved;
+		CStr ErrorString;
+
+		DMibExpectTrue(Resolver.f_GetResult(Resolved, ErrorString));
+		DMibExpectFalse(Resolved.f_IsEmpty());
+
+		if (!Resolved.f_IsEmpty())
+		{
+			t_CNetAddress Return;
+			DMibExpectTrue(Resolved.f_Get(Return));
+			DMibExpect(fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
+		}
+	}
+
+	template <typename t_CNetAddress, ENetAddressType _Type>
+	void f_TestConnect(CStr _Address, uint16 _Port)
+	{
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, _Type);
+		DMibExpectFalse(Address.f_IsEmpty());
+		{
+			DMibTestPath("SetPort");
+			t_CNetAddress Return;
+			DMibExpectTrue(Address.f_Get(Return));
+
+			Return.m_Port = _Port;
+			Address.f_Set(Return);
+
+			DMibExpectFalse(Address.f_IsEmpty());
+
+			if (Address.f_IsEmpty())
+				return;
+		}
+
+		CSocket Socket;
+		Socket.f_Connect(Address);
+
+		if (Socket.f_IsValid())
+		{
+			CNetAddress PeerAddress = Socket.f_GetPeerAddress();
+
+			DMibExpectFalse(PeerAddress.f_IsEmpty());
+			DMibExpect(PeerAddress, ==, Address);
+		}
+
+		DMibExpectTrue(Socket.f_IsValid());
+		if (!Socket.f_IsValid())
 			return;
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
 		static mint const nMessageBytes = sizeof(Message);
 
 		{
-			mint nSent = fg_Send(pSocket, Message, nMessageBytes);
-			DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
+			mint nSent = Socket.f_Send(Message, nMessageBytes);
+			DMibExpect(nSent, ==, nMessageBytes);
 		}
 
 		{
 			mint nReceived = 0;
 			mint nBytes = -1;
 			uint8 Incoming[nMessageBytes];
-			NMemory::fg_MemClear(Incoming, nMessageBytes);
-			NTime::CTimeout Timeout(gc_Timeout);
+			fg_MemClear(Incoming, nMessageBytes);
+			CTimeout Timeout(gc_Timeout);
 			while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 			{
-				nBytes = fg_Receive(pSocket, &Incoming[nReceived], nMessageBytes - nReceived);
+				nBytes = Socket.f_Receive(Incoming + nReceived, nMessageBytes - nReceived);
 
 				if (nBytes == -1)
 					break;
@@ -213,108 +184,75 @@ public:
 
 			DMibExpect(nBytes, !=, -1);
 			DMibExpect(nReceived, ==, nMessageBytes);
-			DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+			DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 		}
 	}
 
-
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestConnectListen(NMib::NStr::CStr _Address, uint16 _Port, uint16 _ListenPort)
+	template <typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestConnectListen(CStr _Address, uint16 _Port, uint16 _ListenPort)
 	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
 		{
+			DMibTestPath("SetPort");
 			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+			DMibExpectTrue(Address.f_Get(Return));
+
 			Return.m_Port = _Port;
+			Address.f_Set(Return);
 
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
+			DMibExpectFalse(Address.f_IsEmpty());
 
-			if (!Address)
+			if (Address.f_IsEmpty())
 				return;
 		}
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
 		static mint const nMessageBytes = sizeof(Message);
 
-		NMib::NThread::CEventAutoResetReportable ServerReady;
+		CEventAutoResetReportable ServerReady;
 
-		auto ServerThread = NThread::CThreadObject::fs_StartThread
+		auto ServerThread = CThreadObject::fs_StartThread
 			(
-				[&](NThread::CThreadObject* _pThread) -> aint
+				[&](CThreadObject *_pThread) -> aint
 				{
+					DMibTestPath("Server");
 					try
 					{
-	//					DMibTraceRaw("ConnectListen Server Thread\n");
-	//					return f_InternalConnectListen_Server<t_CNetAddress, _Type>(_Port, ServerReady);
-						t_CNetAddress AnyAddr; // = _Localhost;
+						t_CNetAddress AnyAddr;
 						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
-						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));
-						DMibTest(DMibExpr(BindAddress) != DMibExpr(nullptr));
+						CNetAddress BindAddress(AnyAddr);
+						DMibExpectFalse(BindAddress.f_IsEmpty());
 
-						void* pServer = fg_Listen(BindAddress, nullptr, NMib::NNetwork::ENetFlag_None);
-						auto CleanupServer
-							= fg_OnScopeExit
-							(
-								[&]()
-								{
-									fg_Close(pServer);
-								}
-							)
-						;
+						CSocket Server;
+						Server.f_Listen(BindAddress, nullptr, ENetFlag_None);
 
-						fg_FreeAddress(BindAddress);
-						BindAddress = nullptr;
+						DMibExpectTrue(Server.f_IsValid());
 
-						DMibTest(DMibExpr(pServer) != DMibExpr(nullptr));
-
-						if (pServer == nullptr)
+						if (!Server.f_IsValid())
 							return -1;
 
 						ServerReady.f_Signal();
 
-						void *pConn = nullptr;
+						CSocket Client;
 
-						NTime::CTimeout Timeout(gc_Timeout);
+						CTimeout Timeout(gc_Timeout);
 
-						while(pConn == nullptr && !Timeout.f_TimedOut())
+						while (!Client.f_IsValid() && !Timeout.f_TimedOut())
 						{
-							pConn = fg_Accept(pServer, nullptr);
-							if (pConn == nullptr)
+							Client.f_Accept(&Server, nullptr);
+							if (!Client.f_IsValid())
 								NSys::fg_Thread_Yield();
 						}
 
-						auto CleanupClient
-							= fg_OnScopeExit
-							(
-								[&]()
-								{
-									if (pConn)
-										fg_Close(pConn);
-								}
-							)
-						;
+						DMibExpectTrue(Client.f_IsValid());
 
-						DMibTest(DMibExpr(pConn) != DMibExpr(nullptr));
-						
-						if (pConn == nullptr)
+						if (!Client.f_IsValid())
 							return -1;
 
-						mint nSent = fg_Send(pConn, Message, nMessageBytes);
+						mint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
 					catch (CExceptionNet const& _Exception)
@@ -331,39 +269,31 @@ public:
 
 		if (ServerReady.f_WaitTimeout(gc_Timeout))
 			DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
+
 		NMib::NSys::fg_Thread_Sleep(1.0f);
 
-		auto ClientThread = NThread::CThreadObject::fs_StartThread(
-			[&](NThread::CThreadObject* _pThread) -> aint
-			{
-				//return f_InternalConnectListen_Client<t_CNetAddress, _Type>(Address, _Port);
-//				DMibTraceRaw("ConnectListen Client Thread\n");
-				try
+		auto ClientThread = CThreadObject::fs_StartThread
+			(
+				[&](CThreadObject *_pThread) -> aint
 				{
-					void* pClient = fg_Connect(Address, nullptr, nullptr);
-					auto Cleanup
-						= fg_OnScopeExit
-						(
-							[&]()
-							{
-								fg_Close(pClient);								
-							}
-						)
-					;
-
-					DMibTest(DMibExpr(pClient) != DMibExpr(nullptr));
-					if (pClient == nullptr)
-						return -1;
-
+					DMibTestPath("Client");
+					try
 					{
+						CSocket Client;
+						Client.f_Connect(Address);
+
+						DMibExpectTrue(Client.f_IsValid());
+						if (!Client.f_IsValid())
+							return -1;
+
 						mint nReceived = 0, nBytes;
 						uint8 Incoming[nMessageBytes];
-						NMemory::fg_MemClear(Incoming, nMessageBytes);
-						NTime::CTimeout Timeout(gc_Timeout);
+						fg_MemClear(Incoming, nMessageBytes);
+						CTimeout Timeout(gc_Timeout);
 
 						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 						{
-							nBytes = fg_Receive(pClient, &Incoming[nReceived], nMessageBytes - nReceived);
+							nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived);
 
 							if (nBytes == -1)
 								break;
@@ -373,108 +303,74 @@ public:
 
 						DMibExpect(nBytes, !=, -1);
 						DMibExpect(nReceived, ==, nMessageBytes);
-						DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+						DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
-				}
-				catch (CExceptionNet const& _Exception)
-				{
-					(void)_Exception;
-					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-				}
+					catch (CExceptionNet const& _Exception)
+					{
+						(void)_Exception;
+						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+					}
 
-				return 0;
-			},
-			"TestConnectListen_Client"
-		);
+					return 0;
+				}
+			 	, "TestConnectListen_Client"
+			)
+		;
 
 		ClientThread->f_Stop();
 		ServerThread->f_Stop();
-
 	}
 
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestConnectReportTo(NMib::NStr::CStr _Address, uint16 _Port)
+	template <typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestConnectReportTo(CStr _Address, uint16 _Port)
 	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
 		{
+			DMibTestPath("SetPort");
 			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+			DMibExpectTrue(Address.f_Get(Return));
+
 			Return.m_Port = _Port;
+			Address.f_Set(Return);
 
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
+			DMibExpectFalse(Address.f_IsEmpty());
 
-			if (!Address)
+			if (Address.f_IsEmpty())
 				return;
 		}
 
+		CEventAutoResetReportable SocketEvent;
 
-		NMib::NThread::CEventAutoResetReportable SocketEvent;
-
-		void* pSocket = fg_Connect
+		CSocket Socket;
+		Socket.f_Connect
 			(
-				Address
-				, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
+			 	Address
+			 	, [&SocketEvent](ENetTCPState _StateAdded)
 				{
 					SocketEvent.f_Signal();
 				}
-				, nullptr
 			)
 		;
-		
-		auto Cleanup
-			= fg_OnScopeExit
-			(
-				[&]()
-				{
-					if (pSocket)
-						fg_Close(pSocket);
-				}
-			)
-		;
-		
 
-		DMibTest(DMibExpr(pSocket) != DMibExpr(nullptr));
-		if (pSocket == nullptr)
+		DMibExpectTrue(Socket.f_IsValid());
+		if (!Socket.f_IsValid())
 			return;
 
 		static mint const nBufferBytes = 1024*1024*16;
-		NContainer::CByteVector lBuffer;
-		lBuffer.f_SetLen(nBufferBytes);
-		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NContainer::CByteVector Buffer;
+		Buffer.f_SetLen(nBufferBytes);
+		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;
 			mint nSent = -1;
 
-//			DMibTraceRaw("Entering send loop\n");
 			while(nTotalSent < nBufferBytes)
 			{
-				nSent = fg_Send(pSocket, lBuffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);			
-//				DMibTrace("Sent: {}\n", nSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
-
-				// OSX note:
-				// Occasionally you will receive two kqueue WRITE notifications after a single stuffing send.
-				// When this occurs it is possible that the report event will be signaled when a fg_Send will return 0.
-				// So we don't do this test:
-//				if (nSent == 0)
-//					break;
-				// A possible fix is to only signal the report event when State does NOT have the write flag,
-				// But this may break windows. Investigate when we refactor the windows net code.
 
 				bint bStuffed = nSent < (nBufferBytes - nTotalSent);
 
@@ -482,142 +378,104 @@ public:
 
 				if (bStuffed)
 				{
-//					DMibTrace("Waiting after sending {} bytes\n", nTotalSent);
 					do
 					{
-						NMib::NTime::CClock WaitTime;
+						CClock WaitTime;
 						WaitTime.f_Start();
 						if (SocketEvent.f_WaitTimeout(gc_Timeout))
 						{
 							DMibTest(DMibExpr(WaitTime.f_GetTime()) > DMibExpr(gc_Timeout));
 							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
 						}
-					} while ( !(fg_GetState(pSocket) & ENetTCPState_Write) );
+					}
+					while (!(Socket.f_GetState() & ENetTCPState_Write))
+						;
 				}
 			}
 
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-
-//			DMibTest(DMibExpr(nSent) > DMibExpr(0)); // Socket event was useless.
-
 			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
-
 		}
-
 	}
 
 
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestConnectListenReportTo(NMib::NStr::CStr _Address, uint16 _Port, uint16 _ListenPort)
+	template<typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestConnectListenReportTo(CStr _Address, uint16 _Port, uint16 _ListenPort)
 	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
 		{
+			DMibTestPath("SetPort");
 			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+			DMibExpectTrue(Address.f_Get(Return));
+
 			Return.m_Port = _Port;
+			Address.f_Set(Return);
 
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
+			DMibExpectFalse(Address.f_IsEmpty());
 
-			if (!Address)
+			if (Address.f_IsEmpty())
 				return;
 		}
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
 		static mint const nMessageBytes = sizeof(Message);
 
-		NMib::NThread::CEventAutoResetReportable ServerReady;
+		CEventAutoResetReportable ServerReady;
 
-		auto ServerThread = NThread::CThreadObject::fs_StartThread(
-				[&](NThread::CThreadObject* _pThread) -> aint
+		auto ServerThread = CThreadObject::fs_StartThread
+			(
+				[&](CThreadObject *_pThread) -> aint
 				{
-//					return f_InternalConnectListen_Server<t_CNetAddress, _Type>(_Port, ServerReady);
+					DMibTestPath("Server");
 					try
 					{
 						t_CNetAddress AnyAddr; // = _Localhost;
 						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
-						CAddress BindAddress = fg_CreateAddress(_Type, &AnyAddr, sizeof(AnyAddr));
-						DMibTest(DMibExpr(BindAddress) != DMibExpr(nullptr));
+						CNetAddress BindAddress(AnyAddr);
+						DMibExpectFalse(BindAddress.f_IsEmpty());
 
-						NMib::NThread::CEventAutoResetReportable ListenEvent;
+						TCSharedPointer<CEventAutoResetReportable> pListenEvent = fg_Construct();
 
-						void* pServer = fg_Listen
+						CSocket Server;
+						Server.f_Listen
 							(
 								BindAddress
-								, [&ListenEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
+								, [pListenEvent](ENetTCPState _StateAdded)
 								{
-									ListenEvent.f_Signal();
+									if (_StateAdded & ENetTCPState_Connection)
+										pListenEvent->f_Signal();
 								}
-								, NMib::NNetwork::ENetFlag_None
+								, ENetFlag_None
 							)
 						;
 
-						auto Cleanup
-							= fg_OnScopeExit
-							(
-								[&]()
-								{
-									if (pServer)
-										fg_Close(pServer);
-								}
-							)
-						;
-						
-						fg_FreeAddress(BindAddress);
-						BindAddress = nullptr;
+						DMibExpectTrue(Server.f_IsValid());
 
-						DMibTest(DMibExpr(pServer) != DMibExpr(nullptr));
-
-						if (pServer == nullptr)
+						if (!Server.f_IsValid())
 							return -1;
 
 						ServerReady.f_Signal();
 
-						void *pConn = nullptr;
+						bool bTimedOut = pListenEvent->f_WaitTimeout(gc_Timeout);
+						DMibExpectFalse(bTimedOut);
 
-						bool bTimedOut = ListenEvent.f_WaitTimeout(gc_Timeout);
-						
-						DMibTest(!DMibExpr(bTimedOut));
-						
 						if (bTimedOut)
 							return -1;
 
-						DMibTest( DMibExpr(fg_GetState(pServer)) & DMibExpr(ENetTCPState_Connection) );
+						DMibExpect(Server.f_GetState(), &, ENetTCPState_Connection);
 
-						pConn = fg_Accept(pServer, nullptr);
+						CSocket Client;
+						Client.f_Accept(&Server, nullptr);
 
-						DMibTest(DMibExpr(pConn) != DMibExpr(nullptr));
-						
-						if (pConn == nullptr)
+						DMibExpectTrue(Client.f_IsValid());
+
+						if (!Client.f_IsValid())
 							return -1;
 						
-						auto CleanupConn
-							= fg_OnScopeExit
-							(
-								[&]()
-								{
-									if (pConn)
-										fg_Close(pConn);
-								}
-							)
-						;
-						
-
-						mint nSent = fg_Send(pConn, Message, nMessageBytes);
+						mint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
 					catch (CExceptionNet const& _Exception)
@@ -627,137 +485,104 @@ public:
 					}
 
 					return 0;
-				},
-				"TestConnectListen_Server"
-			);
+				}
+				, "TestConnectListen_Server"
+			)
+		;
 
 		if (ServerReady.f_WaitTimeout(gc_Timeout))
 			DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
-		NMib::NSys::fg_Thread_Sleep(1.0f);
+		NSys::fg_Thread_Sleep(1.0f);
 
-		auto ClientThread = NThread::CThreadObject::fs_StartThread(
-			[&](NThread::CThreadObject* _pThread) -> aint
-			{
-				try
+		auto ClientThread = CThreadObject::fs_StartThread
+			(
+				[&](CThreadObject *_pThread) -> aint
 				{
-					//return f_InternalConnectListen_Client<t_CNetAddress, _Type>(Address, _Port);
-					void* pClient = fg_Connect(Address, nullptr, nullptr);
-
-
-					DMibTest(DMibExpr(pClient) != DMibExpr(nullptr));
-					if (pClient == nullptr)
-						return -1;
-
-					auto CleanupClient
-						= fg_OnScopeExit
-						(
-							[&]()
-							{
-								if (pClient)
-									fg_Close(pClient);
-							}
-						)
-					;
-					
+					DMibTestPath("Client");
+					try
 					{
-						mint nReceived = 0, nBytes;
-						uint8 Incoming[nMessageBytes];
-						NMemory::fg_MemClear(Incoming, nMessageBytes);
-						NTime::CTimeout Timeout(gc_Timeout);
+						CSocket Client;
+						Client.f_Connect(Address);
 
-						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
+						DMibExpectTrue(Client.f_IsValid());
+						if (!Client.f_IsValid())
+							return -1;
+
 						{
-							nBytes = fg_Receive(pClient, &Incoming[nReceived], nMessageBytes - nReceived);
+							mint nReceived = 0, nBytes;
+							uint8 Incoming[nMessageBytes];
+							fg_MemClear(Incoming, nMessageBytes);
+							CTimeout Timeout(gc_Timeout);
 
-							if (nBytes == -1)
-								break;
+							while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
+							{
+								nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived);
 
-							nReceived += nBytes;
+								if (nBytes == -1)
+									break;
+
+								nReceived += nBytes;
+							}
+
+							DMibExpect(nBytes, !=, -1);
+							DMibExpect(nReceived, ==, nMessageBytes);
+							DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 						}
-
-						DMibExpect(nBytes, !=, -1);
-						DMibExpect(nReceived, ==, nMessageBytes);
-						DMibExpect(NMemory::fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
-				}
-				catch (CExceptionNet const& _Exception)
-				{
-					(void)_Exception;
-					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-				}
+					catch (CExceptionNet const& _Exception)
+					{
+						(void)_Exception;
+						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+					}
 
-				return 0;
-			},
-			"TestConnectListen_Client"
-		);
+					return 0;
+				}
+				, "TestConnectListen_Client"
+			)
+		;
 
 		ClientThread->f_Stop();
 		ServerThread->f_Stop();
-
 	}
 
 
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestInherit(NMib::NStr::CStr _Address, uint16 _Port)
+	template<typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestInherit(CStr _Address, uint16 _Port)
 	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
 		{
+			DMibTestPath("SetPort");
 			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+			DMibExpectTrue(Address.f_Get(Return));
+
 			Return.m_Port = _Port;
+			Address.f_Set(Return);
 
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
+			DMibExpectFalse(Address.f_IsEmpty());
 
-			if (!Address)
+			if (Address.f_IsEmpty())
 				return;
 		}
 
+		CEventAutoResetReportable SocketEvent;
 
-		NMib::NThread::CEventAutoResetReportable SocketEvent;
+		CSocket Socket;
+		Socket.f_Connect(Address);
 
-		void* pSocket = fg_Connect(Address, nullptr, nullptr);
-
-		auto Cleanup
-			= fg_OnScopeExit
-			(
-				[&]()
-				{
-					if (pSocket)
-						fg_Close(pSocket);
-				}
-			)
-		;
-		
-		
-
-		DMibTest(DMibExpr(pSocket) != DMibExpr(nullptr));
-		if (pSocket == nullptr)
+		DMibExpectTrue(Socket.f_IsValid());
+		if (!Socket.f_IsValid())
 			return;
 
 		{
-			void* pOldSocket = pSocket;
-			pSocket = nullptr;
-			void* pOSSocket = fg_GiveUpForInherit(pOldSocket);
+			CSocket OldSocket = fg_Move(Socket);
+			void *pOSSocket = OldSocket.f_GiveUpForInherit();
+			OldSocket.f_Close();
 
-			fg_Close(pOldSocket);
-
-			pSocket = fg_InheritHandle2
+			Socket.f_InheritHandle2
 				(
-					pOSSocket
-					, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
+				 	pOSSocket
+				 	, [&SocketEvent](ENetTCPState _StateAdded)
 					{
 						SocketEvent.f_Signal();
 					}
@@ -766,19 +591,17 @@ public:
 		}
 
 		static mint const nBufferBytes = 1024*1024*4;
-		NContainer::CByteVector lBuffer;
-		lBuffer.f_SetLen(nBufferBytes);
-		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NContainer::CByteVector Buffer;
+		Buffer.f_SetLen(nBufferBytes);
+		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;
 			mint nSent = -1;
 
-//			DMibTraceRaw("Entering send loop\n");
 			while(nTotalSent < nBufferBytes)
 			{
-				nSent = fg_Send(pSocket, lBuffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);			
-//				DMibTrace("Sent: {}\n", nSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
 
@@ -788,104 +611,77 @@ public:
 
 				if (bStuffed)
 				{
-//					DMibTrace("Waiting after sending {} bytes\n", nTotalSent);
 					do
 					{
-//						DMibTraceRaw("...Wait\n");
 						if (SocketEvent.f_WaitTimeout(gc_Timeout))
 							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
-					} while ( !(fg_GetState(pSocket) & ENetTCPState_Write) );
+					}
+					while (!(Socket.f_GetState() & ENetTCPState_Write))
+						;
 				}
 			}
 			
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-
 			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
-
 		}
 	}
 
-
-	template<typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestAsyncConnectReportTo(NMib::NStr::CStr _Address, uint16 _Port)
+	template<typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestAsyncConnectReportTo(CStr _Address, uint16 _Port)
 	{
-//		CAddress Address = fg_CreateAddress(_Type, &_Address, sizeof(t_CNetAddress));
-		CAddress Address = fg_ResolveAddress(_Address, _Type);
-		auto CleanupAddress
-			= g_OnScopeExit > [&]()
-			{
-				if (Address)
-					fg_FreeAddress(Address);
-				Address = nullptr;
-			}
-		;
-		DMibTest(DMibExpr(Address) != DMibExpr(nullptr));
-
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
 		{
+			DMibTestPath("SetPort");
 			t_CNetAddress Return;
-			DMibTest(DMibExpr(fg_GetAddressRaw(Address, _Type, &Return, sizeof(Return))) == DMibExpr((bint)true));
+			DMibExpectTrue(Address.f_Get(Return));
+
 			Return.m_Port = _Port;
+			Address.f_Set(Return);
 
-			CAddress TmpAddress = fg_SetAddressRaw(Address, _Type, &Return, sizeof(Return));
-			DMibTest(DMibExpr(TmpAddress) != DMibExpr(nullptr));
-			Address = TmpAddress;
+			DMibExpectFalse(Address.f_IsEmpty());
 
-			if (!Address)
+			if (Address.f_IsEmpty())
 				return;
 		}
 
+		TCSharedPointer<CEventAutoResetReportable> pSocketEvent = fg_Construct();
 
-		NMib::NThread::CEventAutoResetReportable SocketEvent;
+		CSocket Socket;
 
-		void* pSocket = fg_AsyncConnect
+		Socket.f_AsyncConnect
 			(
 				Address
-				, [&SocketEvent](::NMib::NNetwork::ENetTCPState _StateAdded)
+				, [pSocketEvent](ENetTCPState _StateAdded)
 				{
-					SocketEvent.f_Signal();
+					pSocketEvent->f_Signal();
 				}
-				, nullptr
 			)
 		;
 
-		auto Cleanup
-			= fg_OnScopeExit
-			(
-				[&]()
-				{
-					if (pSocket)
-						fg_Close(pSocket);
-				}
-			)
-		;
-		
-		DMibTest(DMibExpr(pSocket) != DMibExpr(nullptr));
-		if (pSocket == nullptr)
+		DMibExpectTrue(Socket.f_IsValid());
+		if (!Socket.f_IsValid())
 			return;
 
-		NTime::CTimeout Timeout(gc_Timeout);
+		CTimeout Timeout(gc_Timeout);
 
-		while( !(fg_GetState(pSocket) & ENetTCPState_Connected) && !Timeout.f_TimedOut())
-		{
-			SocketEvent.f_WaitTimeout(gc_Timeout);
-		};
-		
-		DMibTest(!DMibExpr(Timeout.f_TimedOut()))(ETest_FailAndStop);
+		while (!(Socket.f_GetState() & ENetTCPState_Connected) && !Timeout.f_TimedOut())
+			pSocketEvent->f_WaitTimeout(gc_Timeout);
+
+		DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
 
 		static mint const nBufferBytes = 1024*1024*4;
-		NContainer::CByteVector lBuffer;
-		lBuffer.f_SetLen(nBufferBytes);
-		NMemory::fg_MemClear(lBuffer.f_GetArray(), lBuffer.f_GetLen());
+		NContainer::CByteVector Buffer;
+		Buffer.f_SetLen(nBufferBytes);
+		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			mint nTotalSent = 0;
 			mint nSent = -1;
 
-//			DMibTraceRaw("Entering send loop\n");
-			while(nTotalSent < nBufferBytes)
+			while (nTotalSent < nBufferBytes)
 			{
-				nSent = fg_Send(pSocket, lBuffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);			
-//				DMibTrace("Sent: {}\n", nSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
 
@@ -895,22 +691,18 @@ public:
 
 				if (bStuffed)
 				{
-//					DMibTrace("Waiting after sending {} bytes\n", nTotalSent);
 					do
 					{
-//						DMibTraceRaw("...Wait\n");
-						if (SocketEvent.f_WaitTimeout(gc_Timeout))
+						if (pSocketEvent->f_WaitTimeout(gc_Timeout))
 							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
-					} while ( !(fg_GetState(pSocket) & ENetTCPState_Write) );
+					}
+					while (!(Socket.f_GetState() & ENetTCPState_Write))
+						;
 				}
 			}
 
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-
-//			DMibTest(DMibExpr(nSent) > DMibExpr(0)); // Socket event was useless.
-
 			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
-
 		}
 	}	
 
@@ -923,98 +715,93 @@ public:
 		CNetAddressTCPv6 const Localhost_TCPv6( CNetAddressIPv6(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1), Port);
 		CNetAddressTCPv6 const Other_TCPv6( CNetAddressIPv6(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2), Port);
 
-		NStr::CStr RemoteMachine = fg_GetLoopbackMachine();
+		CStr RemoteMachine = fg_GetLoopbackMachine();
 
-		//DMibTestCategory(CTestCategory("Manual tests") << CTestGroup("Manual"))
+		DMibTestSuite("Addresses_TCPv4")
 		{
-			DMibTestSuite("Addresses_TCPv4")
-			{			
-				f_TestAddress<CNetAddressTCPv4, ENetAddressType_TCPv4, CNetAddressTCPv6, ENetAddressType_TCPv6>(Localhost_TCPv4, Other_TCPv4);
-			};
+			f_TestAddress(Localhost_TCPv4, Other_TCPv4);
+		};
 
-			DMibTestSuite("Addresses_TCPv6")
-			{				
-				f_TestAddress<CNetAddressTCPv6, ENetAddressType_TCPv6, CNetAddressTCPv4, ENetAddressType_TCPv4>(Localhost_TCPv6, Other_TCPv6);
-			};
+		DMibTestSuite("Addresses_TCPv6")
+		{
+			f_TestAddress(Localhost_TCPv6, Other_TCPv6);
+		};
 
-			DMibTestSuite("Resolve_TCPv4")
-			{
-				f_TestResolve<CNetAddressTCPv4, ENetAddressType_TCPv4>("localhost", Localhost_TCPv4);
-			};
+		DMibTestSuite("Resolve_TCPv4")
+		{
+			f_TestResolve("localhost", Localhost_TCPv4);
+		};
 
-			DMibTestSuite("Resolve_TCPv6")
-			{
-				f_TestResolve<CNetAddressTCPv6, ENetAddressType_TCPv6>("localhost", Localhost_TCPv6);
-			};
+		DMibTestSuite("Resolve_TCPv6")
+		{
+			f_TestResolve("localhost", Localhost_TCPv6);
+		};
 
-			DMibTestSuite("AsyncResolve_TCPv4")
-			{
-				f_TestAsyncResolve<CNetAddressTCPv4, ENetAddressType_TCPv4>("localhost", Localhost_TCPv4);
-			};
+		DMibTestSuite("AsyncResolve_TCPv4")
+		{
+			f_TestAsyncResolve("localhost", Localhost_TCPv4);
+		};
 
-			DMibTestSuite("AsyncResolve_TCPv6")
-			{
-				f_TestAsyncResolve<CNetAddressTCPv6, ENetAddressType_TCPv6>("localhost", Localhost_TCPv6);
-			};
+		DMibTestSuite("AsyncResolve_TCPv6")
+		{
+			f_TestAsyncResolve("localhost", Localhost_TCPv6);
+		};
 
-			DMibTestSuite("Connect_TCPv4")
-			{
-				f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20677);
-			};
+		DMibTestSuite("Connect_TCPv4")
+		{
+			f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20677);
+		};
 
-			DMibTestSuite("Connect_TCPv6")
-			{
-				f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20677);
-			};
+		DMibTestSuite("Connect_TCPv6")
+		{
+			f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20677);
+		};
 
-			DMibTestSuite("ConnectListen_TCPv4")
-			{
-				f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20678, 20680);
-			};
+		DMibTestSuite("ConnectListen_TCPv4")
+		{
+			f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20678, 20680);
+		};
 
-			DMibTestSuite("ConnectListen_TCPv6")
-			{
-				f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20678, 20680);
-			};
+		DMibTestSuite("ConnectListen_TCPv6")
+		{
+			f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20678, 20680);
+		};
 
-			DMibTestSuite("ConnectReportTo_TCPv4")
-			{
-				f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
-			};
+		DMibTestSuite("ConnectReportTo_TCPv4")
+		{
+			f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
+		};
 
-			DMibTestSuite("ConnectReportTo_TCPv6")
-			{
-				f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20679);
-			};
+		DMibTestSuite("ConnectReportTo_TCPv6")
+		{
+			f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20679);
+		};
 
-			DMibTestSuite("ConnectListenReportTo_TCPv4")
-			{
-				f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20678, 20680);
-			};
+		DMibTestSuite("ConnectListenReportTo_TCPv4")
+		{
+			f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20678, 20680);
+		};
 
-			DMibTestSuite("ConnectListenReportTo_TCPv6")
-			{
-				f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20678, 20680);
-			};
+		DMibTestSuite("ConnectListenReportTo_TCPv6")
+		{
+			f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20678, 20680);
+		};
 
-			DMibTestSuite("Inherit")
-			{
-				f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
-			};
+		DMibTestSuite("Inherit")
+		{
+			f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
+		};
 
-			DMibTestSuite("AsyncConnectReportTo_TCPv4")
-			{
-				f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
-			};
+		DMibTestSuite("AsyncConnectReportTo_TCPv4")
+		{
+			f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(RemoteMachine, 20679);
+		};
 
-			DMibTestSuite("AsyncConnectReportTo_TCPv6")
-			{
-				f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20679);
-			};
-
+		DMibTestSuite("AsyncConnectReportTo_TCPv6")
+		{
+			f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(RemoteMachine, 20679);
 		};
 	}
 };
 
 DMibTestRegister(CSysNet_Tests, Malterlib::Network);
-

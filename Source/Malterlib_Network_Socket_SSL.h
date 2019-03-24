@@ -30,41 +30,42 @@ namespace NMib::NNetwork
 		virtual ~CSocket_SSL() override;
 
 		virtual bool f_IsValid() const override;
+		virtual bool f_HandshakeDone() const override;
 		virtual void f_Close() override;
 		virtual void f_Shutdown() override;
 		virtual void f_Connect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) override
 		;
 		virtual void f_AsyncConnect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) override
 		;
 		virtual void f_Listen
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::ENetFlag _Flags
 			) override
 		;
 		virtual void f_ListenDatagram
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, NMib::NNetwork::ENetFlag _Flags
 			) override
 		;
-		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
-		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual void *f_GiveUpForInherit() override;
 		virtual void *f_GetOSSocket() override;
-		virtual void f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		virtual void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual ENetTCPState f_GetState() override;
 		virtual NStr::CStr f_GetCloseReason() override;
 		virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) override;
@@ -101,10 +102,10 @@ namespace NMib::NNetwork
 		void fp_HandleHandshakeDone();
 		void fp_CheckBrokenState();
 		void fp_AddTCPState(ENetTCPState _ToAdd);
-		NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> fp_SharedOnStateChange();
+		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> fp_SharedOnStateChange();
 
 		NAtomic::TCAtomic<uint32> mp_ExtraState;
-		NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
+		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
 		CSocket mp_Socket;
 		NStorage::TCSharedPointer<CSSLContext> mp_pSSLContext;

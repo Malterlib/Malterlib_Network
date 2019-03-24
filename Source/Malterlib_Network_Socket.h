@@ -19,29 +19,36 @@ namespace NMib::NNetwork
 		}
 
 		virtual bool f_IsValid() const = 0;
+		virtual bool f_HandshakeDone() const = 0;
 		virtual void f_Close() = 0;
 		virtual void f_Shutdown() = 0;
 		virtual void f_Connect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) = 0
 		;
 		virtual void f_AsyncConnect
 			(
 			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) = 0
 		;
-		virtual void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
-		virtual void f_ListenDatagram(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
-		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
-		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
+		virtual void f_ListenDatagram
+			(
+			 	NMib::NNetwork::CNetAddress const &_Address
+			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			 	, ENetFlag _Flags
+			) = 0
+		;
+		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
 		virtual void *f_GiveUpForInherit() = 0;
 		virtual void *f_GetOSSocket() = 0;
-		virtual void f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
+		virtual void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
 		virtual ENetTCPState f_GetState() = 0;
 		virtual NStr::CStr f_GetCloseReason() = 0;
 		virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) = 0;

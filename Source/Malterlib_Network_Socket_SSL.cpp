@@ -26,6 +26,11 @@ namespace NMib::NNetwork
 		return mp_Socket.f_IsValid();
 	}
 
+	bool CSocket_SSL::f_HandshakeDone() const
+	{
+		return mp_State == EState_Done;
+	}
+
 	void CSocket_SSL::f_Close()
 	{
 		return mp_Socket.f_Close();
@@ -41,7 +46,7 @@ namespace NMib::NNetwork
 		}
 	}
 
-	NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> CSocket_SSL::fp_SharedOnStateChange()
+	NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> CSocket_SSL::fp_SharedOnStateChange()
 	{
 		return [this](ENetTCPState _StateAdded)
 			{
@@ -54,7 +59,7 @@ namespace NMib::NNetwork
 	void CSocket_SSL::f_Connect
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
@@ -70,7 +75,7 @@ namespace NMib::NNetwork
 	void CSocket_SSL::f_AsyncConnect
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
@@ -96,7 +101,12 @@ namespace NMib::NNetwork
 		;
 	}
 
-	void CSocket_SSL::f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags)
+	void CSocket_SSL::f_Listen
+		(
+		 	NMib::NNetwork::CNetAddress const &_Address
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NNetwork::ENetFlag _Flags
+		)
 	{
 		if (!mp_pSSLContext->f_IsServerContext())
 			DMibErrorNet("SSL context is not a server context when trying to listen");
@@ -109,14 +119,14 @@ namespace NMib::NNetwork
 	void CSocket_SSL::f_ListenDatagram
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		DMibErrorNet("Datagrams not supported");
 	}
 
-	NStorage::TCUniquePointer<ICSocket> CSocket_SSL::f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	NStorage::TCUniquePointer<ICSocket> CSocket_SSL::f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		NStorage::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_AuthenticationResultCallback, mp_UserTrustDecisionCallback, "");
 		pSocket->mp_fOnStateChange = fg_Move(_fOnStateChange);
@@ -129,7 +139,7 @@ namespace NMib::NNetwork
 		return fg_Move(pSocket);
 	}
 
-	void CSocket_SSL::f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	void CSocket_SSL::f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		DMibErrorNet("Not implemented");
 	}
@@ -145,7 +155,7 @@ namespace NMib::NNetwork
 		return mp_Socket.f_GetOSSocket();
 	}
 
-	void CSocket_SSL::f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	void CSocket_SSL::f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		{
 			DMibLock(mp_fOnStateChangeLock);
@@ -220,6 +230,8 @@ namespace NMib::NNetwork
 			DMibLog(DebugVerbose2, " **** CSocket_SSL broken state");
 			return {};
 		}
+		if (!_DataLen)
+			return {};
 
 		CSocketOperationResult Return = mp_SSLConnection.f_Send(_pData, _DataLen);
 		if (!Return.m_nBytes)

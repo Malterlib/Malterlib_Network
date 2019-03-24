@@ -71,4 +71,69 @@ namespace NMib::NNetwork
 			m_bReceivedNetwork = true;
 		return *this;
 	}
+
+	void CSocket::f_Connect
+		(
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::CNetAddress const &_BindAddress
+			, fp64 _Timeout
+		)
+	{
+		f_Close();
+
+		struct CState
+		{
+			NMib::NThread::CEventAutoResetReportable m_Event;
+			bool m_bEventAbandonned = false;
+			bool m_bConnected = false;
+		};
+
+		NStorage::TCSharedPointer<CState> pState = fg_Construct();
+
+		auto CleanupEvent = g_OnScopeExit > [pState]
+			{
+				pState->m_bEventAbandonned = true;
+			}
+		;
+
+		mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect
+			(
+				_Address
+				, [pState, fOnStateChange = fg_Move(_fOnStateChange)](::NMib::NNetwork::ENetTCPState _StateAdded) mutable
+				{
+					if (!pState->m_bEventAbandonned && (_StateAdded & ENetTCPState_Connected))
+					{
+						pState->m_bConnected = true;
+						pState->m_Event.f_Signal();
+						return;
+					}
+					if (fOnStateChange)
+						fOnStateChange(_StateAdded);
+				}
+				, _BindAddress
+			)
+		;
+
+		auto Cleanup = g_OnScopeExit > [&]
+			{
+				NMib::NSys::NNetwork::fg_Close(mp_pSocket);
+				mp_pSocket = nullptr;
+			}
+		;
+
+		NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
+
+		NTime::CClock Clock(true);
+
+		while (!pState->m_bConnected && Clock.f_GetTime() < _Timeout)
+		{
+			fp64 TimeLeft = _Timeout - Clock.f_GetTime();
+			if (TimeLeft <= 0)
+				DMibErrorNet("Timed out waiting for connection");
+			pState->m_Event.f_WaitTimeout(TimeLeft);
+		};
+
+		Cleanup.f_Clear();
+	}
 }

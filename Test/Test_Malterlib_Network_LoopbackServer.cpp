@@ -115,6 +115,10 @@ namespace
 																					(*pSocketShared).f_Clear();
 																				}
 																			}
+
+																			if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
+																				(*pSocketShared)->f_Shutdown();
+
 																			if (_StateAdded & NNetwork::ENetTCPState_Closed)
 																			{
 																				m_ConnectedSockets.f_Remove(*pSocket);
@@ -181,6 +185,10 @@ namespace
 																						(*pSocketSharedMirror).f_Clear();
 																					}
 																				}
+																				
+																				if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
+																					(*pSocketSharedMirror)->f_Shutdown();
+
 																				if (_StateAdded & NNetwork::ENetTCPState_Closed)
 																				{
 																					m_ConnectedSockets.f_Remove(*pSocketMirror);

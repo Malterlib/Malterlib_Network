@@ -27,6 +27,11 @@ namespace NMib::NNetwork
 		return mp_Socket.f_IsValid();
 	}
 
+	bool CSocket_TCP::f_HandshakeDone() const
+	{
+		return true;
+	}
+
 	void CSocket_TCP::f_Close()
 	{
 		return mp_Socket.f_Close();
@@ -40,7 +45,7 @@ namespace NMib::NNetwork
 	void CSocket_TCP::f_Connect
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
@@ -50,7 +55,7 @@ namespace NMib::NNetwork
 	void CSocket_TCP::f_AsyncConnect
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
@@ -60,7 +65,7 @@ namespace NMib::NNetwork
 	void CSocket_TCP::f_Listen
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
@@ -70,14 +75,14 @@ namespace NMib::NNetwork
 	void CSocket_TCP::f_ListenDatagram
 		(
 		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 		 	, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		return mp_Socket.f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
 	}
 
-	NStorage::TCUniquePointer<ICSocket> CSocket_TCP::f_Accept(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	NStorage::TCUniquePointer<ICSocket> CSocket_TCP::f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		NStorage::TCUniquePointer<CSocket_TCP> pSocket = fg_Construct();
 		pSocket->mp_Socket.f_Accept(&mp_Socket, fg_Move(_fOnStateChange));
@@ -86,7 +91,7 @@ namespace NMib::NNetwork
 		return fg_Move(pSocket);
 	}
 
-	void CSocket_TCP::f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	void CSocket_TCP::f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		return mp_Socket.f_InheritHandle2(_pSocketHandle, fg_Move(_fOnStateChange));
 	}
@@ -101,7 +106,7 @@ namespace NMib::NNetwork
 		return mp_Socket.f_GetOSSocket();
 	}
 
-	void CSocket_TCP::f_SetOnStateChange(NMib::NFunction::TCFunction<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	void CSocket_TCP::f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		return mp_Socket.f_SetOnStateChange(fg_Move(_fOnStateChange));
 	}
@@ -127,6 +132,8 @@ namespace NMib::NNetwork
 
 	CSocketOperationResult CSocket_TCP::f_Send(const void *_pData, mint _DataLen)
 	{
+		if (!_DataLen)
+			return {};
 		CSocketOperationResult Result;
 		Result.m_nBytes = mp_Socket.f_Send(_pData, _DataLen);
 		if (Result.m_nBytes != 0)

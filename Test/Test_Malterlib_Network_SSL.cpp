@@ -117,7 +117,7 @@ public:
 			CByteVector Decrypted;
 			CByteVector Encrypted;
 			
-			PlainText = f_GetRandomBuffer(32, 7);
+			PlainText = f_GetRandomBuffer(32, 7).f_ToInsecure();
 
 			uint32 EncryptedLen = EncryptAES.f_Encrypt(PlainText.f_GetArray(), PlainText.f_GetLen(), Encrypted.f_GetArray(32));
 			uint32 DecryptedLen = EncryptAES.f_Decrypt(Encrypted.f_GetArray(), Encrypted.f_GetLen(), Decrypted.f_GetArray(32));
@@ -224,7 +224,7 @@ public:
 			for (auto Length : Lengths)
 			{
 				DMibTestPath(fg_Format("Buffer length: {}", Length));
-				PlainText = f_GetRandomBuffer(Length, 8);
+				PlainText = f_GetRandomBuffer(Length, 8).f_ToInsecure();
 				auto KeyIV = CEncryptKeyIV::fs_GenerateKeyIV(Password, Salt, CKeyDerivationSettings_PKCS5_Deprecated{});
 				CIncrementalEncrypt EncryptAES(ESSLCryptoFlags_Encrypt | ESSLCryptoFlags_UsePadding, KeyIV);
 				CIncrementalEncrypt DecryptAES(ESSLCryptoFlags_Decrypt | ESSLCryptoFlags_UsePadding, KeyIV);
@@ -363,7 +363,7 @@ public:
 			{
 				Encrypted.f_SetLen(Length);
 				Decrypted.f_SetLen(Length);
-				PlainText = f_GetRandomBuffer(Length, 9);
+				PlainText = f_GetRandomBuffer(Length, 9).f_ToInsecure();
 
 				for (auto const &Cipher : Ciphers)
 				{
