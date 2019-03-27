@@ -1,4 +1,4 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 Import "../Core/Lib_Malterlib.MTarget"
@@ -48,7 +48,7 @@ Property
 {
 	!!MalterlibSSLLibrary BoringSSL
 
-	Import.CMake_FullRebuildVersion 10
+	Import.CMake_FullRebuildVersion 15
 	Compile
 	{
 		!!MalterlibCompileSupportTabSetings true
@@ -133,7 +133,7 @@ Compile
 		LanguageFamily Native
 		CompileDialect C
 	}
-	
+
 	SearchPath "@('../../External/boringssl/include'->MakeAbsolute());@(Compile.SearchPath)"
 	{
 		!!MalterlibSSLLibrary BoringSSL
@@ -225,7 +225,7 @@ Property
 Property
 {
 	!!MalterlibEnableInternalTests true
-	
+
 	MalterlibTests "Malterlib_Network;@(MalterlibTests)"
 	MalterlibTestFiles_Malterlib_Network "@('Test/*'->MakeAbsolute())"
 	MalterlibTestDependencies_Malterlib_Network "Lib_Malterlib_Network"
