@@ -112,7 +112,15 @@ namespace NMib::NNetwork
 						if (_StateAdded & NNetwork::ENetTCPState_Closed)
 						{
 							if (!pReplied->f_Exchange(true))
-								Promise.f_SetException(DMibErrorInstance(pPending->m_pSocket->f_GetCloseReason()));
+							{
+								NStr::CStr Error;
+								if (!*pPendingDeleted)
+									Error = pPending->m_pSocket->f_GetCloseReason();
+								else
+									Error = "Client connection actor was deleted";
+
+								Promise.f_SetException(DMibErrorInstance(Error));
+							}
 
 							CleanupPending.f_Clear();
 						}
