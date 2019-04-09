@@ -43,11 +43,11 @@ namespace NMib::NNetwork
 	using CSSLKeySetting = NStorage::TCStreamableVariant
 		<
 			ESSLKeyType
-			, CSSLKeySettings_RSA, ESSLKeyType_RSA
-			, CSSLKeySettings_EC_secp256r1, ESSLKeyType_EC_secp256r1
-			, CSSLKeySettings_EC_secp384r1, ESSLKeyType_EC_secp384r1
-			, CSSLKeySettings_EC_secp521r1, ESSLKeyType_EC_secp521r1
-			, CSSLKeySettings_EC_X25519, ESSLKeyType_EC_X25519
+			, NStorage::TCMember<CSSLKeySettings_RSA, ESSLKeyType_RSA>
+			, NStorage::TCMember<CSSLKeySettings_EC_secp256r1, ESSLKeyType_EC_secp256r1>
+			, NStorage::TCMember<CSSLKeySettings_EC_secp384r1, ESSLKeyType_EC_secp384r1>
+			, NStorage::TCMember<CSSLKeySettings_EC_secp521r1, ESSLKeyType_EC_secp521r1>
+			, NStorage::TCMember<CSSLKeySettings_EC_X25519, ESSLKeyType_EC_X25519>
 		>
 	;
 
@@ -117,8 +117,8 @@ namespace NMib::NNetwork
 	using CKeyDerivationSettings = NStorage::TCStreamableVariant
 		<
 			EKeyDerivationType
-			, CKeyDerivationSettings_Scrypt, EKeyDerivationType_Scrypt
-			, CKeyDerivationSettings_PKCS5_PBKDF2_HMAC, EKeyDerivationType_PKCS5_PBKDF2_HMAC
+			, NStorage::TCMember<CKeyDerivationSettings_Scrypt, EKeyDerivationType_Scrypt>
+			, NStorage::TCMember<CKeyDerivationSettings_PKCS5_PBKDF2_HMAC, EKeyDerivationType_PKCS5_PBKDF2_HMAC>
 		>
 	;
 
