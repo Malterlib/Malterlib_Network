@@ -9,6 +9,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type StaticLibrary
 	Target.BaseName boringssl_gtest
 	%Group third_party
@@ -41,6 +44,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type StaticLibrary
 	Target.BaseName crypto
 	%Group crypto
@@ -1306,6 +1312,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type ConsoleExecutable
 	Target.BaseName crypto_test
 	%Group crypto
@@ -1701,6 +1710,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type StaticLibrary
 	Target.BaseName test_support_lib
 	%Group crypto
@@ -1740,6 +1752,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type StaticLibrary
 	Target.BaseName ssl
 	%Group ssl
@@ -1904,6 +1919,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type ConsoleExecutable
 	Target.BaseName ssl_test
 	%Group ssl
@@ -1939,6 +1957,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type ConsoleExecutable
 	Target.BaseName bssl_shim
 	%Group ssl
@@ -1989,6 +2010,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type ConsoleExecutable
 	Target.BaseName bssl
 	%Group tool
@@ -2067,6 +2091,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type StaticLibrary
 	Target.BaseName decrepit
 	%Group decrepit
@@ -2204,6 +2231,9 @@ Property.CMakeOutputPath_BoringSSL "@('.'->MakeAbsolute())"
 	}
 	Property.MalterlibTargetNameType Normal
 	Target.Group "External/BoringSSL"
+	{
+		!!Target.Group ""
+	}
 	Target.Type ConsoleExecutable
 	Target.BaseName decrepit_test
 	%Group decrepit
