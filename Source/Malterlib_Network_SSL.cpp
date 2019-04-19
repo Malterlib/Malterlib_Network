@@ -618,7 +618,12 @@ namespace NMib::NNetwork
 
 			if (_PreVerifyOK == 0)
 			{
-				if (Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH)
+				if
+					(
+						Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH
+						|| Error == X509_V_ERR_AKID_SKID_MISMATCH
+						|| Error == X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH
+					)
 				{
 					// Don't log these. And I quote:
 					// The presence of rejection messages does not itself imply that anything is wrong: during the normal verify process several rejections may take place.
