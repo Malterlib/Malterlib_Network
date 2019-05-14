@@ -5,6 +5,7 @@
 #include <Mib/Test/Test>
 #include <Mib/Network/AsyncSocket>
 #include <Mib/Network/Sockets/SSL>
+#include <Mib/Cryptography/Certificate>
 
 using namespace NMib::NNetwork;
 using namespace NMib;
@@ -15,10 +16,11 @@ using namespace NMib::NStr;
 using namespace NMib::NConcurrency;
 using namespace NMib::NStorage;
 using namespace NMib::NFunction;
+using namespace NMib::NCryptography;
 
 namespace
 {
-	CSSLKeySetting gc_TestTestKeySetting = CSSLKeySettings_EC_secp256r1{};
+	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
 	char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
 	fp64 g_Timeout = 5.0;
 }
@@ -634,12 +636,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions Options;
+						CCertificateOptions Options;
 						Options.m_CommonName = "Malterlib test Self Signed";
 						Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						Options.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
 
@@ -664,12 +666,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
@@ -680,12 +682,12 @@ public:
 						
 						CByteVector CertificateRequestData;
 
-						CSSLContext::CCertificateOptions ClientOptions;
+						CCertificateOptions ClientOptions;
 						ClientOptions.m_CommonName = "Test Client";
 						ClientOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
-						CSSLContext::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
 
 						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
 						
@@ -704,12 +706,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
@@ -717,25 +719,25 @@ public:
 						CSSLSettings ClientSettings;
 						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
 
-						CSSLContext::CCertificateOptions ClientOptions;
+						CCertificateOptions ClientOptions;
 						ClientOptions.m_CommonName = "Test Client";
 						ClientOptions.m_KeySetting = gc_TestTestKeySetting;
 						
 						CByteVector CertificateRequestData;
-						CSSLContext::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
-						CSSLContext::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate(ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData, CertificateRequestData, ClientSettings.m_PublicCertificateData);
 						
 						CSSLSettings ClientSettings2;
 						ClientSettings2.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
 						ClientSettings2.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 
-						CSSLContext::CCertificateOptions ClientOptions2;
+						CCertificateOptions ClientOptions2;
 						ClientOptions2.m_CommonName = "Test Client";
 						ClientOptions2.m_KeySetting = gc_TestTestKeySetting;
 						
 						CByteVector CertificateRequestData2;
-						CSSLContext::fs_GenerateClientCertificateRequest(ClientOptions2, CertificateRequestData2, ClientSettings2.m_PrivateKeyData);
-						CSSLContext::fs_SignClientCertificate(ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData, CertificateRequestData2, ClientSettings2.m_PublicCertificateData);
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions2, CertificateRequestData2, ClientSettings2.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate(ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData, CertificateRequestData2, ClientSettings2.m_PublicCertificateData);
 						
 						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings2);
 						
@@ -754,12 +756,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 
@@ -769,12 +771,12 @@ public:
 						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
 						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 						
-						CSSLContext::CCertificateOptions ClientOptions;
+						CCertificateOptions ClientOptions;
 						ClientOptions.m_CommonName = "Test Client";
 						ClientOptions.m_KeySetting = gc_TestTestKeySetting;
 						ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
 
 						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
 						
@@ -793,12 +795,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 
@@ -812,11 +814,7 @@ public:
 						
 						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
 					}
-#ifdef DMibSSLLibrary_BoringSSL
 					, "Socket closed: PEER_DID_NOT_RETURN_A_CERTIFICATE"
-#else
-					, "Socket closed: Peer did not return a certificate"
-#endif
 					, ""
 				)
 			;
@@ -829,12 +827,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 						ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
 
@@ -861,12 +859,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 						ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
 
@@ -876,12 +874,12 @@ public:
 						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
 						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 						
-						CSSLContext::CCertificateOptions ClientOptions;
+						CCertificateOptions ClientOptions;
 						ClientOptions.m_CommonName = "Test Client";
 						ClientOptions.m_KeySetting = gc_TestTestKeySetting;
 						ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
 
 						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
 						
@@ -900,19 +898,19 @@ public:
 					{
 						CSSLSettings ServerSettings;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						
 						CSSLSettings ServerSettings2;
-						CSSLContext::CCertificateOptions ServerOptions2;
+						CCertificateOptions ServerOptions2;
 						ServerOptions2.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions2.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions2.m_KeySetting = gc_TestTestKeySetting;
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions2, ServerSettings2.m_PublicCertificateData, ServerSettings2.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions2, ServerSettings2.m_PublicCertificateData, ServerSettings2.m_PrivateKeyData);
 
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
 
@@ -936,12 +934,12 @@ public:
 					{
 						CSSLSettings ServerSettings;
 						
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
 
@@ -966,25 +964,25 @@ public:
 						CByteVector RootCertData;
 						CSecureByteVector RootKeyData;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
 
 						CByteVector ChildCertData;
 						CSecureByteVector ChildKeyData;
 						CByteVector RequestData;
 
-						CSSLContext::CCertificateOptions RequestOptions;
+						CCertificateOptions RequestOptions;
 						RequestOptions.m_CommonName = "Malterlib test request";
 						RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						RequestOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
+						CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
 						
-						CSSLContext::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
+						CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
 						
 						ServerSettings.m_PublicCertificateData = ChildCertData;
 						ServerSettings.m_PrivateKeyData = ChildKeyData; 
@@ -1013,25 +1011,25 @@ public:
 						CByteVector RootCertData;
 						CSecureByteVector RootKeyData;
 
-						CSSLContext::CCertificateOptions ServerOptions;
+						CCertificateOptions ServerOptions;
 						ServerOptions.m_CommonName = "Malterlib test Self Signed";
 						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						ServerOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
 
 						CByteVector ChildCertData;
 						CSecureByteVector ChildKeyData;
 						CByteVector RequestData;
 
-						CSSLContext::CCertificateOptions RequestOptions;
+						CCertificateOptions RequestOptions;
 						RequestOptions.m_CommonName = "Malterlib test request";
 						RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
 						RequestOptions.m_KeySetting = gc_TestTestKeySetting;
 						
-						CSSLContext::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
+						CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
 						
-						CSSLContext::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
+						CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
 						
 						ServerSettings.m_PublicCertificateData = ChildCertData;
 						ServerSettings.m_PrivateKeyData = ChildKeyData; 

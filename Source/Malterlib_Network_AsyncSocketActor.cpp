@@ -5,6 +5,7 @@
 #include <Mib/Concurrency/Actor/Timer>
 #include <Mib/Concurrency/ActorSubscription>
 #include <Mib/Container/PagedByteVector>
+#include <Mib/Cryptography/Exception>
 
 #include <deque>
 
@@ -516,6 +517,10 @@ namespace NMib::NNetwork
 				Internal.m_bShutdownCalled = true;
 			}
 		}
+		catch (NCryptography::CExceptionCryptography const &_Error)
+		{
+			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket exception: {}", _Error.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
+		}
 		catch (NNetwork::CExceptionNet const &_Error)
 		{
 			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket exception: {}", _Error.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
@@ -562,6 +567,12 @@ namespace NMib::NNetwork
 								return false;
 							}
 							return true;
+						}
+						catch (NCryptography::CExceptionCryptography const &_Error)
+						{
+							fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket exception: {}", _Error.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
+							bDisconnected = true;
+							return false;
 						}
 						catch (NNetwork::CExceptionNet const &_Error)
 						{
@@ -801,6 +812,11 @@ namespace NMib::NNetwork
 					}
 				}
 			}
+			catch (NCryptography::CExceptionCryptography const &_Exception)
+			{
+				fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket error: {}", _Exception.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
+				return;
+			}
 			catch (NNetwork::CExceptionNet const &_Exception)
 			{
 				fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket error: {}", _Exception.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
@@ -845,6 +861,9 @@ namespace NMib::NNetwork
 			try
 			{
 				Internal.m_PeerAddress = Internal.m_pSocket->f_GetPeerAddress();
+			}
+			catch (NCryptography::CExceptionCryptography const &)
+			{
 			}
 			catch (NNetwork::CExceptionNet const &)
 			{

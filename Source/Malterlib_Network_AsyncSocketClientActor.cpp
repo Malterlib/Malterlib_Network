@@ -4,6 +4,7 @@
 #include <Mib/Concurrency/ConcurrencyManager>
 #include <Mib/Concurrency/WeakActor>
 #include <Mib/Network/Sockets/TCP>
+#include <Mib/Cryptography/Exception>
 
 #include "Malterlib_Network_AsyncSocket.h"
 
@@ -188,6 +189,10 @@ namespace NMib::NNetwork
 				)
 			;
 			pReplied.f_Clear();
+		}
+		catch (NCryptography::CExceptionCryptography const &_Exception)
+		{
+			co_return _Exception;
 		}
 		catch (NNetwork::CExceptionNet const &_Exception)
 		{
