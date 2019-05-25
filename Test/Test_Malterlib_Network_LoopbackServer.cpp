@@ -299,14 +299,25 @@ namespace
 		~CLoopbackServer()
 		{
 			m_pThread->f_Stop();
+
 			for (auto &Socket : m_ConnectedSockets)
 				(*Socket)->f_Close();
+
 			m_ConnectedSockets.f_Clear();
-			m_pThread = nullptr;
 			m_DispatchQueue.f_Clear();
+
 			for (auto &Socket : m_ConnectedSockets)
 				(*Socket)->f_Close();
+
 			m_ConnectedSockets.f_Clear();
+			m_ListenSocketV4.f_Close();
+			m_ListenSocketV6.f_Close();
+			m_EchoListenSocketV4.f_Close();
+			m_EchoListenSocketV6.f_Close();
+			m_MirrorListenSocketV4.f_Close();
+			m_MirrorListenSocketV6.f_Close();
+
+			m_pThread = nullptr;
 		}
 	};
 	
@@ -326,6 +337,5 @@ namespace NMib::NNetwork
 				g_pLoopbackServer = fg_Construct();
 			return "localhost";
 		}
-
 	}
 }
