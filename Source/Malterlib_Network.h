@@ -21,20 +21,20 @@
 						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
 
 						::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
-						bint fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
+						bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
 						CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, mint _nDataBytes);
 
 						CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
 						void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo);
-						bint fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
+						bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
 						void fg_AsyncResolveAddress_Close(void *_pResolver);
 
 						int fg_CompareAddresses(CAddress _pFirst, CAddress _pSecond);
 
 						void fg_FreeAddress(CAddress _Address); // It is OK to free a nullptr address.
 
-						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bint _bIncludeType);
+						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bool _bIncludeType);
 
 					// Connection Operations
 						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
@@ -323,7 +323,7 @@ namespace NMib::NSys::NNetwork
 	CAddress fg_DuplicateAddress(CAddress _Address);
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
-	bint fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
+	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
 	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, mint _nDataBytes);
 
 	CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
@@ -331,14 +331,14 @@ namespace NMib::NSys::NNetwork
 	mint fg_GetMaxUnixSocketNameLength();
 
 	void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunction<void ()> &&_fOnFinish);
-	bint fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
+	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
 	void fg_AsyncResolveAddress_Close(void *_pResolver);
 
 	int fg_CompareAddresses(CAddress _pFirst, CAddress _pSecond);
 
 	void fg_FreeAddress(CAddress _Address); // It is OK to free a nullptr address.
 
-	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bint _bIncludeType);
+	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bool _bIncludeType);
 
 // Connection Operations
 
@@ -470,12 +470,12 @@ namespace NMib::NNetwork
 			return mp_Address;
 		}
 
-		bint f_IsEmpty() const
+		bool f_IsEmpty() const
 		{
 			return mp_Address == nullptr;
 		}
 
-		NStr::CStr f_GetString(bint _bIncludeType = false) const
+		NStr::CStr f_GetString(bool _bIncludeType = false) const
 		{
 			if (mp_Address == nullptr)
 				return "";
@@ -488,12 +488,12 @@ namespace NMib::NNetwork
 		}
 
 		template<typename t_CAddress>
-		bint f_Get(t_CAddress& _oAddress) const
+		bool f_Get(t_CAddress& _oAddress) const
 		{
 			return NMib::NSys::NNetwork::fg_GetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_oAddress, sizeof(t_CAddress));
 		}
 
-		bint f_Set(CNetAddress const &_Address)
+		bool f_Set(CNetAddress const &_Address)
 		{
 			f_Clear();
 			if (_Address.mp_Address)
@@ -503,7 +503,7 @@ namespace NMib::NNetwork
 		}
 
 		template<typename t_CAddress>
-		bint f_Set(t_CAddress const &_Address)
+		bool f_Set(t_CAddress const &_Address)
 		{
 			f_Clear();
 
@@ -515,7 +515,7 @@ namespace NMib::NNetwork
 			return mp_Address != nullptr;
 		}
 
-		bint f_SetPort(uint16 _Port)
+		bool f_SetPort(uint16 _Port)
 		{
 			if (!mp_Address)
 				return false;
@@ -582,12 +582,12 @@ namespace NMib::NNetwork
 			return mp_Address;
 		}
 
-		bint operator==(CNetAddress const& _Other)
+		bool operator==(CNetAddress const& _Other)
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
 		}
 
-		bint operator<(CNetAddress const& _Other)
+		bool operator<(CNetAddress const& _Other)
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) < 0;
 		}
@@ -665,7 +665,7 @@ namespace NMib::NNetwork
 			;
 		}
 
-		bint f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error)
+		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error)
 		{
 			fp_CheckValid();
 			NMib::NSys::NNetwork::CAddress Address;
@@ -736,7 +736,7 @@ namespace NMib::NNetwork
 			return *this;
 		}
 
-		bint f_IsValid() const
+		bool f_IsValid() const
 		{
 			return mp_pSocket != nullptr;
 		}

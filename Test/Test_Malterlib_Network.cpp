@@ -3,14 +3,14 @@
 
 /*
 	Author:			Michael Wynne
-	
+
 	Contents:		NSys level network tests
-	
+
 	Comments:		For these tests to work you need a remote machine setup as follows:
 
 					*	Connections on ports 20677 should have their contents echoed.
 						Line by line echoing is fine. You can use socat as below for this:
-							socat TCP-LISTEN:20677,reuseaddr,fork exec:'cat',pty,raw,echo=0 
+							socat TCP-LISTEN:20677,reuseaddr,fork exec:'cat',pty,raw,echo=0
 
 					*	Connections on port 20678 should be redirected to port 20680 on the
 						calling machine. You can use socat as below for this:
@@ -28,12 +28,12 @@
 
 					A good way of running the above three socat instances in a way that you can
 					monitor is to use GNU screen. screen allows you to create multiple shells
-					in your terminal window (with Ctrl-A C) and switch between them with 
+					in your terminal window (with Ctrl-A C) and switch between them with
 					Ctrl-A <0-9>.
 
 					Alternatively you could use tmux so you can see each socat instance at the
 					same time.
-	
+
 */
 
 #include <Mib/Core/Core>
@@ -372,7 +372,7 @@ public:
 				if (nSent == -1)
 					break;
 
-				bint bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -474,7 +474,7 @@ public:
 
 						if (!Client.f_IsValid())
 							return -1;
-						
+
 						mint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
@@ -605,7 +605,7 @@ public:
 				if (nSent == -1)
 					break;
 
-				bint bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -620,7 +620,7 @@ public:
 						;
 				}
 			}
-			
+
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
 			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
 		}
@@ -685,7 +685,7 @@ public:
 				if (nSent == -1)
 					break;
 
-				bint bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -704,7 +704,7 @@ public:
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
 			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
 		}
-	}	
+	}
 
 	void f_DoTests()
 	{
