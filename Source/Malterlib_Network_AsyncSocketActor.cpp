@@ -860,6 +860,7 @@ namespace NMib::NNetwork
 		{
 			try
 			{
+				NException::CDisableExceptionTraceScope DisableTrace;
 				Internal.m_PeerAddress = Internal.m_pSocket->f_GetPeerAddress();
 			}
 			catch (NCryptography::CExceptionCryptography const &)
