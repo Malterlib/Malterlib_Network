@@ -172,11 +172,6 @@ namespace NMib::NNetwork
 	{
 		NStr::CStr Ret;
 
-		NStr::CStr CloseReason = mp_Socket.f_GetCloseReason();
-
-		if (!CloseReason.f_IsEmpty())
-			NStr::fg_AddStrSep(Ret, CloseReason, ", ");
-
 		NStr::CStr SSLErrors = mp_SSLConnection.f_GetConnectionResult().f_GetErrorMessage();
 
 		if (!SSLErrors.f_IsEmpty())
@@ -185,6 +180,9 @@ namespace NMib::NNetwork
 		NStr::CStr LastError = mp_SSLConnection.f_GetLastError();
 		if (!LastError.f_IsEmpty())
 			NStr::fg_AddStrSep(Ret, LastError, ", ");
+
+		if (Ret.f_IsEmpty())
+			Ret = mp_Socket.f_GetCloseReason();
 
 		return Ret;
 	}

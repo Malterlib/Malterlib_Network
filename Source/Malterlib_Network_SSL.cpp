@@ -21,7 +21,11 @@
 
 	static NMib::NStr::CStr fg_GetLastSystemError()
 	{
-		return NMib::NPlatform::fg_FormatErrno("", errno);
+		int Error = errno;
+		if (Error == 0)
+			DMibErrorNet("End of file encountered");
+		else
+			return NMib::NPlatform::fg_FormatErrno("", Error);
 	}
 #endif
 
@@ -983,7 +987,11 @@ namespace NMib::NNetwork
 					DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL, windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
 	#else
 					// Unix
-					DMibErrorNet(NMib::NPlatform::fg_FormatErrno("SSL_shutdown", errno));
+					int Error = errno;
+					if (Error == 0)
+						DMibErrorNet("SSL_shutdown: End of file encountered");
+					else
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("SSL_shutdown", Error));
 	#endif
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
@@ -1030,7 +1038,11 @@ namespace NMib::NNetwork
 					DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
 	#else
 					// Unix
-					DMibErrorNet(NMib::NPlatform::fg_FormatErrno("send (write to SSL socket)", errno));
+					int Error = errno;
+					if (Error == 0)
+						DMibErrorNet("send (write to SSL socket): End of file encountered");
+					else
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("send (write to SSL socket)", Error));
 	#endif
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
@@ -1084,7 +1096,11 @@ namespace NMib::NNetwork
 					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
 	#else
 					// Unix
-					DMibErrorNet(NMib::NPlatform::fg_FormatErrno("recv (read from SSL socket)", errno));
+					int Error = errno;
+					if (Error == 0)
+						DMibErrorNet("recv (read from SSL socket): End of file encountered");
+					else
+						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("recv (read from SSL socket)", Error));
 	#endif
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)

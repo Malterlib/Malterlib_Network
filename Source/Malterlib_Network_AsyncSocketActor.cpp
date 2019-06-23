@@ -906,12 +906,12 @@ namespace NMib::NNetwork
 		fg_RegisterTimer
 			(
 				m_Timeout/2.0
-				, fg_ThisActor(m_pThis)
 				, [this]() -> NConcurrency::TCFuture<void>
 				{
 					f_UpdateTimeout();
 					return fg_Explicit();
 				}
+				, fg_ThisActor(m_pThis)
 			)
 			> [this, Sequence](NConcurrency::TCAsyncResult<NConcurrency::CActorSubscription> &&_Subscription)
 			{
