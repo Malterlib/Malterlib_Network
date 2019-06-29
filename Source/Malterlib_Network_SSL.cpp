@@ -23,7 +23,7 @@
 	{
 		int Error = errno;
 		if (Error == 0)
-			DMibErrorNet("End of file encountered");
+			return "End of file encountered";
 		else
 			return NMib::NPlatform::fg_FormatErrno("", Error);
 	}
