@@ -136,7 +136,7 @@ namespace NMib::NNetwork
 		}
 		catch (NException::CException const &_Exception)
 		{
-			co_return _Exception;
+			co_return _Exception.f_ExceptionPointer();
 		}
 		co_return {};
 	}

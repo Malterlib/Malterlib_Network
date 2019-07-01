@@ -192,11 +192,11 @@ namespace NMib::NNetwork
 		}
 		catch (NCryptography::CExceptionCryptography const &_Exception)
 		{
-			co_return _Exception;
+			co_return _Exception.f_ExceptionPointer();
 		}
 		catch (NNetwork::CExceptionNet const &_Exception)
 		{
-			co_return _Exception;
+			co_return _Exception.f_ExceptionPointer();
 		}
 
 		co_return co_await Promise.f_MoveFuture();
