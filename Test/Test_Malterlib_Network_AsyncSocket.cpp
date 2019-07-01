@@ -486,7 +486,7 @@ public:
 					ProcessingActor->f_BlockDestroy();
 				}
 			;
-			CCurrentActorScope CurrentActorScope(ProcessingActor);
+			CCurrentlyProcessingActorScope CurrentActorScope(ProcessingActor);
 			auto Factories = _fGetFactories();
 			auto ServerFactory = fg_Get<0>(Factories);
 			auto ClientFactory = fg_Get<1>(Factories); 

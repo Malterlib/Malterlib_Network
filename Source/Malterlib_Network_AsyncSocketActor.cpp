@@ -762,7 +762,7 @@ namespace NMib::NNetwork
 				auto DestroyFutures = Internal.m_Callbacks.m_fOnClose.f_Destroy() + Internal.m_Callbacks.m_fOnReceiveData.f_Destroy();
 				Internal.m_Callbacks.m_fOnClose.f_Clear();
 				Internal.m_Callbacks.m_fOnReceiveData.f_Clear();
-				co_await DestroyFutures;
+				co_await fg_Move(DestroyFutures);
 				co_return {};
 			}
 		;
