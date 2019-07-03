@@ -282,7 +282,7 @@ namespace NMib::NNetwork
 
 		fp_Disconnect(_Status, _Reason, false, EAsyncSocketCloseOrigin_Local);
 
-		return *pClosePromise;
+		return pClosePromise->f_Future();
 	}
 
 	void CAsyncSocketActor::CInternal::f_ShutdownDone(NStr::CStr const &_Error)
@@ -878,7 +878,7 @@ namespace NMib::NNetwork
 	auto CAsyncSocketActor::fp_FinishConnection() -> NConcurrency::TCFuture<CFinishConnectionResult>
 	{
 		auto &Internal = *mp_pInternal;
-		return Internal.m_FinishConnectionPromise;
+		return Internal.m_FinishConnectionPromise.f_Future();
 	}
 
 	void CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)
