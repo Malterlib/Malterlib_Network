@@ -748,9 +748,9 @@ namespace NMib::NNetwork
 			mp_pSocket = nullptr;
 		}
 
-		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr)
+		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0)
 		{
-			f_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			f_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress(), _Timeout);
 		}
 
 		void f_Connect
