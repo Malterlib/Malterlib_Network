@@ -126,7 +126,7 @@ namespace NMib::NNetwork
 		NContainer::TCMap<uint32, NContainer::TCLinkedList<COutgoingMessage>> m_PendingMessages;
 		NContainer::TCLinkedList<COutgoingMessage> *m_pLastPendingMessagesList;
 
-		NStorage::TCSharedPointer<NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo>> m_pClosePromise;
+		NStorage::TCUniquePointer<NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo>> m_pClosePromise;
 		NContainer::TCLinkedList<NFunction::TCFunction<void (NStr::CStr const &_Error)>> m_OnShutdown;
 
 		CAsyncSocketCallbacks m_Callbacks;
@@ -268,21 +268,21 @@ namespace NMib::NNetwork
 	{
 		auto &Internal = *mp_pInternal;
 		if (Internal.m_pClosePromise)
-			return DMibErrorInstance("Socket close already initiated");
+			co_return DMibErrorInstance("Socket close already initiated");
 
 		if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
 		{
 			CAsyncSocketActor::CCloseInfo CloseInfo;
 			CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
 			CloseInfo.m_Reason = "Already fully closed";
-			return fg_Explicit(CloseInfo);
+			co_return fg_Move(CloseInfo);
 		}
 
-		auto pClosePromise = Internal.m_pClosePromise = fg_Construct();
+		auto CloseFuture = (Internal.m_pClosePromise = fg_Construct())->f_Future();
 
 		fp_Disconnect(_Status, _Reason, false, EAsyncSocketCloseOrigin_Local);
 
-		return pClosePromise->f_Future();
+		co_return co_await fg_Move(CloseFuture);
 	}
 
 	void CAsyncSocketActor::CInternal::f_ShutdownDone(NStr::CStr const &_Error)
@@ -294,6 +294,8 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_CloseWithLinger(EAsyncSocketStatus _Status, const NStr::CStr &_Reason, fp64 _MaxLingerTime)
 	{
+		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
+
 		auto &Internal = *mp_pInternal;
 
 		if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
@@ -301,7 +303,7 @@ namespace NMib::NNetwork
 			CAsyncSocketActor::CCloseInfo CloseInfo;
 			CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
 			CloseInfo.m_Reason = "Already fully closed";
-			return fg_Explicit(CloseInfo);
+			return Promise <<= fg_Move(CloseInfo);
 		}
 
 		struct CState
@@ -314,8 +316,7 @@ namespace NMib::NNetwork
 
 			void f_Finish()
 			{
-				m_AsyncSocketActor->f_DestroyNoResult(DMibPFile, DMibPLine);
-				m_AsyncSocketActor.f_Clear();
+				fg_Move(m_AsyncSocketActor).f_Destroy() > NConcurrency::fg_DiscardResult();
 			}
 
 			NConcurrency::TCActor<CAsyncSocketActor> m_AsyncSocketActor;
@@ -325,8 +326,6 @@ namespace NMib::NNetwork
 		NStorage::TCSharedPointer<CState> pState = fg_Construct();
 		pState->m_AsyncSocketActor = fg_ThisActor(this);
 
-		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
-		
 		auto Cleanup = NConcurrency::g_OnScopeExitActor(NConcurrency::fg_ConcurrentActor()) > [pState, Promise]
 			{
 				if (!pState->m_bHandled.f_Exchange(true))
@@ -383,6 +382,8 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pMessage, uint32 _Priority)
 	{
+		NConcurrency::TCPromise<void> Result;
+
 		auto &Internal = *mp_pInternal;
 		DMibLog(DebugVerbose2, " ++++ {} f_SendBinary", !Internal.m_bClient);
 
@@ -390,12 +391,10 @@ namespace NMib::NNetwork
 		mint nBytes = Massage.f_GetLen();
 
 		if (nBytes > Internal.m_MaxMessageSize)
-			return DMibErrorInstance("Message is bigger than max message size");
+			return Result <<= DMibErrorInstance("Message is bigger than max message size");
 
 		if (_Priority == TCLimitsInt<uint32>::mc_Max)
-			return DMibErrorInstance("0xffffffff priority is reserved for internal messages");
-
-		NConcurrency::TCPromise<void> Result;
+			return Result <<= DMibErrorInstance("0xffffffff priority is reserved for internal messages");
 
 		if (nBytes <= Internal.m_FramentationSize)
 		{
@@ -909,7 +908,7 @@ namespace NMib::NNetwork
 				, [this]() -> NConcurrency::TCFuture<void>
 				{
 					f_UpdateTimeout();
-					return fg_Explicit();
+					co_return {};
 				}
 				, fg_ThisActor(m_pThis)
 			)

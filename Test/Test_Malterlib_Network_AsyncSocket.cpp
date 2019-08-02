@@ -114,16 +114,10 @@ public:
 				m_ClientSocket.f_Destroy() > Destroys.f_AddResult();
 
 				if (m_ClientSocket)
-				{
-					m_ClientSocket->f_Destroy() > Destroys.f_AddResult();
-					m_ClientSocket.f_Clear();
-				}
+					fg_Move(m_ClientSocket).f_Destroy() > Destroys.f_AddResult();
 
 				if (m_ClientActor)
-				{
-					m_ClientActor->f_Destroy() > Destroys.f_AddResult();
-					m_ClientActor.f_Clear();
-				}
+					fg_Move(m_ClientActor).f_Destroy() > Destroys.f_AddResult();
 
 				if (m_ListenCallbackReference)
 				{
@@ -133,9 +127,8 @@ public:
 
 				for (auto &Connection : m_ServerConnections)
 				{
-					Connection.m_Actor.f_Destroy() > Destroys.f_AddResult();
 					if (Connection.m_Actor)
-						Connection.m_Actor->f_Destroy() > Destroys.f_AddResult();
+						fg_Move(Connection.m_Actor).f_Destroy() > Destroys.f_AddResult();
 				}
 
 				m_ServerConnections.f_Clear();
@@ -180,11 +173,11 @@ public:
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
-									return fg_Explicit();
+									co_return {};
 
 								DMibLock(pState->m_Lock);
 								if (*pDeleted || pState->m_bCleared)
-									return fg_Explicit();
+									co_return {};
 
 								for (auto &Connection : pState->m_ServerConnections)
 								{
@@ -205,7 +198,7 @@ public:
 									}
 								}
 
-								return fg_Explicit();
+								co_return {};
 							}
 						;
 
@@ -214,17 +207,17 @@ public:
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
-									return fg_Explicit();
+									co_return {};
 								DMibLock(pState->m_Lock);
 								if (*pDeleted || pState->m_bCleared)
-									return fg_Explicit();
+									co_return {};
 								pState->m_ServerConnectionCloseMessage = _Message;
 								pState->m_ServerConnectionCloseStatus = _Status;
 								pState->m_ServerConnectionCloseOrigin = _Origin;
 								pState->m_ServerConnections.f_Remove(*pServerConnection);
 								pState->m_Event.f_Signal();
 
-								return fg_Explicit();
+								co_return {};
 							}
 						;
 
@@ -270,14 +263,14 @@ public:
 				{
 					auto pState = pStateWeak.f_Lock();
 					if (!pState)
-						return fg_Explicit();
+						co_return {};
 
 					DMibLock(pState->m_Lock);
 					pState->m_bAcceptError = true;
 					pState->m_AcceptError = _ConnectionInfo.m_Error;
 					pState->m_Event.f_Signal();
 
-					return fg_Explicit();
+					co_return {};
 				}
 			;
 
@@ -337,7 +330,7 @@ public:
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
-									return fg_Explicit();
+									co_return {};
 
 								DMibLock(pState->m_Lock);
 								pState->m_ClientConnectionCloseMessage = _Message;
@@ -345,7 +338,7 @@ public:
 								pState->m_ClientConnectionCloseOrigin = _Origin;
 								pState->m_Event.f_Signal();
 
-								return fg_Explicit();
+								co_return {};
 							}
 						;
 
@@ -353,7 +346,7 @@ public:
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
-									return fg_Explicit();
+									co_return {};
 								DMibLock(pState->m_Lock);
 								pState->m_ClientMessageBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
 
@@ -362,7 +355,7 @@ public:
 
 								pState->m_Event.f_Signal();
 
-								return fg_Explicit();
+								co_return {};
 							}
 						;
 

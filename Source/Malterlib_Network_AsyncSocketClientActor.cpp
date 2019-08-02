@@ -39,7 +39,7 @@ namespace NMib::NNetwork
 	NConcurrency::TCFuture<void> CAsyncSocketClientActor::fp_Destroy()
 	{
 		mp_PendingConnects.f_Clear();
-		return fg_Explicit();
+		co_return {};
 	}
 
 	CAsyncSocketClientActor::CPendingConnection::~CPendingConnection()

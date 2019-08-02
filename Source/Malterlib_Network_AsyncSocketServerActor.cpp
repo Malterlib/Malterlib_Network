@@ -1,6 +1,6 @@
 // Copyright © 2019 Nonna Holding AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
- 
+
 #include <Mib/Concurrency/ConcurrencyManager>
 #include <Mib/Concurrency/ActorSubscription>
 
@@ -72,7 +72,7 @@ namespace NMib::NNetwork
 							pListen->m_fOnNewConnection.f_Destroy() > DestroyResults.f_AddResult();
 							pListen->m_fOnFailedConnection.f_Destroy() > DestroyResults.f_AddResult();
 							for (auto &ListenSocket : pListen->m_ListenSockets)
-								ListenSocket->f_Destroy() > DestroyResults.f_AddResult();
+								fg_Move(ListenSocket).f_Destroy() > DestroyResults.f_AddResult();
 						}
 
 						Internal.m_Listens.f_Remove(ListenID);
@@ -160,7 +160,7 @@ namespace NMib::NNetwork
 			Address.f_Set(AnyAddress);
 			AddressesToListenTo.f_Insert(fg_Move(Address));
 		}
-		return self(&CAsyncSocketServerActor::f_StartListenAddress, fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_SocketFactory));
+		co_return co_await self(&CAsyncSocketServerActor::f_StartListenAddress, fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_SocketFactory));
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketServerActor::fp_Destroy()
@@ -174,7 +174,7 @@ namespace NMib::NNetwork
 			Listen.m_fOnFailedConnection.f_Destroy() > Results.f_AddResult();
 
 			for (auto &ListenSocket : Listen.m_ListenSockets)
-				ListenSocket->f_Destroy() > Results.f_AddResult();
+				ListenSocket.f_Destroy() > Results.f_AddResult();
 		}
 
 		co_await Results.f_GetResults() | NConcurrency::g_Unwrap;
