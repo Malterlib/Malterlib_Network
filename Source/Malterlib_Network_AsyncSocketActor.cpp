@@ -282,7 +282,9 @@ namespace NMib::NNetwork
 
 		fp_Disconnect(_Status, _Reason, false, EAsyncSocketCloseOrigin_Local);
 
-		co_return co_await fg_Move(CloseFuture);
+		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
+
+ 		co_return co_await fg_Move(CloseFuture);
 	}
 
 	void CAsyncSocketActor::CInternal::f_ShutdownDone(NStr::CStr const &_Error)
