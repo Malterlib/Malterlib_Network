@@ -301,6 +301,11 @@ namespace NMib::NNetwork
 				mp_SSLConnection.f_GiveSocket(mp_Socket.f_GetOSSocket());
 			}
 			break;
+		case EState_Connected:
+		case EState_None:
+		case EState_Accept:
+		case EState_Listen:
+			break;
 		}
 
 		switch (mp_State)

@@ -689,6 +689,8 @@ namespace NMib::NNetwork
 					Internal.m_IncomingData.f_RemoveFront(Internal.m_IncomingData.f_GetLen());
 				}
 				break;
+			case EState_None:
+				break; // Handshake still running
 			}
 		}
 	}
