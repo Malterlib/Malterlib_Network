@@ -45,7 +45,7 @@ namespace NMib::NNetwork
 			int m_ExDataIndex = 0;
 		};
 
-		NStorage::TCAggregate<CSSLLowLevelDataIndex, 129> g_SSLLowLevelDataIndex = {DAggregateInit};
+		constinit NStorage::TCAggregate<CSSLLowLevelDataIndex, 129> g_SSLLowLevelDataIndex = {DAggregateInit};
 
 		SSL_CTX *fg_CreateSSLContext(SSL_METHOD const *_pMethod)
 		{
