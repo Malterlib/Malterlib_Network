@@ -582,12 +582,12 @@ namespace NMib::NNetwork
 			return mp_Address;
 		}
 
-		bool operator==(CNetAddress const& _Other)
+		bool operator == (CNetAddress const& _Other) const
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
 		}
 
-		bool operator<(CNetAddress const& _Other)
+		bool operator < (CNetAddress const& _Other) const
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) < 0;
 		}
