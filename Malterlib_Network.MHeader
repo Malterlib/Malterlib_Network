@@ -7,9 +7,9 @@ Import "../Core/Lib_Malterlib.MTarget"
 {
 	Property.MalterlibConcurrency_DistributedActors true
 	
-	%Group Network
+	%Group "Network"
 	{
-		%Group Include
+		%Group "Include"
 		{
 			Compile.Type "C++"
 			{
@@ -18,7 +18,7 @@ Import "../Core/Lib_Malterlib.MTarget"
 			%File "Include/Mib/Network/^*"
 		}
 		%File "Source/*"
-		%Group Documentation
+		%Group "Documentation"
 		{
 			%File "Documentation/*"
 		}
