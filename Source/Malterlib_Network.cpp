@@ -8,34 +8,40 @@ namespace NMib::NNetwork
 {
 	DMibImpErrorClassImplement(CExceptionNet);
 
-	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars)
+	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
 	{
-		if (_String.f_IsEmpty())
-			return false;
 		if (_String.f_GetLen() > 254)
 			return false;
 		ch8 const *pParse = _String.f_GetStr();
 		ch8 LastChar = 0;
+		bool bEmptySegment = true;
 		while (*pParse)
 		{
 			if (*pParse == '-')
 				return false; // Must not start with hyphen
 			if (*pParse == '.')
 				return false; // Empty label allowed?
-			while (*pParse && (NStr::fg_CharIsAnsiAlphabetical(*pParse) || NStr::fg_CharIsNumber(*pParse) || *pParse == '-'))
+			while (*pParse && (NStr::fg_CharIsAnsiAlphabetical(*pParse) || NStr::fg_CharIsNumber(*pParse) || *pParse == '-' || NStr::fg_StrFindChar(_pLabelChars, *pParse) >= 0))
 			{
 				LastChar = *pParse;
+				bEmptySegment = false;
 				++pParse;
 			}
 			if (LastChar == '-')
 				return false; // Must not end with hyphen
-			if (*pParse)
+			if (*pParse == '.')
+				++pParse;
+			else if (*pParse)
 			{
-				if (NStr::fg_StrFindChar(_pSeparatorChars, *pParse) < 0 && *pParse != '.')
+				if (NStr::fg_StrFindChar(_pSeparatorChars, *pParse) < 0)
 					return false; // Any other character is not allowed
 				++pParse;
+				bEmptySegment = true;
+				LastChar = 0;
 			}
 		}
+		if (bEmptySegment)
+			return false;
 		return true;
 	}
 
