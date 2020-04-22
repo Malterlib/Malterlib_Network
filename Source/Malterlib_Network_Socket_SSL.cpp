@@ -217,6 +217,9 @@ namespace NMib::NNetwork
 
 	CSocketOperationResult CSocket_SSL::f_Send(const void *_pData, mint _DataLen)
 	{
+		if (mp_State == EState_ShutdownSocket)
+			return {};
+
 		if (!fp_HandleHandshake())
 		{
 			DMibLog(DebugVerbose2, " **** CSocket_SSL handshake not done");
