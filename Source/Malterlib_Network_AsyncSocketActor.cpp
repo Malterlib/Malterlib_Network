@@ -60,7 +60,7 @@ namespace NMib::NNetwork
 					m_pPromise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
 			}
 
-			mint m_Position = 0;
+			uint64 m_Position = 0;
 			NStorage::TCUniquePointer<NConcurrency::TCPromise<void>> m_pPromise;
 		};
 
@@ -144,7 +144,7 @@ namespace NMib::NNetwork
 
 		fp64 m_Timeout = 0.0;
 		mint m_TimeoutTimerSubscriptionSequence = 0;
-		mint m_nSentBytes = 0;
+		uint64 m_nSentBytes = 0;
 
 		mint m_MaxMessageSize = 0;
 		mint m_FramentationSize = 0;
@@ -641,13 +641,13 @@ namespace NMib::NNetwork
 			if (CombinedResults.m_bReceivedNetwork)
 				Internal.f_OnReceivedData();
 
-			mint PrevSent = Internal.m_nSentBytes;
+			uint64 PrevSent = Internal.m_nSentBytes;
 			Internal.m_nSentBytes += SentBytes;
 
 			while (!Internal.m_OutgoingDataPromises.empty())
 			{
 				auto &Promise = Internal.m_OutgoingDataPromises.front();
-				mint Diff = Promise.m_Position - PrevSent;
+				uint64 Diff = Promise.m_Position - PrevSent;
 				if (Diff <= SentBytes)
 				{
 					Promise.m_pPromise->f_SetResult();
