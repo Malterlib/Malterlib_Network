@@ -88,6 +88,9 @@ namespace NMib::NNetwork
 
 		~CInternal()
 		{
+			DMibFastCheck(!m_bDestroyed || m_OutgoingDataPromises.empty());
+			DMibFastCheck(!m_bDestroyed || m_PendingMessages.f_IsEmpty());
+
 			if (m_pClosePromise)
 				m_pClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
 		}
@@ -151,6 +154,9 @@ namespace NMib::NNetwork
 		bool m_bOnCloseCalled = false;
 		bool m_bDeferringCallbacks = true;
 		bool m_bShutdownCalled = false;
+#if DMibEnableSafeCheck > 0
+		bool m_bDestroyed = false;
+#endif
 	};
 
 	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, mint _MaxMessageSize, mint _FragmentationSize, fp64 _Timeout)
@@ -170,6 +176,8 @@ namespace NMib::NNetwork
 			, uint32 _Priority
 		)
 	{
+		DMibFastCheck(!m_pThis->f_IsDestroyed());
+
 		auto &NewMessage = m_PendingMessages[_Priority].f_Insert();
 		NewMessage.m_pData = _pData;
 		NewMessage.m_bFinished = true;
@@ -258,16 +266,44 @@ namespace NMib::NNetwork
 			m_pLastPendingMessagesList = pList;
 	}
 
-	void CAsyncSocketActor::f_DebugStopProcessing(fp64 _Timeout)
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_DebugStopProcessing(fp64 _Timeout)
 	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+
 		auto &Internal = *mp_pInternal;
 		Internal.m_bDebugNoProcessing = true;
 		Internal.m_Timeout = _Timeout;
 		Internal.f_SetupTimeout();
+
+		co_return {};
+	}
+
+	NConcurrency::TCFuture<void> CAsyncSocketActor::fp_Destroy()
+	{
+		auto &Internal = *mp_pInternal;
+
+#if DMibEnableSafeCheck > 0
+		Internal.m_bDestroyed = true;
+#endif
+
+		Internal.m_PendingMessages.f_Clear();
+		Internal.m_OutgoingDataPromises.clear();
+		Internal.m_pLastPendingMessagesList = nullptr;
+		if (Internal.m_pClosePromise)
+		{
+			Internal.m_pClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
+			Internal.m_pClosePromise.f_Clear();
+		}
+
+		return NConcurrency::TCPromise<void>() <<= g_Void;
 	}
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_Close(EAsyncSocketStatus _Status, const NStr::CStr &_Reason)
 	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+
 		auto &Internal = *mp_pInternal;
 		if (Internal.m_pClosePromise)
 			co_return DMibErrorInstance("Socket close already initiated");
@@ -298,6 +334,9 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_CloseWithLinger(EAsyncSocketStatus _Status, const NStr::CStr &_Reason, fp64 _MaxLingerTime)
 	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+
 		{
 			auto &Internal = *mp_pInternal;
 
@@ -306,6 +345,9 @@ namespace NMib::NNetwork
 				CAsyncSocketActor::CCloseInfo CloseInfo;
 				CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
 				CloseInfo.m_Reason = "Already fully closed";
+
+				fg_ThisActor(this).f_Destroy() > NConcurrency::fg_DiscardResult();
+
 				co_return fg_Move(CloseInfo);
 			}
 		}
@@ -393,6 +435,9 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pMessage, uint32 _Priority)
 	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+
 		auto &Internal = *mp_pInternal;
 		DMibLog(DebugVerbose2, " ++++ {} f_SendBinary", !Internal.m_bClient);
 
@@ -788,7 +833,7 @@ namespace NMib::NNetwork
 	{
 		auto &Internal = *mp_pInternal;
 
-		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid() || f_IsDestroyed())
 			return;
 
 		if ((_StateAdded & NNetwork::ENetTCPState_Read) && !Internal.m_bDebugNoProcessing)
@@ -891,11 +936,16 @@ namespace NMib::NNetwork
 		return Internal.m_FinishConnectionPromise.f_Future();
 	}
 
-	void CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)
 	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+
 		auto &Internal = *mp_pInternal;
 		Internal.m_Timeout = _Seconds;
 		Internal.f_SetupTimeout();
+
+		co_return {};
 	}
 
 	void CAsyncSocketActor::CInternal::f_StopTimeout()
