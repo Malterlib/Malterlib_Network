@@ -589,7 +589,7 @@ public:
 					return;
 				{
 					DMibTestPath("Timeout");
-					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing).f_CallSync(g_Timeout);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(g_Timeout);
 					NSys::fg_Thread_Sleep(2.0);
 					
 					DMibLock(pState->m_Lock);

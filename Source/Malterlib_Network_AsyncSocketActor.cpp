@@ -258,10 +258,12 @@ namespace NMib::NNetwork
 			m_pLastPendingMessagesList = pList;
 	}
 
-	void CAsyncSocketActor::f_DebugStopProcessing()
+	void CAsyncSocketActor::f_DebugStopProcessing(fp64 _Timeout)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_bDebugNoProcessing = true;
+		Internal.m_Timeout = _Timeout;
+		Internal.f_SetupTimeout();
 	}
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_Close(EAsyncSocketStatus _Status, const NStr::CStr &_Reason)
@@ -534,13 +536,13 @@ namespace NMib::NNetwork
 		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
 			return;
 
-		if (Internal.m_bDebugNoProcessing)
-			return;
-
 		if (Internal.m_State == EState_Connected)
 			Internal.f_WriteQueuedMessages();
 		else
 			fp_CheckHandshake(Internal);
+
+		if (Internal.m_bDebugNoProcessing)
+			return;
 
 		bool bDidSend = false;
 		while (!Internal.m_OutgoingData.f_IsEmpty() && Internal.m_pSocket->f_IsValid())
