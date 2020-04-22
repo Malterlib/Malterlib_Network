@@ -298,96 +298,101 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_CloseWithLinger(EAsyncSocketStatus _Status, const NStr::CStr &_Reason, fp64 _MaxLingerTime)
 	{
-		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
-
-		auto &Internal = *mp_pInternal;
-
-		if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
 		{
-			CAsyncSocketActor::CCloseInfo CloseInfo;
-			CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
-			CloseInfo.m_Reason = "Already fully closed";
-			return Promise <<= fg_Move(CloseInfo);
+			auto &Internal = *mp_pInternal;
+
+			if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
+			{
+				CAsyncSocketActor::CCloseInfo CloseInfo;
+				CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
+				CloseInfo.m_Reason = "Already fully closed";
+				co_return fg_Move(CloseInfo);
+			}
 		}
 
-		struct CState
+		auto ProcessingActor = NConcurrency::fg_AnyConcurrentActor();
+
+		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
 		{
-			~CState()
+			auto &Internal = *mp_pInternal;
+			struct CState
 			{
-				if (!m_bHandled)
-					f_Finish();
-			}
-
-			void f_Finish()
-			{
-				fg_Move(m_AsyncSocketActor).f_Destroy() > NConcurrency::fg_DiscardResult();
-			}
-
-			NConcurrency::TCActor<CAsyncSocketActor> m_AsyncSocketActor;
-			NAtomic::TCAtomic<bool> m_bHandled;
-		};
-
-		NStorage::TCSharedPointer<CState> pState = fg_Construct();
-		pState->m_AsyncSocketActor = fg_ThisActor(this);
-
-		auto Cleanup = NConcurrency::g_OnScopeExitActor(NConcurrency::fg_ConcurrentActor()) > [pState, Promise]
-			{
-				if (!pState->m_bHandled.f_Exchange(true))
+				~CState()
 				{
+					if (!m_bHandled)
+						f_Finish();
+				}
+
+				void f_Finish()
+				{
+					fg_Move(m_AsyncSocketActor).f_Destroy() > NConcurrency::fg_DiscardResult();
+				}
+
+				NConcurrency::TCActor<CAsyncSocketActor> m_AsyncSocketActor;
+				NAtomic::TCAtomic<bool> m_bHandled;
+			};
+
+			NStorage::TCSharedPointer<CState> pState = fg_Construct();
+			pState->m_AsyncSocketActor = fg_ThisActor(this);
+
+			auto Cleanup = NConcurrency::g_OnScopeExitActor(ProcessingActor) > [pState, Promise]
+				{
+					if (pState->m_bHandled.f_Exchange(true))
+						return;
+
 					Promise.f_SetException(DMibErrorInstance("Socket destroyed"));
 					pState->f_Finish();
 				}
-			}
-		;
+			;
 
-		Internal.m_OnShutdown.f_Insert
-			(
-				[Cleanup, pState, Promise, this](NStr::CStr const &_Error)
-				{
-					auto &Internal = *mp_pInternal;
-					if (!pState->m_bHandled.f_Exchange(true))
+			Internal.m_OnShutdown.f_Insert
+				(
+					[Cleanup, pState, Promise, this](NStr::CStr const &_Error)
 					{
+						if (pState->m_bHandled.f_Exchange(true))
+							return;
+
+						auto &Internal = *mp_pInternal;
 						if (!_Error.f_IsEmpty())
 							Promise.f_SetException(DMibErrorInstance(fg_Format("Unclean socket shutdown: {}", _Error)));
 						else
 							Promise.f_SetResult(fg_Move(Internal.m_CloseInfo));
 						pState->f_Finish();
 					}
-				}
-			)
-		;
+				)
+			;
 
-		f_Close(_Status, _Reason) > NConcurrency::fg_ConcurrentActor() / [pState, Promise]
-			(NConcurrency::TCAsyncResult<NNetwork::CAsyncSocketActor::CCloseInfo> &&_Result)
-			{
-				if (!_Result)
+			self(&CAsyncSocketActor::f_Close, _Status, _Reason) > ProcessingActor / [pState, Promise](NConcurrency::TCAsyncResult<NNetwork::CAsyncSocketActor::CCloseInfo> &&_Result)
 				{
-					if (!pState->m_bHandled.f_Exchange(true))
+					if (!_Result)
 					{
+						if (pState->m_bHandled.f_Exchange(true))
+							return;
+
 						Promise.f_SetException(fg_Move(_Result));
 						pState->f_Finish();
 					}
 				}
-			}
-		;
+			;
 
-		NConcurrency::fg_Timeout(_MaxLingerTime, false)(NConcurrency::fg_ConcurrentActor()) > [Promise, pState]
-			{
-				if (!pState->m_bHandled.f_Exchange(true))
+			NConcurrency::fg_Timeout(_MaxLingerTime, false)(ProcessingActor) > [Promise, pState]
 				{
+					if (pState->m_bHandled.f_Exchange(true))
+						return;
+
 					Promise.f_SetException(DMibErrorInstance("Timed out waiting for socket to close gracefully"));
 					pState->f_Finish();
 				}
-			}
-		;
+			;
+		}
 
-		return Promise.f_MoveFuture();
+ 		co_await fg_ContinueRunningOnActor(ProcessingActor);
+
+		co_return co_await Promise.f_MoveFuture();
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pMessage, uint32 _Priority)
 	{
-		NConcurrency::TCPromise<void> Result;
-
 		auto &Internal = *mp_pInternal;
 		DMibLog(DebugVerbose2, " ++++ {} f_SendBinary", !Internal.m_bClient);
 
@@ -395,28 +400,28 @@ namespace NMib::NNetwork
 		mint nBytes = Massage.f_GetLen();
 
 		if (nBytes > Internal.m_MaxMessageSize)
-			return Result <<= DMibErrorInstance("Message is bigger than max message size");
+			co_return DMibErrorInstance("Message is bigger than max message size");
 
 		if (_Priority == TCLimitsInt<uint32>::mc_Max)
-			return Result <<= DMibErrorInstance("0xffffffff priority is reserved for internal messages");
+			co_return DMibErrorInstance("0xffffffff priority is reserved for internal messages");
+
+		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
 
 		if (nBytes <= Internal.m_FramentationSize)
 		{
 			auto &NewMessage = Internal.f_QueueMessage(_pMessage, _Priority);
-			NewMessage.m_pPromise = fg_Construct(Result);
+			auto Future = (NewMessage.m_pPromise = fg_Construct())->f_Future();
 			DMibLog(DebugVerbose2, " ++++ {} Queue non-fragmented", !Internal.m_bClient);
 			fp_UpdateSend();
-			return Result.f_MoveFuture();
+			co_return co_await fg_Move(Future);
 		}
 
-		Internal.f_QueueFragmentedMessage(Massage.f_GetArray(), nBytes, _Priority)
-			.m_pPromise = fg_Construct(Result)
-		;
+		auto Future = (Internal.f_QueueFragmentedMessage(Massage.f_GetArray(), nBytes, _Priority).m_pPromise = fg_Construct())->f_Future();
 
 		DMibLog(DebugVerbose2, " ++++ {} Queue fragmented", !Internal.m_bClient);
 		fp_UpdateSend();
 
-		return Result.f_MoveFuture();
+		co_return co_await fg_Move(Future);
 	}
 
 	void CAsyncSocketActor::fp_StateAdded(NNetwork::ENetTCPState _StateAdded)
