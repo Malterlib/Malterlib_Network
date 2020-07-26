@@ -69,8 +69,8 @@ namespace NMib::NNetwork
 
 						NConcurrency::TCActorResultVector<void> DestroyResults;
 						{
-							pListen->m_fOnNewConnection.f_Destroy() > DestroyResults.f_AddResult();
-							pListen->m_fOnFailedConnection.f_Destroy() > DestroyResults.f_AddResult();
+							fg_Move(pListen->m_fOnNewConnection).f_Destroy() > DestroyResults.f_AddResult();
+							fg_Move(pListen->m_fOnFailedConnection).f_Destroy() > DestroyResults.f_AddResult();
 							for (auto &ListenSocket : pListen->m_ListenSockets)
 								fg_Move(ListenSocket).f_Destroy() > DestroyResults.f_AddResult();
 						}
@@ -171,8 +171,8 @@ namespace NMib::NNetwork
 
 		for (auto &Listen : Internal.m_Listens)
 		{
-			Listen.m_fOnNewConnection.f_Destroy() > Results.f_AddResult();
-			Listen.m_fOnFailedConnection.f_Destroy() > Results.f_AddResult();
+			fg_Move(Listen.m_fOnNewConnection).f_Destroy() > Results.f_AddResult();
+			fg_Move(Listen.m_fOnFailedConnection).f_Destroy() > Results.f_AddResult();
 
 			for (auto &ListenSocket : Listen.m_ListenSockets)
 				ListenSocket.f_Destroy() > Results.f_AddResult();

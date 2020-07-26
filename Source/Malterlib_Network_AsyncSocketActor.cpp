@@ -814,10 +814,7 @@ namespace NMib::NNetwork
 		auto Subscription = NConcurrency::g_ActorSubscription / [this]() -> NConcurrency::TCFuture<void>
 			{
 				auto &Internal = *mp_pInternal;
-				auto DestroyFutures = Internal.m_Callbacks.m_fOnClose.f_Destroy() + Internal.m_Callbacks.m_fOnReceiveData.f_Destroy();
-				Internal.m_Callbacks.m_fOnClose.f_Clear();
-				Internal.m_Callbacks.m_fOnReceiveData.f_Clear();
-				co_await fg_Move(DestroyFutures);
+				co_await (fg_Move(Internal.m_Callbacks.m_fOnClose).f_Destroy() + fg_Move(Internal.m_Callbacks.m_fOnReceiveData).f_Destroy());
 				co_return {};
 			}
 		;
