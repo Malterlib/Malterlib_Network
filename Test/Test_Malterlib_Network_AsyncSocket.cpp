@@ -462,6 +462,26 @@ public:
 		return true;
 	}
 
+	bool fp_WaitForCondition(TCFunction<bool ()> const &_fPredicate)
+	{
+		bool bTimedOut = false;
+
+		NTime::CClock Clock;
+		Clock.f_Start();
+
+		while (!_fPredicate())
+		{
+			NSys::fg_Thread_Sleep(0.01f);
+			if (Clock.f_GetTime() > 30.0)
+			{
+				bTimedOut = true;
+				break;
+			}
+		}
+
+		return bTimedOut;
+	}
+
 	void fp_TestImp
 		(
 			TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories
@@ -590,8 +610,17 @@ public:
 				{
 					DMibTestPath("Timeout");
 					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(g_Timeout);
-					NSys::fg_Thread_Sleep(2.0);
-					
+					bool bTimedOut = fp_WaitForCondition
+						(
+							[&]
+							{
+								DMibLock(pState->m_Lock);
+								return pState->m_ServerConnectionCloseStatus == EAsyncSocketStatus_Timeout || pState->m_ClientConnectionCloseStatus == EAsyncSocketStatus_Timeout;
+							}
+						)
+					;
+
+					DMibExpectFalse(bTimedOut);
 					DMibLock(pState->m_Lock);
 					DMibTest
 						(
