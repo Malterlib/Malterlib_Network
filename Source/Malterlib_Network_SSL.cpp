@@ -25,7 +25,7 @@
 		if (Error == 0)
 			return "End of file encountered";
 		else
-			return NMib::NPlatform::fg_FormatErrno("", Error);
+			return NMib::NPlatform::fg_ErrnoString<NMib::NStr::CStr>(Error);
 	}
 #endif
 
@@ -1297,9 +1297,23 @@ namespace NMib::NNetwork
 			}
 		}
 
+		static NStr::CStr fsp_GetErrorString(uint32_t _Error)
+		{
+			const uint32_t Lib = ERR_GET_LIB(_Error);
+			const uint32_t Reason = ERR_GET_REASON(_Error);
+
+			if (Lib == ERR_LIB_SYS)
+			{
+				if (Reason < 127)
+					return NStr::CStr::CFormat("{cc}") << NMib::NPlatform::fg_ErrnoString<NStr::CStr>(Reason);
+			}
+
+			return NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(_Error);
+		}
+
 		bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult &_Result, NStr::CStr &_SystemErrors, bool &_bConnectionRefused)
 		{
-			unsigned long SysError;
+			uint32_t SysError;
 			NStr::CStr AllErrors;
 
 			if ((SysError=ERR_peek_error()) != 0)
@@ -1307,7 +1321,7 @@ namespace NMib::NNetwork
 				const char *pFile;
 				int Line;
 				while( (SysError = ERR_get_error_line(&pFile, &Line)))
-					NStr::fg_AddStrSep(AllErrors, NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(SysError), "\n");
+					NStr::fg_AddStrSep(AllErrors, fsp_GetErrorString(SysError), "\n");
 
 				_Result = EAuthenticationResult_Failure;
 				_SystemErrors = AllErrors;
@@ -1327,7 +1341,7 @@ namespace NMib::NNetwork
 				{
 					_Result = EAuthenticationResult_Failure;
 					_bConnectionRefused = true;
-					_SystemErrors = NStr::fg_Format("{cc}", ERR_reason_error_string(SysError));
+					_SystemErrors = fsp_GetErrorString(SysError);
 					return true;
 				}
 			}
