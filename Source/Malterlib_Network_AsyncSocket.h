@@ -206,7 +206,7 @@ namespace NMib::NNetwork
 			~CPendingConnection();
 
 			NStorage::TCUniquePointer<NNetwork::ICSocket> m_pSocket;
-			NStorage::TCSharedPointer<bool> m_pDeleted = fg_Construct(false);
+			NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>> m_pDeleted = fg_Construct(false);
 		};
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;

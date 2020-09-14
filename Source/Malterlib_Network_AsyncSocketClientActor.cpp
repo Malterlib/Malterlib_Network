@@ -81,7 +81,7 @@ namespace NMib::NNetwork
 
 		auto CleanupPending = NConcurrency::g_OnScopeExitActor > [this, pPendingDeleted = pPending->m_pDeleted, pPending]
 			{
-				if (*pPendingDeleted)
+				if (pPendingDeleted->f_Load())
 					return;
 				mp_PendingConnects.f_Remove(*pPending);
 			}
@@ -114,13 +114,28 @@ namespace NMib::NNetwork
 						{
 							if (!pReplied->f_Exchange(true))
 							{
-								NStr::CStr Error;
-								if (!*pPendingDeleted)
-									Error = pPending->m_pSocket->f_GetCloseReason();
-								else
-									Error = "Client connection actor was deleted";
+								auto This = WeakThis.f_Lock();
+								if (This)
+								{
+									NConcurrency::g_Dispatch(This) / [pPendingDeleted, pPending, Promise, CleanupPending]
+										{
+											NStr::CStr Error;
+											if (!pPendingDeleted->f_Load())
+												Error = pPending->m_pSocket->f_GetCloseReason();
+											else
+												Error = "Client connection actor was deleted";
 
-								Promise.f_SetException(DMibErrorInstance(Error));
+											Promise.f_SetException(DMibErrorInstance(Error));
+										}
+										> NConcurrency::NPrivate::fg_DirectResultActor() / [Promise](NConcurrency::TCAsyncResult<void> &&_Result)
+										{
+											if (!Promise.f_IsSet())
+												Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
+										}
+									;
+								}
+								else
+									Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
 							}
 
 							CleanupPending.f_Clear();
@@ -134,7 +149,7 @@ namespace NMib::NNetwork
 							}
 
 							auto This = WeakThis.f_Lock();
-							if (!This || *pPendingDeleted)
+							if (!This || pPendingDeleted->f_Load())
 								return Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
 
 							NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = fg_Move(pPending->m_pSocket);

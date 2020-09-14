@@ -6,6 +6,7 @@
 #include <Mib/Network/AsyncSocket>
 #include <Mib/Network/Sockets/SSL>
 #include <Mib/Cryptography/Certificate>
+#include <Mib/Cryptography/RandomID>
 
 using namespace NMib::NNetwork;
 using namespace NMib;
@@ -50,16 +51,22 @@ public:
 	{
 		struct CServerConnection
 		{
-			~CServerConnection()
-			{
-				*m_pDeleted = true;
-			}
 
 			TCActorInterface<CAsyncSocketActor> m_Actor;
 			CStr m_MessageBuffer;
-			TCSharedPointer<bool> m_pDeleted = fg_Construct();
 			bool m_bFinished = false;
 		};
+
+		~CState()
+		{
+			DMibLock(m_Lock);
+			m_ServerActor.f_Clear();
+			m_ListenCallbackReference.f_Clear();
+			m_ServerConnections.f_Clear();
+			m_ClientActor.f_Clear();
+			m_ClientSocket.f_Clear();
+			m_Messages.f_Clear();
+		}
 		
 		CMutual m_Lock;
 		CEventAutoReset m_Event;
@@ -69,7 +76,7 @@ public:
 		TCActor<CAsyncSocketServerActor> m_ServerActor;
 		CActorSubscription m_ListenCallbackReference;
 
-		TCLinkedList<CServerConnection> m_ServerConnections;
+		TCMap<CStr, CServerConnection> m_ServerConnections;
 		
 		CStr m_AcceptError;
 		bool m_bAcceptError = false;
@@ -158,25 +165,27 @@ public:
 				{
 					CAsyncSocketCallbacks Callbacks;
 					CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
-					CState::CServerConnection *pServerConnection;
-					TCSharedPointer<bool> pDeleted;
+					CStr ServerConnectionID;
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
 							co_return {};
 						DMibLock(pState->m_Lock);
 
-						pServerConnection = &pState->m_ServerConnections.f_Insert();
+						ServerConnectionID = fg_RandomID(pState->m_ServerConnections);
+
+						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=, pDeleted = pServerConnection->m_pDeleted](TCSharedPointer<CSecureByteVector> const &_pData) -> TCFuture<void>
+							/ [=](TCSharedPointer<CSecureByteVector> const &_pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
 									co_return {};
 
 								DMibLock(pState->m_Lock);
-								if (*pDeleted || pState->m_bCleared)
+								auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+								if (!pServerConnection || pState->m_bCleared)
 									co_return {};
 
 								for (auto &Connection : pState->m_ServerConnections)
@@ -203,34 +212,38 @@ public:
 						;
 
 						Callbacks.m_fOnClose = g_ActorFunctor
-							/ [=, pDeleted = pServerConnection->m_pDeleted](EAsyncSocketStatus _Status, CStr const &_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+							/ [=](EAsyncSocketStatus _Status, CStr const &_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
 									co_return {};
 								DMibLock(pState->m_Lock);
-								if (*pDeleted || pState->m_bCleared)
+								auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+								if (!pServerConnection || pState->m_bCleared)
 									co_return {};
+
 								pState->m_ServerConnectionCloseMessage = _Message;
 								pState->m_ServerConnectionCloseStatus = _Status;
 								pState->m_ServerConnectionCloseOrigin = _Origin;
-								pState->m_ServerConnections.f_Remove(*pServerConnection);
+								pState->m_ServerConnections.f_Remove(pServerConnection);
 								pState->m_Event.f_Signal();
 
 								co_return {};
 							}
 						;
-
-						pDeleted = pServerConnection->m_pDeleted;
 					}
 
-					auto Cleanup = g_OnScopeExit > [=, pDeleted = pServerConnection->m_pDeleted]
+					auto Cleanup = g_OnScopeExit > [=]
 						{
 							auto pState = pStateWeak.f_Lock();
 							if (!pState)
 								return;
-							if (*pDeleted || pState->m_bCleared)
+
+							DMibLock(pState->m_Lock);
+							auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+							if (!pServerConnection || pState->m_bCleared)
 								return;
+
 							pServerConnection->m_bFinished = true;
 							pState->m_Event.f_Signal();
 						}
@@ -242,7 +255,9 @@ public:
 						if (!pState)
 							co_return {};
 
-						if (*pDeleted || pState->m_bCleared)
+						DMibLock(pState->m_Lock);
+						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+						if (!pServerConnection || pState->m_bCleared)
 							co_return {};
 					}
 
@@ -252,6 +267,10 @@ public:
 
 					{
 						DMibLock(pState->m_Lock);
+						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+						if (!pServerConnection || pState->m_bCleared)
+							co_return {};
+
 						pServerConnection->m_Actor = fg_Move(Actor);
 					}
 

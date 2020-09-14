@@ -91,8 +91,8 @@ namespace NMib::NNetwork
 		struct CState
 		{
 			NMib::NThread::CEventAutoResetReportable m_Event;
-			bool m_bEventAbandonned = false;
-			bool m_bConnected = false;
+			NAtomic::TCAtomic<bool> m_bEventAbandonned = false;
+			NAtomic::TCAtomic<bool> m_bConnected = false;
 		};
 
 		NStorage::TCSharedPointer<CState> pState = fg_Construct();
