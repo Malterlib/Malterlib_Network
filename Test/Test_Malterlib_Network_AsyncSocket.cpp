@@ -23,7 +23,7 @@ namespace
 {
 	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
 	char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
-	fp64 g_Timeout = 5.0;
+	fp64 g_Timeout = 5.0 * gc_TimeoutMultiplier;
 }
 
 class CAsyncSocket_Tests : public CTest
@@ -563,8 +563,8 @@ public:
 				{
 					DMibTestPath("Messages");
 
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(20.0);
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(20.0);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(g_Timeout / 3);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(g_Timeout / 3);
 
 					bool bTimedOut = false;
 					while (!bTimedOut)
