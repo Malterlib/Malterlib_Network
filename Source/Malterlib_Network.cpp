@@ -90,7 +90,7 @@ namespace NMib::NNetwork
 
 		struct CState
 		{
-			NMib::NThread::CEventAutoResetReportable m_Event;
+			NMib::NThread::CEventAutoReset m_Event;
 			NAtomic::TCAtomic<bool> m_bEventAbandonned = false;
 			NAtomic::TCAtomic<bool> m_bConnected = false;
 		};

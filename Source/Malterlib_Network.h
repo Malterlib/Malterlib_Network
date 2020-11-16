@@ -26,7 +26,7 @@
 
 						CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
-						void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo);
+						void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 						bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
 						void fg_AsyncResolveAddress_Close(void *_pResolver);
 
@@ -37,10 +37,10 @@
 						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bool _bIncludeType);
 
 					// Connection Operations
-						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
+						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 
-						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
-						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
+						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
+						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
 
 						void fg_Close(void *_pSocket); // Closes the socket and connection
 
@@ -49,12 +49,10 @@
 
 					// Socket Properties & State
 
-						void fg_SetReportTo(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data
-
 						NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 						NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
 
-						void *fg_InheritHandle2(void *_pSocket, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo);
+						void *fg_InheritHandle2(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 						void *fg_GiveUpForInherit(void *_pSocket);
 						void *fg_GetOSSocket(void *_pSocket);
 
@@ -650,7 +648,7 @@ namespace NMib::NNetwork
 			mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open(_Address, _PreferType, fg_Move(_fOnFinish));
 		}
 
-		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
 			f_Close();
 			mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open
@@ -698,7 +696,7 @@ namespace NMib::NNetwork
 				DMibErrorNet("Socket is not valid");
 		}
 
-		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
 			if (_pReportTo)
 			{
@@ -748,7 +746,7 @@ namespace NMib::NNetwork
 			mp_pSocket = nullptr;
 		}
 
-		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0)
+		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0)
 		{
 			f_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress(), _Timeout);
 		}
@@ -762,7 +760,7 @@ namespace NMib::NNetwork
 			)
 		;
 
-		void f_AsyncConnect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo = nullptr)
+		void f_AsyncConnect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr)
 		{
 			f_Close();
 
@@ -783,7 +781,7 @@ namespace NMib::NNetwork
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo, ENetFlag _Flags)
+		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo, ENetFlag _Flags)
 		{
 			f_Close();
 
@@ -812,7 +810,7 @@ namespace NMib::NNetwork
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
 			f_Close();
 
@@ -830,7 +828,7 @@ namespace NMib::NNetwork
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
-		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fsp_GetChangeReportTo(_pReportTo));
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
@@ -852,7 +850,7 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GetOSSocket(mp_pSocket);
 		}
 
-		void f_SetReportTo(NMib::NThread::CSemaphoreReportableAggregate *_pReportTo)
+		void f_SetReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
 			NMib::NSys::NNetwork::fg_SetOnStateChange(mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
 		}

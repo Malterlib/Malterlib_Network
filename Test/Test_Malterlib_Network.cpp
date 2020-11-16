@@ -93,7 +93,7 @@ public:
 	template <typename t_CNetAddress>
 	void f_TestAsyncResolve(CStr const &_Address, t_CNetAddress const& _Result)
 	{
-		NStorage::TCSharedPointer<CEventAutoResetReportable> pResolveEvent = fg_Construct();
+		NStorage::TCSharedPointer<CEventAutoReset> pResolveEvent = fg_Construct();
 
 		CAsyncResolver Resolver;
 		Resolver.f_Open
@@ -210,7 +210,7 @@ public:
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
 		static mint const nMessageBytes = sizeof(Message);
 
-		CEventAutoResetReportable ServerReady;
+		CEventAutoReset ServerReady;
 
 		auto ServerThread = CThreadObject::fs_StartThread
 			(
@@ -340,7 +340,7 @@ public:
 				return;
 		}
 
-		CEventAutoResetReportable SocketEvent;
+		CEventAutoReset SocketEvent;
 
 		CSocket Socket;
 		Socket.f_Connect
@@ -421,7 +421,7 @@ public:
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
 		static mint const nMessageBytes = sizeof(Message);
 
-		CEventAutoResetReportable ServerReady;
+		CEventAutoReset ServerReady;
 
 		auto ServerThread = CThreadObject::fs_StartThread
 			(
@@ -437,7 +437,7 @@ public:
 						CNetAddress BindAddress(AnyAddr);
 						DMibExpectFalse(BindAddress.f_IsEmpty());
 
-						TCSharedPointer<CEventAutoResetReportable> pListenEvent = fg_Construct();
+						TCSharedPointer<CEventAutoReset> pListenEvent = fg_Construct();
 
 						CSocket Server;
 						Server.f_Listen
@@ -565,7 +565,7 @@ public:
 				return;
 		}
 
-		CEventAutoResetReportable SocketEvent;
+		CEventAutoReset SocketEvent;
 
 		CSocket Socket;
 		Socket.f_Connect(Address);
@@ -645,7 +645,7 @@ public:
 				return;
 		}
 
-		TCSharedPointer<CEventAutoResetReportable> pSocketEvent = fg_Construct();
+		TCSharedPointer<CEventAutoReset> pSocketEvent = fg_Construct();
 
 		CSocket Socket;
 
