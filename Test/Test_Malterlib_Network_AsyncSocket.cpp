@@ -57,6 +57,11 @@ public:
 			bool m_bFinished = false;
 		};
 
+		CState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop)
+			: m_pRunLoop(_pRunLoop)
+		{
+		}
+
 		~CState()
 		{
 			DMibLock(m_Lock);
@@ -69,7 +74,8 @@ public:
 		}
 		
 		CMutual m_Lock;
-		CEventAutoReset m_Event;
+		TCSharedPointer<CDefaultRunLoop> m_pRunLoop;
+		bool m_bSignalCompletion = false;
 
 		CStr m_ClientMessageBuffer;
 
@@ -110,6 +116,31 @@ public:
 			}
 			return true;
 		}
+
+		void f_Signal()
+		{
+			DMibLock(m_Lock);
+			m_bSignalCompletion = true;
+			m_pRunLoop->f_Wake();
+		}
+
+		bool f_Wait()
+		{
+			while (true)
+			{
+				{
+					DMibLock(m_Lock);
+					if (m_bSignalCompletion)
+					{
+						m_bSignalCompletion = false;
+						break;
+					}
+				}
+				if (m_pRunLoop->f_WaitOnceTimeout(g_Timeout))
+					return true;
+			}
+			return false;
+		}
 		
 		void f_Clear()
 		{
@@ -141,7 +172,7 @@ public:
 				m_ServerConnections.f_Clear();
 			}
 
-			Destroys.f_GetResults().f_CallSync();
+			Destroys.f_GetResults().f_CallSync(m_pRunLoop);
 
 			{
 				DMibLock(m_Lock);
@@ -150,7 +181,7 @@ public:
 					auto ServerActor = m_ServerActor;
 					{
 						DMibUnlock(m_Lock);
-						ServerActor->f_BlockDestroy(); // Make sure to release listen socket
+						ServerActor->f_BlockDestroy(m_pRunLoop->f_ActorDestroyLoop()); // Make sure to release listen socket
 					}
 					m_ServerActor.f_Clear();
 				}
@@ -161,6 +192,7 @@ public:
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
 			CAsyncSocketServerCallbacks ListenCallbacks;
+
 			ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection &&_ConnectionInfo) -> TCFuture<void>
 				{
 					CAsyncSocketCallbacks Callbacks;
@@ -226,7 +258,7 @@ public:
 								pState->m_ServerConnectionCloseStatus = _Status;
 								pState->m_ServerConnectionCloseOrigin = _Origin;
 								pState->m_ServerConnections.f_Remove(pServerConnection);
-								pState->m_Event.f_Signal();
+								pState->f_Signal();
 
 								co_return {};
 							}
@@ -245,21 +277,17 @@ public:
 								return;
 
 							pServerConnection->m_bFinished = true;
-							pState->m_Event.f_Signal();
+							pState->f_Signal();
 						}
 					;
 
 					auto Actor = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
-						if (!pServerConnection || pState->m_bCleared)
-							co_return {};
-					}
+					auto Cleanup2 = g_OnScopeExit > [&Actor]
+						{
+							if (Actor)
+								fg_Move(Actor).f_Destroy() > fg_DiscardResult();
+						}
+					;
 
 					auto pState = pStateWeak.f_Lock();
 					if (!pState)
@@ -272,6 +300,7 @@ public:
 							co_return {};
 
 						pServerConnection->m_Actor = fg_Move(Actor);
+						Cleanup2.f_Clear();
 					}
 
 					co_return {};
@@ -287,7 +316,7 @@ public:
 					DMibLock(pState->m_Lock);
 					pState->m_bAcceptError = true;
 					pState->m_AcceptError = _ConnectionInfo.m_Error;
-					pState->m_Event.f_Signal();
+					pState->f_Signal();
 
 					co_return {};
 				}
@@ -312,10 +341,10 @@ public:
 						pState->m_ListenCallbackReference = fg_Move(_Result->m_Subscription);
 					else
 						pState->m_ListenError = _Result.f_GetExceptionStr();
-					pState->m_Event.f_Signal();
+					pState->f_Signal();
 				}
 			;			
-			bool bTimedOutListenStart = m_Event.f_WaitTimeout(g_Timeout);
+			bool bTimedOutListenStart = f_Wait();
 			DMibAssert(m_ListenError, ==, "");
 			DMibAssertFalse(bTimedOutListenStart);
 			DMibAssertTrue(m_ListenCallbackReference);
@@ -355,7 +384,7 @@ public:
 								pState->m_ClientConnectionCloseMessage = _Message;
 								pState->m_ClientConnectionCloseStatus = _Status;
 								pState->m_ClientConnectionCloseOrigin = _Origin;
-								pState->m_Event.f_Signal();
+								pState->f_Signal();
 
 								co_return {};
 							}
@@ -372,7 +401,7 @@ public:
 								while (pState->m_ClientMessageBuffer.f_FindChar('\n') >= 0)
 									pState->m_Messages.f_Insert(fg_GetStrLineSep(pState->m_ClientMessageBuffer));
 
-								pState->m_Event.f_Signal();
+								pState->f_Signal();
 
 								co_return {};
 							}
@@ -386,7 +415,7 @@ public:
 
 								DMibLock(pState->m_Lock);
 								pState->m_bClientConnectionResult = true;
-								pState->m_Event.f_Signal();
+								pState->f_Signal();
 							}
 						;
 
@@ -397,12 +426,18 @@ public:
 
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
+								{
+									fg_Move(*_Socket).f_Destroy() > fg_DiscardResult();
 									return;
+								}
 
 								DMibLock(pState->m_Lock);
 
 								if (pState->m_bCleared)
+								{
+									fg_Move(*_Socket).f_Destroy() > fg_DiscardResult();
 									return;
+								}
 
 								pState->m_ClientSocket = fg_Move(*_Socket);
 							}
@@ -414,7 +449,7 @@ public:
 						pState->m_ClientConnectionError = _Result.f_GetExceptionStr();
 					}
 
-					pState->m_Event.f_Signal();
+					pState->f_Signal();
 				}
 			;
 		}
@@ -453,7 +488,7 @@ public:
 						break; // Successfully done
 				}
 			}
-			bTimedOut = pState->m_Event.f_WaitTimeout(g_Timeout);
+			bTimedOut = pState->f_Wait();
 		}
 
 		DMibTest(!DMibExpr(bTimedOut));
@@ -512,13 +547,21 @@ public:
 	{
 		DMibTestSuite("Connection")
 		{
-			TCActor<CSeparateThreadActor> ProcessingActor{fg_Construct(), "Test processing"};
-			auto Cleanup = g_OnScopeExit > [&]
+			TCSharedPointer<CDefaultRunLoop> pRunLoop = fg_Construct();
+			auto CleanupRunLoop = g_OnScopeExit > [&]
 				{
-					ProcessingActor->f_BlockDestroy();
+					while (pRunLoop->f_RefCountGet() > 0)
+						pRunLoop->f_WaitOnceTimeout(0.1);
 				}
 			;
-			CCurrentlyProcessingActorScope CurrentActorScope(ProcessingActor);
+			TCActor<CDispatchingActor> HelperActor(fg_Construct(), pRunLoop->f_Dispatcher());
+			auto CleanupHelperActor = g_OnScopeExit > [&]
+				{
+					HelperActor->f_BlockDestroy(pRunLoop->f_ActorDestroyLoop());
+				}
+			;
+			CCurrentlyProcessingActorScope CurrentActor{HelperActor};
+			
 			auto Factories = _fGetFactories();
 			auto ServerFactory = fg_Get<0>(Factories);
 			auto ClientFactory = fg_Get<1>(Factories); 
@@ -534,7 +577,7 @@ public:
 			else
 				ListenAddress = CSocket::fs_ResolveAddress(_Address);
 			{
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
 				auto Cleanup 
 					= g_OnScopeExit > [&]
 					{
@@ -574,7 +617,7 @@ public:
 							if (pState->m_Messages.f_GetLen() >= 2)
 								break;
 						}
-						bTimedOut = pState->m_Event.f_WaitTimeout(g_Timeout);
+						bTimedOut = pState->f_Wait();
 					}
 
 					DMibExpectFalse(bTimedOut);
@@ -596,7 +639,7 @@ public:
 							if (!pState->m_ClientConnectionCloseMessage.f_IsEmpty() && pState->m_ServerConnections.f_IsEmpty())
 								break; // Successfully disconnected from the server
 						}
-						bTimedOut = pState->m_Event.f_WaitTimeout(g_Timeout);
+						bTimedOut = pState->f_Wait();
 					}
 
 					DMibTest(!DMibExpr(bTimedOut));
@@ -608,7 +651,7 @@ public:
 			if (_bTestTimeout)
 			{
 				DMibTestPath("Timeout");
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
 				auto Cleanup 
 					= g_OnScopeExit > [&]
 					{
@@ -617,18 +660,18 @@ public:
 				;
 				
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(g_Timeout);
+				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(pRunLoop, g_Timeout);
 				pState->f_StartListen(ListenAddress, ServerFactory);
 				
 				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(g_Timeout);
+				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(pRunLoop, g_Timeout);
 				pState->f_Connect(_Address, ClientFactory);
 				
 				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
 					return;
 				{
 					DMibTestPath("Timeout");
-					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(g_Timeout);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(pRunLoop, g_Timeout);
 					bool bTimedOut = fp_WaitForCondition
 						(
 							[&]
