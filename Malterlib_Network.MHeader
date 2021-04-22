@@ -23,24 +23,21 @@ Import "../Core/Lib_Malterlib.MTarget"
 			%File "Documentation/*"
 		}
 	}
+	%Dependency "Lib_Malterlib_Cryptography"
+	{
+		Dependency.Indirect true
+	}
 }
 
 Property
 {
-	MalterlibLibrary_Network true
-	{
-		&
-		{
-			MalterlibLibrary_Network ""
-			MalterlibLibrary_All true
-		}
-	}
-	MalterlibSubLibraries "Network;@(MalterlibSubLibraries)"
+	MalterlibLibrary_Network define bool = MalterlibLibrary_All
+	MalterlibSubLibraries =+ "Network"
 	{
 		!!MalterlibLibrary_Network true
 	}
-	MalterlibLibrarySeparate_Lib_Malterlib_Network true
-	MalterlibIncludeRoots "@('Include'->MakeAbsolute());@(MalterlibIncludeRoots)"
+	MalterlibLibrarySeparate_Lib_Malterlib_Network define bool = true
+	MalterlibIncludeRoots =+ "Include"->MakeAbsolute()
 	{
 		!!MalterlibLibrary_Network true
 	}
@@ -50,7 +47,6 @@ Property
 {
 	Property
 	{
-		MalterlibLinkWithOpenSSL true
 	}
 }
 
@@ -58,8 +54,8 @@ Property
 {
 	!!MalterlibEnableInternalTests true
 
-	MalterlibTests "Malterlib_Network;@(MalterlibTests)"
-	MalterlibTestFiles_Malterlib_Network "@('Test/*'->MakeAbsolute())"
-	MalterlibTestDependencies_Malterlib_Network "Lib_Malterlib_Network"
-	MalterlibTestExtraGroups_Malterlib_Network "{Test}/{Malterlib_Network}"
+	MalterlibTests =+ "Malterlib_Network"
+	MalterlibTestFiles_Malterlib_Network define [type(CEntity)] = ["Test/*"->MakeAbsolute()]
+	MalterlibTestDependencies_Malterlib_Network define [type(CEntity)] = ["Lib_Malterlib_Network"]
+	MalterlibTestExtraGroups_Malterlib_Network define [string] = ["{Test}/{Malterlib_Network}"]
 }
