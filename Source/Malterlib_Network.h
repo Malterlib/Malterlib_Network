@@ -585,9 +585,9 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
 		}
 
-		bool operator < (CNetAddress const& _Other) const
+		COrdering_Weak operator <=> (CNetAddress const& _Other) const
 		{
-			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) < 0;
+			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) <=> 0;
 		}
 
 		template <typename tf_CStr>
