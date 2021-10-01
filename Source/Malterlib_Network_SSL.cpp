@@ -305,10 +305,11 @@ namespace NMib::NNetwork
 			// Update chain of certificates
 			if (!Result.f_HasLoggedCertificateChain())
 			{
-				auto nCertsInChain = sk_X509_num(_pStoreContext->chain);
+				auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
+				auto nCertsInChain = sk_X509_num(pChain);
 				while (nCertsInChain)
 				{
-					X509* pCert = sk_X509_value(_pStoreContext->chain, nCertsInChain - 1);
+					X509* pCert = sk_X509_value(pChain, nCertsInChain - 1);
 					NContainer::CByteVector CertData;
 					try
 					{
@@ -515,11 +516,6 @@ namespace NMib::NNetwork
 				if (!pStore)
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
 
-				ERR_clear_error();
-				X509_LOOKUP* pLookup = X509_STORE_add_lookup(pStore, X509_LOOKUP_file());
-				if (!pLookup)
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to add lookup file to store"));
-
 				X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
 
 				auto Cleanup = g_OnScopeExit > [&]
@@ -529,11 +525,11 @@ namespace NMib::NNetwork
 				;
 
 				ERR_clear_error();
-				if (!X509_STORE_add_crl(pLookup->store_ctx, pCRL))
+				if (!X509_STORE_add_crl(pStore, pCRL))
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
 
 				ERR_clear_error();
-				if (!X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL))
+				if (!X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL))
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to set store flags"));
 			}
 
@@ -570,7 +566,7 @@ namespace NMib::NNetwork
 				}
 
 				if (bAdded)
-					X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK|X509_V_FLAG_CRL_CHECK_ALL);
+					X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
 			}
 		}
 
