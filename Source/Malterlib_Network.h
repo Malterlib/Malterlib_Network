@@ -929,6 +929,7 @@ namespace NMib::NNetwork
 	};
 
 	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars = "", ch8 const *_pLabelChars = "");
+	bool fg_IsValidLowerCaseHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars = "", ch8 const *_pLabelChars = "");
 }
 
 #ifndef DMibPNoShortCuts

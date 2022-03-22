@@ -8,7 +8,8 @@ namespace NMib::NNetwork
 {
 	DMibImpErrorClassImplement(CExceptionNet);
 
-	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
+	template <bool tf_bLowerCase>
+	bool fg_IsValidHostnameImpl(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
 	{
 		if (_String.f_GetLen() > 254)
 			return false;
@@ -21,7 +22,17 @@ namespace NMib::NNetwork
 				return false; // Must not start with hyphen
 			if (*pParse == '.')
 				return false; // Empty label allowed?
-			while (*pParse && (NStr::fg_CharIsAnsiAlphabetical(*pParse) || NStr::fg_CharIsNumber(*pParse) || *pParse == '-' || NStr::fg_StrFindChar(_pLabelChars, *pParse) >= 0))
+			while
+				(
+					*pParse
+					&&
+					(
+						(tf_bLowerCase ? NStr::fg_CharIsLowerCaseAnsiAlphabetical(*pParse) : NStr::fg_CharIsAnsiAlphabetical(*pParse))
+						|| NStr::fg_CharIsNumber(*pParse)
+						|| *pParse == '-'
+						|| NStr::fg_StrFindChar(_pLabelChars, *pParse) >= 0
+					)
+				)
 			{
 				LastChar = *pParse;
 				bEmptySegment = false;
@@ -43,6 +54,16 @@ namespace NMib::NNetwork
 		if (bEmptySegment)
 			return false;
 		return true;
+	}
+
+	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
+	{
+		return fg_IsValidHostnameImpl<false>(_String, _pSeparatorChars, _pLabelChars);
+	}
+
+	bool fg_IsValidLowerCaseHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
+	{
+		return fg_IsValidHostnameImpl<true>(_String, _pSeparatorChars, _pLabelChars);
 	}
 
 	namespace
