@@ -123,7 +123,7 @@ namespace NMib::NNetwork
 					[&]() -> decltype(auto)
 					{
 						// Protect against destructor not being run in case of exception
-						auto Cleanup = g_OnScopeExit > [&]
+						auto Cleanup = g_OnScopeExit / [&]
 							{
 								this->~CInternal();
 							}
@@ -347,7 +347,7 @@ namespace NMib::NNetwork
 			BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
 			if (!pMemoryBio)
 				DMibErrorCryptography(fg_GetExceptionStr("Error creating BIO"));
-			auto Cleanup = g_OnScopeExit > [&]
+			auto Cleanup = g_OnScopeExit / [&]
 				{
 					BIO_free(pMemoryBio);
 				}
@@ -448,7 +448,7 @@ namespace NMib::NNetwork
 						bUsingCertificateAuthority = true;
 
 						X509 *pCertificate = fg_LoadCertificate(CertificateData);
-						auto Cleanup0 = g_OnScopeExit > [&]
+						auto Cleanup0 = g_OnScopeExit / [&]
 							{
 								X509_free(pCertificate);
 							}
@@ -468,7 +468,7 @@ namespace NMib::NNetwork
 			{
 				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
 				X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_CACertificateData);
-				auto Cleanup0 = g_OnScopeExit > [&]
+				auto Cleanup0 = g_OnScopeExit / [&]
 					{
 						X509_free(pCertificate);
 					}
@@ -494,7 +494,7 @@ namespace NMib::NNetwork
 				return false;
 
 			X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_PublicCertificateData);
-			auto Cleanup0 = g_OnScopeExit > [&]
+			auto Cleanup0 = g_OnScopeExit / [&]
 				{
 					X509_free(pCertificate);
 				}
@@ -518,7 +518,7 @@ namespace NMib::NNetwork
 
 				X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
 
-				auto Cleanup = g_OnScopeExit > [&]
+				auto Cleanup = g_OnScopeExit / [&]
 					{
 						X509_CRL_free(pCRL);
 					}
@@ -553,7 +553,7 @@ namespace NMib::NNetwork
 						continue;
 
 					X509_CRL* pCRL = fs_LoadCRL(CRLData);
-					auto Cleanup = g_OnScopeExit > [&]
+					auto Cleanup = g_OnScopeExit / [&]
 						{
 							X509_CRL_free(pCRL);
 						}
@@ -648,7 +648,7 @@ namespace NMib::NNetwork
 			}
 
 			EVP_PKEY* pKey = fg_LoadPrivateKey(mp_Settings.m_PrivateKeyData);
-			auto Cleanup = g_OnScopeExit > [&]
+			auto Cleanup = g_OnScopeExit / [&]
 				{
 					EVP_PKEY_free(pKey);
 				}
@@ -700,7 +700,7 @@ namespace NMib::NNetwork
 					EC_KEY *pECDH = EC_KEY_new_by_curve_name(CurveName);
 					if (pECDH)
 					{
-						auto Cleanup = g_OnScopeExit > [&]
+						auto Cleanup = g_OnScopeExit / [&]
 							{
 								EC_KEY_free(pECDH);
 							}
@@ -1708,7 +1708,7 @@ namespace NMib::NNetwork
 			return false;
 
 		X509* pPeerCertificate = fg_LoadCertificate(_SpecificCertificate);
-		auto Cleanup0 = g_OnScopeExit > [&]
+		auto Cleanup0 = g_OnScopeExit / [&]
 			{
 				X509_free(pPeerCertificate);
 			}

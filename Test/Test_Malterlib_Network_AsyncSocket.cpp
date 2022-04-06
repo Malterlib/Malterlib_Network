@@ -265,7 +265,7 @@ public:
 						;
 					}
 
-					auto Cleanup = g_OnScopeExit > [=]
+					auto Cleanup = g_OnScopeExit / [=]
 						{
 							auto pState = pStateWeak.f_Lock();
 							if (!pState)
@@ -282,7 +282,7 @@ public:
 					;
 
 					auto Actor = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
-					auto Cleanup2 = g_OnScopeExit > [&Actor]
+					auto Cleanup2 = g_OnScopeExit / [&Actor]
 						{
 							if (Actor)
 								fg_Move(Actor).f_Destroy() > fg_DiscardResult();
@@ -548,14 +548,14 @@ public:
 		DMibTestSuite("Connection")
 		{
 			TCSharedPointer<CDefaultRunLoop> pRunLoop = fg_Construct();
-			auto CleanupRunLoop = g_OnScopeExit > [&]
+			auto CleanupRunLoop = g_OnScopeExit / [&]
 				{
 					while (pRunLoop->f_RefCountGet() > 0)
 						pRunLoop->f_WaitOnceTimeout(0.1);
 				}
 			;
 			TCActor<CDispatchingActor> HelperActor(fg_Construct(), pRunLoop->f_Dispatcher());
-			auto CleanupHelperActor = g_OnScopeExit > [&]
+			auto CleanupHelperActor = g_OnScopeExit / [&]
 				{
 					HelperActor->f_BlockDestroy(pRunLoop->f_ActorDestroyLoop());
 				}
@@ -579,7 +579,7 @@ public:
 			{
 				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
 				auto Cleanup 
-					= g_OnScopeExit > [&]
+					= g_OnScopeExit / [&]
 					{
 						pState->f_Clear();
 					}
@@ -653,7 +653,7 @@ public:
 				DMibTestPath("Timeout");
 				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
 				auto Cleanup 
-					= g_OnScopeExit > [&]
+					= g_OnScopeExit / [&]
 					{
 						pState->f_Clear();
 					}

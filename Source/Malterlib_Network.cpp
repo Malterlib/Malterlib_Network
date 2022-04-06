@@ -118,7 +118,7 @@ namespace NMib::NNetwork
 
 		NStorage::TCSharedPointer<CState> pState = fg_Construct();
 
-		auto CleanupEvent = g_OnScopeExit > [pState]
+		auto CleanupEvent = g_OnScopeExit / [pState]
 			{
 				pState->m_bEventAbandonned = true;
 			}
@@ -142,7 +142,7 @@ namespace NMib::NNetwork
 			)
 		;
 
-		auto Cleanup = g_OnScopeExit > [&]
+		auto Cleanup = g_OnScopeExit / [&]
 			{
 				NMib::NSys::NNetwork::fg_Close(mp_pSocket);
 				mp_pSocket = nullptr;
