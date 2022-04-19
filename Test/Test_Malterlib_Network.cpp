@@ -724,90 +724,76 @@ public:
 				return RemoteMachine;
 			}
 		;
-
-		DMibTestSuite("Addresses_TCPv4")
+		DMibTestSuite("Tests")
 		{
-			f_TestAddress(Localhost_TCPv4, Other_TCPv4);
-		};
-
-		DMibTestSuite("Addresses_TCPv6")
-		{
-			f_TestAddress(Localhost_TCPv6, Other_TCPv6);
-		};
-
-		DMibTestSuite("Resolve_TCPv4")
-		{
-			f_TestResolve("localhost", Localhost_TCPv4);
-		};
-
-		DMibTestSuite("Resolve_TCPv6")
-		{
-			f_TestResolve("localhost", Localhost_TCPv6);
-		};
-
-		DMibTestSuite("AsyncResolve_TCPv4")
-		{
-			f_TestAsyncResolve("localhost", Localhost_TCPv4);
-		};
-
-		DMibTestSuite("AsyncResolve_TCPv6")
-		{
-			f_TestAsyncResolve("localhost", Localhost_TCPv6);
-		};
-
-		DMibTestSuite("Connect_TCPv4")
-		{
-			f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20677);
-		};
-
-		DMibTestSuite("Connect_TCPv6")
-		{
-			f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20677);
-		};
-
-		DMibTestSuite("ConnectListen_TCPv4")
-		{
-			f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
-		};
-
-		DMibTestSuite("ConnectListen_TCPv6")
-		{
-			f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
-		};
-
-		DMibTestSuite("ConnectReportTo_TCPv4")
-		{
-			f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
-		};
-
-		DMibTestSuite("ConnectReportTo_TCPv6")
-		{
-			f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
-		};
-
-		DMibTestSuite("ConnectListenReportTo_TCPv4")
-		{
-			f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
-		};
-
-		DMibTestSuite("ConnectListenReportTo_TCPv6")
-		{
-			f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
-		};
-
-		DMibTestSuite("Inherit")
-		{
-			f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
-		};
-
-		DMibTestSuite("AsyncConnectReportTo_TCPv4")
-		{
-			f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
-		};
-
-		DMibTestSuite("AsyncConnectReportTo_TCPv6")
-		{
-			f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+			{
+				DMibTestPath("Addresses_TCPv4");
+				f_TestAddress(Localhost_TCPv4, Other_TCPv4);
+			}
+			{
+				DMibTestPath("Addresses_TCPv6");
+				f_TestAddress(Localhost_TCPv6, Other_TCPv6);
+			}
+			{
+				DMibTestPath("Resolve_TCPv4");
+				f_TestResolve("localhost", Localhost_TCPv4);
+			}
+			{
+				DMibTestPath("Resolve_TCPv6");
+				f_TestResolve("localhost", Localhost_TCPv6);
+			}
+			{
+				DMibTestPath("AsyncResolve_TCPv4");
+				f_TestAsyncResolve("localhost", Localhost_TCPv4);
+			}
+			{
+				DMibTestPath("AsyncResolve_TCPv6");
+				f_TestAsyncResolve("localhost", Localhost_TCPv6);
+			}
+			{
+				DMibTestPath("Connect_TCPv4");
+				f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20677);
+			}
+			{
+				DMibTestPath("Connect_TCPv6");
+				f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20677);
+			}
+			{
+				DMibTestPath("ConnectListen_TCPv4");
+				f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
+			}
+			{
+				DMibTestPath("ConnectListen_TCPv6");
+				f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
+			}
+			{
+				DMibTestPath("ConnectReportTo_TCPv4");
+				f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+			}
+			{
+				DMibTestPath("ConnectReportTo_TCPv6");
+				f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+			}
+			{
+				DMibTestPath("ConnectListenReportTo_TCPv4");
+				f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
+			}
+			{
+				DMibTestPath("ConnectListenReportTo_TCPv6");
+				f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
+			}
+			{
+				DMibTestPath("Inherit");
+				f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+			}
+			{
+				DMibTestPath("AsyncConnectReportTo_TCPv4");
+				f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+			}
+			{
+				DMibTestPath("AsyncConnectReportTo_TCPv6");
+				f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+			}
 		};
 	}
 };
