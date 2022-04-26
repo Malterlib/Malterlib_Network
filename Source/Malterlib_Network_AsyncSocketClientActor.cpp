@@ -49,11 +49,37 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_Connect
 		(
-			NStr::CStr const& _ConnectToAddress
-			, NStr::CStr const& _BindToAddress
+			NStr::CStr const &_ConnectToAddress
+			, NStr::CStr const &_BindToAddress
 			, NMib::NNetwork::ENetAddressType _PreferAddress
 			, uint16 _Port
 			, NNetwork::FVirtualSocketFactory &&_SocketFactory
+		)
+	{
+		if (_ConnectToAddress.f_IsEmpty())
+			co_return DMibErrorInstance("Connect to address cannot be empty");
+
+		if (!mp_AddressResolver)
+			mp_AddressResolver = NConcurrency::fg_ConstructActor<NNetwork::CResolveActor>();
+
+		auto [ConnectToAddress, BindToAddress] = co_await
+			(
+			 	mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _ConnectToAddress, _PreferAddress)
+			 	+ mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _BindToAddress, _PreferAddress)
+			)
+		;
+
+		ConnectToAddress.f_SetPort(_Port);
+
+		co_return co_await self(&CAsyncSocketClientActor::f_ConnectAddress, ConnectToAddress, BindToAddress, fg_Move(_SocketFactory), _ConnectToAddress);
+	}
+
+	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_ConnectAddress
+		(
+			NNetwork::CNetAddress const &_ConnectToAddress
+			, NNetwork::CNetAddress const &_BindAddress
+			, NNetwork::FVirtualSocketFactory &&_SocketFactory
+			, NStr::CStr const &_Hostname
 		)
 	{
 		if (!_SocketFactory)
@@ -62,21 +88,11 @@ namespace NMib::NNetwork
 		if (_ConnectToAddress.f_IsEmpty())
 			co_return DMibErrorInstance("Connect to address cannot be empty");
 
-		if (!mp_AddressResolver)
-			mp_AddressResolver = NConcurrency::fg_ConstructActor<NNetwork::CResolveActor>();
-
-		auto [ConnectToAdress, BindToAddress] = co_await
-			(
-			 	mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _ConnectToAddress, _PreferAddress)
-			 	+ mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _BindToAddress, _PreferAddress)
-			)
-		;
-
 		CPendingConnection *pPending;
 		{
 			CPendingConnection &Pending = mp_PendingConnects.f_Insert();
 			pPending = &Pending;
-			Pending.m_pSocket = _SocketFactory(_ConnectToAddress);
+			Pending.m_pSocket = _SocketFactory(_Hostname);
 		}
 
 		auto CleanupPending = NConcurrency::g_OnScopeExitActor > [this, pPendingDeleted = pPending->m_pDeleted, pPending]
@@ -87,8 +103,6 @@ namespace NMib::NNetwork
 			}
 		;
 
-		ConnectToAdress.f_SetPort(_Port);
-
 		NConcurrency::TCPromise<CAsyncSocketNewClientConnection> Promise;
 
 		try
@@ -97,7 +111,7 @@ namespace NMib::NNetwork
 			auto pReplied = NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>>(fg_Construct(false));
 			pPending->m_pSocket->f_AsyncConnect
 				(
-					ConnectToAdress
+					_ConnectToAddress
 					,
 				 	[
 					 	pReplied
@@ -200,7 +214,7 @@ namespace NMib::NNetwork
 							fFinishConnection();
 						}
 					}
-					, BindToAddress
+					, _BindAddress
 				)
 			;
 			pReplied.f_Clear();

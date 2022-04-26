@@ -2,7 +2,6 @@
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include <Mib/Concurrency/ConcurrencyManager>
-#include <Mib/Concurrency/ActorCallbackManager>
 
 #include "Malterlib_Network_AsyncSocket.h"
 #include "Malterlib_Network_AsyncSocketServerActor_Internal_Listen.h"

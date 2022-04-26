@@ -99,8 +99,6 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
-		NConcurrency::CActorSubscription fp_SetOnClose(NConcurrency::TCActor<NConcurrency::CActor> &&_Actor);
-
 		void fp_StateAdded(NNetwork::ENetTCPState _StateAdded);
 		void fp_Disconnect(EAsyncSocketStatus _Status, NStr::CStr const &_Reason, bool _bFatal, EAsyncSocketCloseOrigin _Origin);
 		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
@@ -195,6 +193,15 @@ namespace NMib::NNetwork
 				, NMib::NNetwork::ENetAddressType _PreferAddress // The preferred type of address to connect to
 				, uint16 _Port	// The port to connect to
 				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+			)
+		; // You will receive an exception if connection fails
+
+		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_ConnectAddress
+			(
+				NNetwork::CNetAddress const &_ConnectToAddress	// The server to connect to
+				, NNetwork::CNetAddress const &_BindAddress	// The src address to bind to. Leave empty to not bind
+				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NStr::CStr const &_Hostname // Tthe hostname to use for SSL connections
 			)
 		; // You will receive an exception if connection fails
 
