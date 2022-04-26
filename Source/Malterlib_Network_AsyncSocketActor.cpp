@@ -439,7 +439,7 @@ namespace NMib::NNetwork
 			co_return DMibErrorInstance("Destroying socket");
 
 		auto &Internal = *mp_pInternal;
-		DMibLog(DebugVerbose2, " ++++ {} f_SendBinary", !Internal.m_bClient);
+		DMibLog(DebugVerbose3, " ++++ {} f_SendBinary", !Internal.m_bClient);
 
 		auto &Massage = *_pMessage;
 		mint nBytes = Massage.f_GetLen();
@@ -456,14 +456,14 @@ namespace NMib::NNetwork
 		{
 			auto &NewMessage = Internal.f_QueueMessage(_pMessage, _Priority);
 			auto Future = (NewMessage.m_pPromise = fg_Construct())->f_Future();
-			DMibLog(DebugVerbose2, " ++++ {} Queue non-fragmented", !Internal.m_bClient);
+			DMibLog(DebugVerbose3, " ++++ {} Queue non-fragmented", !Internal.m_bClient);
 			fp_UpdateSend();
 			co_return co_await fg_Move(Future);
 		}
 
 		auto Future = (Internal.f_QueueFragmentedMessage(Massage.f_GetArray(), nBytes, _Priority).m_pPromise = fg_Construct())->f_Future();
 
-		DMibLog(DebugVerbose2, " ++++ {} Queue fragmented", !Internal.m_bClient);
+		DMibLog(DebugVerbose3, " ++++ {} Queue fragmented", !Internal.m_bClient);
 		fp_UpdateSend();
 
 		co_return co_await fg_Move(Future);
@@ -609,7 +609,7 @@ namespace NMib::NNetwork
 						{
 							bDidSend = true;
 							NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Send(_pPtr, _nBytes);
-							DMibLog(DebugVerbose2, " ++++ {} Sending {} resulted in {} sent", !Internal.m_bClient, _nBytes, Result.m_nBytes);
+							DMibLog(DebugVerbose3, " ++++ {} Sending {} resulted in {} sent", !Internal.m_bClient, _nBytes, Result.m_nBytes);
 
 							CombinedResults += Result;
 
@@ -683,7 +683,7 @@ namespace NMib::NNetwork
 	bool CAsyncSocketActor::fp_ProcessIncomingMessage()
 	{
 		auto &Internal = *mp_pInternal;
-		DMibLog(DebugVerbose2, " ++++ {} fp_ProcessIncomingMessage", !Internal.m_bClient);
+		DMibLog(DebugVerbose3, " ++++ {} fp_ProcessIncomingMessage", !Internal.m_bClient);
 
 		mint Length = Internal.m_IncomingData.f_GetLen();
 		NContainer::CSecureByteVector Data;
@@ -709,7 +709,7 @@ namespace NMib::NNetwork
 
 	void CAsyncSocketActor::CInternal::f_HandleDataMessage(NContainer::CSecureByteVector &&_Data)
 	{
-		DMibLog(DebugVerbose2, " ++++ {} call m_OnReceiveData", !m_bClient);
+		DMibLog(DebugVerbose3, " ++++ {} call m_OnReceiveData", !m_bClient);
 		if (m_bDeferringCallbacks)
 		{
 			m_DeferredOnReciveData.f_Insert(fg_Construct(fg_Construct(fg_Move(_Data))));
@@ -851,7 +851,7 @@ namespace NMib::NNetwork
 						fp_ProcessIncoming();
 						break;
 					}
-					DMibLog(DebugVerbose2, " ++++ {} Received data {}", !Internal.m_bClient, Result.m_nBytes);
+					DMibLog(DebugVerbose3, " ++++ {} Received data {}", !Internal.m_bClient, Result.m_nBytes);
 					Internal.m_IncomingData.f_InsertBack(Data, Result.m_nBytes);
 
 					if (Internal.m_IncomingData.f_GetLen() >= Internal.m_FramentationSize)

@@ -222,13 +222,13 @@ namespace NMib::NNetwork
 
 		if (!fp_HandleHandshake())
 		{
-			DMibLog(DebugVerbose2, " **** CSocket_SSL handshake not done");
+			DMibLog(DebugVerbose3, " **** CSocket_SSL handshake not done");
 			return {};
 		}
 		if (mp_SSLConnection.f_BrokenState())
 		{
 			fp_CheckBrokenState();
-			DMibLog(DebugVerbose2, " **** CSocket_SSL broken state");
+			DMibLog(DebugVerbose3, " **** CSocket_SSL broken state");
 			return {};
 		}
 		if (!_DataLen)

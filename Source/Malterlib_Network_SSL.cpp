@@ -1022,7 +1022,7 @@ namespace NMib::NNetwork
 			{
 				// Write did not succeed.
 				int Error = SSL_get_error(pSSL, Ret);
-				DMibLog(DebugVerbose2, " **** SSL error {}", Error);
+				DMibLog(DebugVerbose3, " **** SSL error {}", Error);
 				if (Error == SSL_ERROR_ZERO_RETURN)
 				{
 					f_SetState(EState_ConnectionShutdown);
@@ -1049,7 +1049,7 @@ namespace NMib::NNetwork
 			}
 			else
 			{
-				DMibLog(DebugVerbose2, " **** SSL wrote {}", Ret);
+				DMibLog(DebugVerbose3, " **** SSL wrote {}", Ret);
 				// Write succeeded, return the number of bytes written.
 				Result.m_nBytes = (mint)Ret;
 			}
@@ -1102,7 +1102,7 @@ namespace NMib::NNetwork
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 				{
 					mp_LastError = fg_GetErrors();
-					DMibLog(DebugVerbose2, " **** Read failed: {} {}", Error, mp_LastError);
+					DMibLog(DebugVerbose3, " **** Read failed: {} {}", Error, mp_LastError);
 					f_SetState(EState_ReadFailed);
 				}
 			}
@@ -1386,7 +1386,7 @@ namespace NMib::NNetwork
 				{
 					if (mp_pInternal->f_GetState() != EState_None)
 					{
-						DMibLog(DebugVerbose2, " **** SSL broken: {}", mp_pInternal->f_GetState());
+						DMibLog(DebugVerbose3, " **** SSL broken: {}", mp_pInternal->f_GetState());
 						return true;
 					}
 					return false;
