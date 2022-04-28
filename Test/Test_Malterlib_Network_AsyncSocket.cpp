@@ -47,7 +47,7 @@ public:
 		}
 	}
 
-	struct CState : public TCSharedPointerIntrusiveBase<ESharedPointerOption_SupportWeakPointer>
+	struct CState
 	{
 		struct CServerConnection
 		{
@@ -72,7 +72,9 @@ public:
 			m_ClientSocket.f_Clear();
 			m_Messages.f_Clear();
 		}
-		
+
+		CIntrusiveRefCountWithWeak m_RefCount;
+
 		CMutual m_Lock;
 		TCSharedPointer<CDefaultRunLoop> m_pRunLoop;
 		bool m_bSignalCompletion = false;
@@ -550,7 +552,7 @@ public:
 			TCSharedPointer<CDefaultRunLoop> pRunLoop = fg_Construct();
 			auto CleanupRunLoop = g_OnScopeExit / [&]
 				{
-					while (pRunLoop->f_RefCountGet() > 0)
+					while (pRunLoop->m_RefCount.f_Get() > 0)
 						pRunLoop->f_WaitOnceTimeout(0.1);
 				}
 			;
