@@ -2,4 +2,4 @@
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #pragma once
-#include "../../../Source/Malterlib_Network_AsyncSocket.h"
+#include "../../../Source/Malterlib_Network_DebugFlags.h"
