@@ -352,7 +352,7 @@ namespace NMib::NNetwork
 			}
 		}
 
-		auto ProcessingActor = NConcurrency::fg_AnyConcurrentActor();
+		auto ProcessingActor = NConcurrency::fg_ThisConcurrentActor();
 
 		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
 		{
@@ -377,7 +377,7 @@ namespace NMib::NNetwork
 			NStorage::TCSharedPointer<CState> pState = fg_Construct();
 			pState->m_AsyncSocketActor = fg_ThisActor(this);
 
-			auto Cleanup = NConcurrency::g_OnScopeExitActor(ProcessingActor) > [pState, Promise]
+			auto Cleanup = NConcurrency::g_OnScopeExitActor(ProcessingActor) / [pState, Promise]
 				{
 					if (pState->m_bHandled.f_Exchange(true))
 						return;

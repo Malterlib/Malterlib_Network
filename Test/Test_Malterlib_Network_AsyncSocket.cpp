@@ -409,7 +409,7 @@ public:
 							}
 						;
 
-						auto Cleanup = g_OnScopeExitActor > [pStateWeak]
+						auto Cleanup = g_OnScopeExitActor / [pStateWeak]
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)

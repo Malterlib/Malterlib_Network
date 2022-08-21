@@ -95,7 +95,7 @@ namespace NMib::NNetwork
 			Pending.m_pSocket = _SocketFactory(_Hostname);
 		}
 
-		auto CleanupPending = NConcurrency::g_OnScopeExitActor > [this, pPendingDeleted = pPending->m_pDeleted, pPending]
+		auto CleanupPending = NConcurrency::g_OnScopeExitActor / [this, pPendingDeleted = pPending->m_pDeleted, pPending]
 			{
 				if (pPendingDeleted->f_Load())
 					return;
