@@ -5,8 +5,6 @@ Import "../Core/Lib_Malterlib.MTarget"
 
 %Group "{Malterlib}/{Lib_Malterlib_Network}"
 {
-	Property.MalterlibConcurrency_DistributedActors true
-	
 	%Group "Network"
 	{
 		%Group "Include"
@@ -27,16 +25,20 @@ Import "../Core/Lib_Malterlib.MTarget"
 	{
 		Dependency.Indirect true
 	}
+	%Dependency "Lib_Malterlib_Concurrency"
+	{
+		Dependency.Indirect true
+	}
 }
 
 Property
 {
-	MalterlibLibrary_Network define bool = MalterlibLibrary_All
+	MalterlibLibrary_Network: bool = MalterlibLibrary_All
 	MalterlibSubLibraries =+ "Network"
 	{
 		!!MalterlibLibrary_Network true
 	}
-	MalterlibLibrarySeparate_Lib_Malterlib_Network define bool = true
+	MalterlibLibrarySeparate_Lib_Malterlib_Network: bool = true
 	MalterlibIncludeRoots =+ "Include"->MakeAbsolute()
 	{
 		!!MalterlibLibrary_Network true
@@ -55,7 +57,7 @@ Property
 	!!MalterlibEnableInternalTests true
 
 	MalterlibTests =+ "Malterlib_Network"
-	MalterlibTestFiles_Malterlib_Network define [type(CEntity)] = ["Test/*"->MakeAbsolute()]
-	MalterlibTestDependencies_Malterlib_Network define [type(CEntity)] = ["Lib_Malterlib_Network"]
-	MalterlibTestExtraGroups_Malterlib_Network define [string] = ["{Test}/{Malterlib_Network}"]
+	MalterlibTestFiles_Malterlib_Network: [type(CEntity)] = ["Test/*"->MakeAbsolute()]
+	MalterlibTestDependencies_Malterlib_Network: [type(CEntity)] = ["Lib_Malterlib_Network"]
+	MalterlibTestExtraGroups_Malterlib_Network: [string] = ["{Test}/{Malterlib_Network}"]
 }
