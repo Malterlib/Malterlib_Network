@@ -250,13 +250,13 @@ namespace NMib::NStream
 	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4 >
 	{
 	public:
-		static void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data)
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
 			_Stream << _Data.m_Port;
 		}
 
-		static void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 &_Data)
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 &_Data)
 		{
 			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
 			_Stream >> _Data.m_Port;
@@ -267,12 +267,12 @@ namespace NMib::NStream
 	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4 >
 	{
 	public:
-		static void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data)
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
 		}
 
-		static void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv4 &_Data)
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv4 &_Data)
 		{
 			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
 		}
@@ -282,13 +282,13 @@ namespace NMib::NStream
 	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6 >
 	{
 	public:
-		static void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data)
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
 			_Stream << _Data.m_Port;
 		}
 
-		static void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 &_Data)
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 &_Data)
 		{
 			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
 			_Stream >> _Data.m_Port;
@@ -299,12 +299,12 @@ namespace NMib::NStream
 	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6 >
 	{
 	public:
-		static void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data)
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
 		}
 
-		static void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv6 &_Data)
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv6 &_Data)
 		{
 			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
 		}
