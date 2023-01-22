@@ -213,8 +213,6 @@ namespace NMib::NNetwork
 		if (m_PendingMessages.f_IsEmpty())
 			return;
 
-		mint OutgoingData = m_OutgoingData.f_GetLen();
-
 		auto pList = m_pLastPendingMessagesList;
 
 		if (!pList)
@@ -236,7 +234,7 @@ namespace NMib::NNetwork
 			bFinished = pPending->m_bFinished;
 
 			f_SendMessage(pPending->m_pData->f_GetArray(), pPending->m_pData->f_GetLen());
-			OutgoingData = m_OutgoingData.f_GetLen();
+			mint OutgoingData = m_OutgoingData.f_GetLen();
 
 			if (pPending->m_pPromise)
 			{

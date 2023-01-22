@@ -576,9 +576,11 @@ public:
 
 		{
 			CSocket OldSocket = fg_Move(Socket);
+
 			void *pOSSocket = OldSocket.f_GiveUpForInherit();
 			OldSocket.f_Close();
 
+			DMibMovedFromValid(Socket);
 			Socket.f_InheritHandle2
 				(
 				 	pOSSocket

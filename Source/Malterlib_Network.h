@@ -830,12 +830,16 @@ namespace NMib::NNetwork
 
 		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreAggregate *_pReportTo)
 		{
+			f_Close();
+
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fsp_GetChangeReportTo(_pReportTo));
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
 		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
 		{
+			f_Close();
+
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fg_Move(_fOnStateChange));
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
