@@ -219,13 +219,13 @@ namespace NMib::NNetwork
 			;
 			pReplied.f_Clear();
 		}
-		catch (NCryptography::CExceptionCryptography const &_Exception)
+		catch (NCryptography::CExceptionCryptography const &)
 		{
-			co_return _Exception.f_ExceptionPointer();
+			co_return NException::fg_CurrentException();
 		}
-		catch (NNetwork::CExceptionNet const &_Exception)
+		catch (NNetwork::CExceptionNet const &)
 		{
-			co_return _Exception.f_ExceptionPointer();
+			co_return NException::fg_CurrentException();
 		}
 
 		co_return co_await Promise.f_MoveFuture();
