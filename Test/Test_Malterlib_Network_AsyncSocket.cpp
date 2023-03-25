@@ -34,7 +34,7 @@ public:
 			TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories
 			, CStr const &_AcceptError
 			, CStr const &_ConnectError
-		 	, bool _bTestTimeout = false
+			, bool _bTestTimeout = false
 		)
 	{
 		{
@@ -544,7 +544,7 @@ public:
 			, CStr const &_AcceptError
 			, CStr const &_ConnectError
 			, CStr const &_Address
-		 	, bool _bTestTimeout
+			, bool _bTestTimeout
 		)
 	{
 		{
@@ -628,7 +628,7 @@ public:
 					DMibExpect(pState->m_Messages[1], ==, "TestBuff");
 				}
 
- 				{
+				{
 					DMibTestPath("Disconnect");
 
 					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0) > fg_DiscardResult();

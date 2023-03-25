@@ -65,8 +65,8 @@ namespace NMib::NNetwork
 
 	CAsyncSocketNewServerConnection::CAsyncSocketNewServerConnection
 		(
-		 	CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo
-		 	, NConcurrency::TCActor<CAsyncSocketActor> const &_Connection
+			CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo
+			, NConcurrency::TCActor<CAsyncSocketActor> const &_Connection
 		)
 		: CAsyncSocketNewConnection(_Connection)
 		, m_Info(fg_Move(_ConnectionInfo))

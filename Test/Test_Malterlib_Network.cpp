@@ -98,10 +98,10 @@ public:
 		CAsyncResolver Resolver;
 		Resolver.f_Open
 			(
-			 	_Address
-			 	, t_CNetAddress::mc_Type
-			 	, [pResolveEvent]
-			 	{
+				_Address
+				, t_CNetAddress::mc_Type
+				, [pResolveEvent]
+				{
 					pResolveEvent->f_Signal();
 				}
 			)
@@ -313,7 +313,7 @@ public:
 
 					return 0;
 				}
-			 	, "TestConnectListen_Client"
+				, "TestConnectListen_Client"
 			)
 		;
 
@@ -345,8 +345,8 @@ public:
 		CSocket Socket;
 		Socket.f_Connect
 			(
-			 	Address
-			 	, [&SocketEvent](ENetTCPState _StateAdded)
+				Address
+				, [&SocketEvent](ENetTCPState _StateAdded)
 				{
 					SocketEvent.f_Signal();
 				}
@@ -583,8 +583,8 @@ public:
 			DMibMovedFromValid(Socket);
 			Socket.f_InheritHandle2
 				(
-				 	pOSSocket
-				 	, [&SocketEvent](ENetTCPState _StateAdded)
+					pOSSocket
+					, [&SocketEvent](ENetTCPState _StateAdded)
 					{
 						SocketEvent.f_Signal();
 					}

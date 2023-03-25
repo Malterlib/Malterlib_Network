@@ -58,9 +58,9 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_Connect
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::CNetAddress const &_BindAddress
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
 		if (!mp_pSSLContext->f_IsClientContext())
@@ -74,9 +74,9 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_AsyncConnect
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::CNetAddress const &_BindAddress
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
 		if (!mp_pSSLContext->f_IsClientContext())
@@ -103,9 +103,9 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_Listen
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::ENetFlag _Flags
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		if (!mp_pSSLContext->f_IsServerContext())
@@ -118,9 +118,9 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_ListenDatagram
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::ENetFlag _Flags
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		DMibErrorNet("Datagrams not supported");

@@ -753,10 +753,10 @@ namespace NMib::NNetwork
 
 		void f_Connect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			 	, fp64 _Timeout = 15.0
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				, fp64 _Timeout = 15.0
 			)
 		;
 
@@ -770,9 +770,9 @@ namespace NMib::NNetwork
 
 		void f_AsyncConnect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			)
 		{
 			f_Close();
@@ -799,9 +799,9 @@ namespace NMib::NNetwork
 
 		void f_ListenDatagram
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, ENetFlag _Flags
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
+				, ENetFlag _Flags
 			)
 		{
 			f_Close();

@@ -64,8 +64,8 @@ namespace NMib::NNetwork
 
 		auto [ConnectToAddress, BindToAddress] = co_await
 			(
-			 	mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _ConnectToAddress, _PreferAddress)
-			 	+ mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _BindToAddress, _PreferAddress)
+				mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _ConnectToAddress, _PreferAddress)
+				+ mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _BindToAddress, _PreferAddress)
 			)
 		;
 
@@ -113,16 +113,16 @@ namespace NMib::NNetwork
 				(
 					_ConnectToAddress
 					,
-				 	[
-					 	pReplied
-					 	, pPending
-					 	, pPendingDeleted = pPending->m_pDeleted
-					 	, WeakThis = fg_ThisActor(this).f_Weak()
-					 	, Promise
-					 	, this
-					 	, CleanupPending = fg_Move(CleanupPending)
+					[
+						pReplied
+						, pPending
+						, pPendingDeleted = pPending->m_pDeleted
+						, WeakThis = fg_ThisActor(this).f_Weak()
+						, Promise
+						, this
+						, CleanupPending = fg_Move(CleanupPending)
 					]
-				 	(::NMib::NNetwork::ENetTCPState _StateAdded) mutable
+					(::NMib::NNetwork::ENetTCPState _StateAdded) mutable
 					{
 						if (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed))
 						{

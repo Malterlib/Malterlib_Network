@@ -320,7 +320,7 @@ namespace NMib::NNetwork
 
 		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
 
- 		co_return co_await fg_Move(CloseFuture);
+		co_return co_await fg_Move(CloseFuture);
 	}
 
 	void CAsyncSocketActor::CInternal::f_ShutdownDone(NStr::CStr const &_Error)
@@ -426,7 +426,7 @@ namespace NMib::NNetwork
 			;
 		}
 
- 		co_await fg_ContinueRunningOnActor(ProcessingActor);
+		co_await fg_ContinueRunningOnActor(ProcessingActor);
 
 		co_return co_await Promise.f_MoveFuture();
 	}

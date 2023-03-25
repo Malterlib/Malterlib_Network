@@ -44,9 +44,9 @@ namespace NMib::NNetwork
 
 	void CSocket_TCP::f_Connect
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::CNetAddress const &_BindAddress
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
 		return mp_Socket.f_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
@@ -54,9 +54,9 @@ namespace NMib::NNetwork
 
 	void CSocket_TCP::f_AsyncConnect
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::CNetAddress const &_BindAddress
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::CNetAddress const &_BindAddress
 		)
 	{
 		return mp_Socket.f_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
@@ -64,9 +64,9 @@ namespace NMib::NNetwork
 
 	void CSocket_TCP::f_Listen
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::ENetFlag _Flags
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		return mp_Socket.f_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
@@ -74,9 +74,9 @@ namespace NMib::NNetwork
 
 	void CSocket_TCP::f_ListenDatagram
 		(
-		 	NMib::NNetwork::CNetAddress const &_Address
-		 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-		 	, NMib::NNetwork::ENetFlag _Flags
+			NMib::NNetwork::CNetAddress const &_Address
+			, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, NMib::NNetwork::ENetFlag _Flags
 		)
 	{
 		return mp_Socket.f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);

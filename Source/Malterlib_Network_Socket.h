@@ -24,24 +24,24 @@ namespace NMib::NNetwork
 		virtual void f_Shutdown() = 0;
 		virtual void f_Connect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) = 0
 		;
 		virtual void f_AsyncConnect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) = 0
 		;
 		virtual void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
 		virtual void f_ListenDatagram
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, ENetFlag _Flags
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, ENetFlag _Flags
 			) = 0
 		;
 		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;

@@ -22,30 +22,30 @@ namespace NMib::NNetwork
 		virtual void f_Shutdown() override;
 		virtual void f_Connect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) override
 		;
 		virtual void f_AsyncConnect
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			) override
 		;
 		virtual void f_Listen
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::ENetFlag _Flags
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::ENetFlag _Flags
 			) override
 		;
 		virtual void f_ListenDatagram
 			(
-			 	NMib::NNetwork::CNetAddress const &_Address
-			 	, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-			 	, NMib::NNetwork::ENetFlag _Flags
+				NMib::NNetwork::CNetAddress const &_Address
+				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+				, NMib::NNetwork::ENetFlag _Flags
 			) override
 		;
 		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
