@@ -130,7 +130,7 @@ namespace NMib::NNetwork
 				}
 			}
 
-			co_await SetSocketResults.f_GetResults() | NConcurrency::g_Unwrap;
+			co_await (co_await SetSocketResults.f_GetResults() | NConcurrency::g_Unwrap);
 
 			co_return fg_Move(ListenResults);
 		}
@@ -178,7 +178,7 @@ namespace NMib::NNetwork
 				ListenSocket.f_Destroy() > Results.f_AddResult();
 		}
 
-		co_await Results.f_GetResults() | NConcurrency::g_Unwrap;
+		co_await (co_await Results.f_GetResults() | NConcurrency::g_Unwrap);
 
 		co_return {};
 	}
