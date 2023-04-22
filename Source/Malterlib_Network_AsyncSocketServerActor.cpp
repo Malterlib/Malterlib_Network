@@ -3,6 +3,7 @@
 
 #include <Mib/Concurrency/ConcurrencyManager>
 #include <Mib/Concurrency/ActorSubscription>
+#include <Mib/Concurrency/LogError>
 
 #include "Malterlib_Network_AsyncSocket.h"
 #include "Malterlib_Network_AsyncSocketServerActor_Internal.h"
@@ -160,6 +161,8 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<void> CAsyncSocketServerActor::fp_Destroy()
 	{
+		NConcurrency::CLogError LogError("AsyncSocketServer");
+
 		auto &Internal = *mp_pInternal;
 		NConcurrency::TCActorResultVector<void> Results;
 
@@ -172,7 +175,7 @@ namespace NMib::NNetwork
 				ListenSocket.f_Destroy() > Results.f_AddResult();
 		}
 
-		co_await (co_await Results.f_GetResults() | NConcurrency::g_Unwrap);
+		co_await Results.f_GetUnwrappedResults().f_Wrap() > LogError.f_Warning("Failed to destroy async socket server");
 
 		co_return {};
 	}
