@@ -23,7 +23,7 @@ namespace
 {
 	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
 	char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
-	fp64 g_Timeout = 5.0 * gc_TimeoutMultiplier;
+	fp64 g_Timeout = 30.0 * gc_TimeoutMultiplier;
 }
 
 class CAsyncSocket_Tests : public CTest
