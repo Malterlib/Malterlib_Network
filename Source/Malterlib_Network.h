@@ -89,12 +89,9 @@ namespace NMib::NNetwork
 	class CNetAddressIPv4
 	{
 	public:
-		uint8 m_IP[4];
+		uint8 m_IP[4] = {};
 
-		CNetAddressIPv4()
-		{
-			NMemory::fg_MemClear(*this);
-		}
+		CNetAddressIPv4() = default;
 
 		CNetAddressIPv4(uint8 _0, uint8 _1, uint8 _2, uint8 _3)
 		{
@@ -116,6 +113,13 @@ namespace NMib::NNetwork
 			return *this;
 		}
 
+		template <typename tf_CStream>
+		void f_Stream(tf_CStream &_Stream)
+		{
+			for (auto &Ip : m_IP)
+				_Stream % Ip;
+		}
+
 		void f_SetLocalhost()
 		{
 			*this = {127, 0, 0, 1};
@@ -125,12 +129,9 @@ namespace NMib::NNetwork
 	class CNetAddressIPv6
 	{
 	public:
-		uint8 m_IP[16];
+		uint8 m_IP[16] = {};
 
-		CNetAddressIPv6()
-		{
-			NMemory::fg_MemClear(*this);
-		}
+		CNetAddressIPv6() = default;
 
 		CNetAddressIPv6(	uint8 _0, uint8 _1, uint8 _2, uint8 _3
 						,	uint8 _4, uint8 _5, uint8 _6, uint8 _7
@@ -157,6 +158,13 @@ namespace NMib::NNetwork
 			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
 
 			return *this;
+		}
+
+		template <typename tf_CStream>
+		void f_Stream(tf_CStream &_Stream)
+		{
+			for (auto &Ip : m_IP)
+				_Stream % Ip;
 		}
 
 		void f_SetLocalhost()
