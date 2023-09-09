@@ -120,6 +120,12 @@ namespace NMib::NNetwork
 				_Stream % Ip;
 		}
 
+		template <typename tf_CStr>
+		void f_Format(tf_CStr &o_String) const
+		{
+			o_String += typename tf_CStr::CFormat("{}.{}.{}.{}") << m_IP[0] << m_IP[1] << m_IP[2] << m_IP[3];
+		}
+		
 		void f_SetLocalhost()
 		{
 			*this = {127, 0, 0, 1};
