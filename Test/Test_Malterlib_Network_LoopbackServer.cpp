@@ -56,13 +56,13 @@ namespace
 			;
 
 			auto fHandlerFactory
-				= [=](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
+				= [=, this](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
 				{
-					return [=](NNetwork::ENetTCPState _StateAdded)
+					return [=, this](NNetwork::ENetTCPState _StateAdded)
 						{
 							f_Dispatch
 								(
-									[=]()
+									[=, this]()
 									{
 										if (_StateAdded & NNetwork::ENetTCPState_Connection)
 										{
@@ -78,11 +78,11 @@ namespace
 													(**pSocket)->f_Accept
 														(
 															_pListenSocket
-															, [=](NNetwork::ENetTCPState _StateAdded)
+															, [=, this](NNetwork::ENetTCPState _StateAdded)
 															{
 																f_Dispatch
 																	(
-																		[=]()
+																		[=, this]()
 																		{
 																			if (!(*pSocketShared))
 																			{
@@ -150,11 +150,11 @@ namespace
 														(*pSocketSharedMirror)->f_AsyncConnect
 															(
 																Peer
-																, [=](NNetwork::ENetTCPState _StateAdded)
+																, [=, this](NNetwork::ENetTCPState _StateAdded)
 																{
 																	f_Dispatch
 																		(
-																			[=]()
+																			[=, this]()
 																			{
 																				if (!(*pSocketSharedMirror))
 																					return;

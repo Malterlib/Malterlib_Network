@@ -1682,7 +1682,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return false;
 
-		auto fl_VerifyAgainstLocalTrust = [=] (NContainer::CByteVector const &_Certificate) -> bool
+		auto fl_VerifyAgainstLocalTrust = [=, this] (NContainer::CByteVector const &_Certificate) -> bool
 		{
 			if (_Certificate.f_IsEmpty())
 				return false;
