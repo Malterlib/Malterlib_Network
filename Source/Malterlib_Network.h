@@ -607,7 +607,10 @@ namespace NMib::NNetwork
 		template <typename tf_CStr>
 		void f_Format(tf_CStr &o_Str) const
 		{
-			o_Str += f_GetString();
+			auto Type = f_GetType();
+			o_Str += f_GetString(Type == ENetAddressType_Unix);
+			if (Type == ENetAddressType_TCPv4 || Type == ENetAddressType_TCPv6)
+				o_Str += typename tf_CStr::CFormat(":{}") << f_GetPort();
 		}
 	};
 
