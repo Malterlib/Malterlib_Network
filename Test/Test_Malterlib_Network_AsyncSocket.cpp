@@ -7,6 +7,7 @@
 #include <Mib/Network/Sockets/SSL>
 #include <Mib/Cryptography/Certificate>
 #include <Mib/Cryptography/RandomID>
+#include <Mib/Concurrency/DistributedActorTestHelpers>
 
 using namespace NMib::NNetwork;
 using namespace NMib;
@@ -549,20 +550,7 @@ public:
 	{
 		{
 			DMibTestPath("Connection");
-			TCSharedPointer<CDefaultRunLoop> pRunLoop = fg_Construct();
-			auto CleanupRunLoop = g_OnScopeExit / [&]
-				{
-					while (pRunLoop->m_RefCount.f_Get() > 0)
-						pRunLoop->f_WaitOnceTimeout(0.1);
-				}
-			;
-			TCActor<CDispatchingActor> HelperActor(fg_Construct(), pRunLoop->f_Dispatcher());
-			auto CleanupHelperActor = g_OnScopeExit / [&]
-				{
-					HelperActor->f_BlockDestroy(pRunLoop->f_ActorDestroyLoop());
-				}
-			;
-			CCurrentlyProcessingActorScope CurrentActor{HelperActor};
+			CActorRunLoopTestHelper RunLoopHelper;
 			
 			auto Factories = _fGetFactories();
 			auto ServerFactory = fg_Get<0>(Factories);
@@ -579,8 +567,8 @@ public:
 			else
 				ListenAddress = CSocket::fs_ResolveAddress(_Address);
 			{
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
-				auto Cleanup 
+				TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
+				auto Cleanup
 					= g_OnScopeExit / [&]
 					{
 						pState->f_Clear();
@@ -608,8 +596,8 @@ public:
 				{
 					DMibTestPath("Messages");
 
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(g_Timeout / 3);
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(g_Timeout / 3);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
 
 					bool bTimedOut = false;
 					while (!bTimedOut)
@@ -653,7 +641,7 @@ public:
 			if (_bTestTimeout)
 			{
 				DMibTestPath("Timeout");
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct(pRunLoop);
+				TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
 				auto Cleanup 
 					= g_OnScopeExit / [&]
 					{
@@ -662,18 +650,18 @@ public:
 				;
 				
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(pRunLoop, g_Timeout);
+				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 				pState->f_StartListen(ListenAddress, ServerFactory);
 				
 				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(pRunLoop, g_Timeout);
+				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 				pState->f_Connect(_Address, ClientFactory);
 				
 				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
 					return;
 				{
 					DMibTestPath("Timeout");
-					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(pRunLoop, g_Timeout);
+					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 					bool bTimedOut = fp_WaitForCondition
 						(
 							[&]
