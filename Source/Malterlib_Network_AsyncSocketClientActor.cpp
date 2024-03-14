@@ -211,7 +211,7 @@ namespace NMib::NNetwork
 													)
 												;
 											}
-											> NConcurrency::NPrivate::fg_DirectResultActor()
+											> NConcurrency::fg_DirectResultActor()
 											/ [Promise, pCleanupPromise]
 											(NConcurrency::TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
 											{
