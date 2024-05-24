@@ -34,7 +34,7 @@
 
 						void fg_FreeAddress(CAddress _Address); // It is OK to free a nullptr address.
 
-						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bool _bIncludeType);
+						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, ENetAddressStringFlag _Flags);
 
 					// Connection Operations
 						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
@@ -185,6 +185,13 @@ namespace NMib::NNetwork
 		, ENetAddressType_TCPv4 = 1
 		, ENetAddressType_TCPv6 = 2
 		, ENetAddressType_Unix = 3
+	};
+
+	enum ENetAddressStringFlag
+	{
+		ENetAddressStringFlag_None = 0
+		, ENetAddressStringFlag_IncludeType = DMibBit(0)
+		, ENetAddressStringFlag_IncludePort = DMibBit(1)
 	};
 
 	template<typename t_CIPAddress, ENetAddressType t_Type>
@@ -350,7 +357,7 @@ namespace NMib::NSys::NNetwork
 
 	void fg_FreeAddress(CAddress _Address); // It is OK to free a nullptr address.
 
-	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, bool _bIncludeType);
+	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, NMib::NNetwork::ENetAddressStringFlag _Flags);
 
 // Connection Operations
 
@@ -487,11 +494,11 @@ namespace NMib::NNetwork
 			return mp_Address == nullptr;
 		}
 
-		NStr::CStr f_GetString(bool _bIncludeType = false) const
+		NStr::CStr f_GetString(ENetAddressStringFlag _Flags) const
 		{
 			if (mp_Address == nullptr)
 				return "";
-			return NMib::NSys::NNetwork::fg_GetAddressString(mp_Address, _bIncludeType);
+			return NMib::NSys::NNetwork::fg_GetAddressString(mp_Address, _Flags);
 		}
 
 		ENetAddressType f_GetType() const
@@ -608,9 +615,12 @@ namespace NMib::NNetwork
 		void f_Format(tf_CStr &o_Str) const
 		{
 			auto Type = f_GetType();
-			o_Str += f_GetString(Type == ENetAddressType_Unix);
-			if (Type == ENetAddressType_TCPv4 || Type == ENetAddressType_TCPv6)
-				o_Str += typename tf_CStr::CFormat(":{}") << f_GetPort();
+
+			ENetAddressStringFlag Flags = ENetAddressStringFlag_IncludePort;
+			if (Type == ENetAddressType_Unix)
+				Flags |= ENetAddressStringFlag_IncludeType;
+
+			o_Str += f_GetString(Flags);
 		}
 	};
 
