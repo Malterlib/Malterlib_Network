@@ -69,7 +69,8 @@ namespace NMib::NNetwork
 			)
 		;
 
-		ConnectToAddress.f_SetPort(_Port);
+		if (_Port)
+			ConnectToAddress.f_SetPort(_Port);
 
 		co_return co_await self(&CAsyncSocketClientActor::f_ConnectAddress, ConnectToAddress, BindToAddress, fg_Move(_SocketFactory), _ConnectToAddress);
 	}
