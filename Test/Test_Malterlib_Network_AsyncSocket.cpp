@@ -212,7 +212,7 @@ public:
 						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=](TCSharedPointer<CSecureByteVector> const &_pData) -> TCFuture<void>
+							/ [=](TCSharedPointer<CSecureByteVector> &&_pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -247,7 +247,7 @@ public:
 						;
 
 						Callbacks.m_fOnClose = g_ActorFunctor
-							/ [=](EAsyncSocketStatus _Status, CStr const &_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+							/ [=](EAsyncSocketStatus _Status, CStr &&_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -377,7 +377,7 @@ public:
 
 						CAsyncSocketCallbacks Callbacks;
 
-						Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr const &_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+						Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr &&_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -393,7 +393,7 @@ public:
 							}
 						;
 
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CSecureByteVector> const &_pData) -> TCFuture<void>
+						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CSecureByteVector> &&_pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)

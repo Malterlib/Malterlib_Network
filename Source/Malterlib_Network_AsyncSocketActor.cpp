@@ -752,7 +752,7 @@ namespace NMib::NNetwork
 		if (Internal.m_Callbacks.m_fOnReceiveData)
 		{
 			for (auto &pMessage : Internal.m_DeferredOnReciveData)
-				Internal.m_Callbacks.m_fOnReceiveData(pMessage) > NConcurrency::fg_DiscardResult();
+				Internal.m_Callbacks.m_fOnReceiveData(fg_Move(pMessage)) > NConcurrency::fg_DiscardResult();
 			Internal.m_DeferredOnReciveData.f_Clear();
 		}
 		if (Internal.m_Callbacks.m_fOnClose && Internal.m_bOnCloseCalled)

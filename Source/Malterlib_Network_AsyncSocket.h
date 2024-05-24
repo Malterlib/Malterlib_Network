@@ -42,8 +42,8 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_Message)> m_fOnReceiveData;
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr const &_Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CSecureByteVector> &&_pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr &&_Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
 	class CAsyncSocketActor : public NConcurrency::CActor
