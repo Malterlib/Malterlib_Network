@@ -147,35 +147,35 @@ public:
 		
 		void f_Clear()
 		{
-			TCActorResultVector<void> Destroys;
+			TCFutureVector<void> Destroys;
 			{
 				DMibLock(m_Lock);
 				m_bCleared = true;
 
-				m_ClientSocket.f_Destroy() > Destroys.f_AddResult();
+				m_ClientSocket.f_Destroy() > Destroys;
 
 				if (m_ClientSocket)
-					fg_Move(m_ClientSocket).f_Destroy() > Destroys.f_AddResult();
+					fg_Move(m_ClientSocket).f_Destroy() > Destroys;
 
 				if (m_ClientActor)
-					fg_Move(m_ClientActor).f_Destroy() > Destroys.f_AddResult();
+					fg_Move(m_ClientActor).f_Destroy() > Destroys;
 
 				if (m_ListenCallbackReference)
 				{
-					m_ListenCallbackReference->f_Destroy() > Destroys.f_AddResult();
+					m_ListenCallbackReference->f_Destroy() > Destroys;
 					m_ListenCallbackReference.f_Clear();
 				}
 
 				for (auto &Connection : m_ServerConnections)
 				{
 					if (Connection.m_Actor)
-						fg_Move(Connection.m_Actor).f_Destroy() > Destroys.f_AddResult();
+						fg_Move(Connection.m_Actor).f_Destroy() > Destroys;
 				}
 
 				m_ServerConnections.f_Clear();
 			}
 
-			Destroys.f_GetResults().f_CallSync(m_pRunLoop);
+			fg_AllDoneWrapped(Destroys).f_CallSync(m_pRunLoop);
 
 			{
 				DMibLock(m_Lock);
@@ -196,7 +196,7 @@ public:
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
 			CAsyncSocketServerCallbacks ListenCallbacks;
 
-			ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection &&_ConnectionInfo) -> TCFuture<void>
+			ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _ConnectionInfo) -> TCFuture<void>
 				{
 					CAsyncSocketCallbacks Callbacks;
 					CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
@@ -212,7 +212,7 @@ public:
 						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=](TCSharedPointer<CSecureByteVector> &&_pData) -> TCFuture<void>
+							/ [=](TCSharedPointer<CSecureByteVector> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -226,7 +226,7 @@ public:
 								for (auto &Connection : pState->m_ServerConnections)
 								{
 									if (Connection.m_Actor)
-										Connection.m_Actor(&CAsyncSocketActor::f_SendData, _pData, 0) > fg_DiscardResult();
+										Connection.m_Actor(&CAsyncSocketActor::f_SendData, _pData, 0).f_DiscardResult();
 								}
 
 								pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
@@ -238,7 +238,7 @@ public:
 									{
 										DMibLock(pState->m_Lock);
 										for (auto &Connection : pState->m_ServerConnections)
-											Connection.m_Actor(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, g_pCloseMessage) > fg_DiscardResult();
+											Connection.m_Actor(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, g_pCloseMessage).f_DiscardResult();
 									}
 								}
 
@@ -247,7 +247,7 @@ public:
 						;
 
 						Callbacks.m_fOnClose = g_ActorFunctor
-							/ [=](EAsyncSocketStatus _Status, CStr &&_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+							/ [=](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -288,7 +288,7 @@ public:
 					auto Cleanup2 = g_OnScopeExit / [&Actor]
 						{
 							if (Actor)
-								fg_Move(Actor).f_Destroy() > fg_DiscardResult();
+								fg_Move(Actor).f_Destroy().f_DiscardResult();
 						}
 					;
 
@@ -310,7 +310,7 @@ public:
 				}
 			;
 
-			ListenCallbacks.m_fFailedConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo) -> TCFuture<void>
+			ListenCallbacks.m_fFailedConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
 				{
 					auto pState = pStateWeak.f_Lock();
 					if (!pState)
@@ -377,7 +377,7 @@ public:
 
 						CAsyncSocketCallbacks Callbacks;
 
-						Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr &&_Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+						Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -393,7 +393,7 @@ public:
 							}
 						;
 
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CSecureByteVector> &&_pData) -> TCFuture<void>
+						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CSecureByteVector> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -430,7 +430,7 @@ public:
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
 								{
-									fg_Move(*_Socket).f_Destroy() > fg_DiscardResult();
+									fg_Move(*_Socket).f_Destroy().f_DiscardResult();
 									return;
 								}
 
@@ -438,7 +438,7 @@ public:
 
 								if (pState->m_bCleared)
 								{
-									fg_Move(*_Socket).f_Destroy() > fg_DiscardResult();
+									fg_Move(*_Socket).f_Destroy().f_DiscardResult();
 									return;
 								}
 
@@ -619,7 +619,7 @@ public:
 				{
 					DMibTestPath("Disconnect");
 
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0) > fg_DiscardResult();
+					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0).f_DiscardResult();
 					
 					bool bTimedOut = false;
 					while (!bTimedOut)

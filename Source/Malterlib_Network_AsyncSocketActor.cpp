@@ -294,10 +294,10 @@ namespace NMib::NNetwork
 			Internal.m_pClosePromise.f_Clear();
 		}
 
-		return NConcurrency::TCPromise<void>() <<= g_Void;
+		return g_Void;
 	}
 
-	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_Close(EAsyncSocketStatus _Status, const NStr::CStr &_Reason)
+	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason)
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
@@ -330,7 +330,7 @@ namespace NMib::NNetwork
 		m_OnShutdown.f_Clear();
 	}
 
-	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_CloseWithLinger(EAsyncSocketStatus _Status, const NStr::CStr &_Reason, fp64 _MaxLingerTime)
+	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_CloseWithLinger(EAsyncSocketStatus _Status, NStr::CStr _Reason, fp64 _MaxLingerTime)
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
@@ -344,7 +344,7 @@ namespace NMib::NNetwork
 				CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
 				CloseInfo.m_Reason = "Already fully closed";
 
-				fg_ThisActor(this).f_Destroy() > NConcurrency::fg_DiscardResult();
+				fg_ThisActor(this).f_Destroy().f_DiscardResult();
 
 				co_return fg_Move(CloseInfo);
 			}
@@ -352,7 +352,7 @@ namespace NMib::NNetwork
 
 		auto ProcessingActor = NConcurrency::fg_ThisConcurrentActor();
 
-		NConcurrency::TCPromise<CAsyncSocketActor::CCloseInfo> Promise;
+		NConcurrency::TCPromiseFuturePair<CAsyncSocketActor::CCloseInfo> Promise;
 		{
 			auto &Internal = *mp_pInternal;
 			struct CState
@@ -365,7 +365,7 @@ namespace NMib::NNetwork
 
 				void f_Finish()
 				{
-					fg_Move(m_AsyncSocketActor).f_Destroy() > NConcurrency::fg_DiscardResult();
+					fg_Move(m_AsyncSocketActor).f_Destroy().f_DiscardResult();
 				}
 
 				NConcurrency::TCActor<CAsyncSocketActor> m_AsyncSocketActor;
@@ -375,7 +375,7 @@ namespace NMib::NNetwork
 			NStorage::TCSharedPointer<CState> pState = fg_Construct();
 			pState->m_AsyncSocketActor = fg_ThisActor(this);
 
-			auto Cleanup = NConcurrency::g_OnScopeExitActor(ProcessingActor) / [pState, Promise]
+			auto Cleanup = NConcurrency::g_OnScopeExitActor(ProcessingActor) / [pState, Promise = Promise.m_Promise]
 				{
 					if (pState->m_bHandled.f_Exchange(true))
 						return;
@@ -387,7 +387,7 @@ namespace NMib::NNetwork
 
 			Internal.m_OnShutdown.f_Insert
 				(
-					[Cleanup, pState, Promise, this](NStr::CStr const &_Error)
+					[Cleanup, pState, Promise = Promise.m_Promise, this](NStr::CStr const &_Error)
 					{
 						if (pState->m_bHandled.f_Exchange(true))
 							return;
@@ -402,7 +402,7 @@ namespace NMib::NNetwork
 				)
 			;
 
-			self(&CAsyncSocketActor::f_Close, _Status, _Reason) > ProcessingActor / [pState, Promise](NConcurrency::TCAsyncResult<NNetwork::CAsyncSocketActor::CCloseInfo> &&_Result)
+			f_Close(_Status, _Reason) > ProcessingActor / [pState, Promise = Promise.m_Promise](NConcurrency::TCAsyncResult<NNetwork::CAsyncSocketActor::CCloseInfo> &&_Result)
 				{
 					if (!_Result)
 					{
@@ -415,23 +415,25 @@ namespace NMib::NNetwork
 				}
 			;
 
-			NConcurrency::fg_Timeout(_MaxLingerTime, false)(ProcessingActor) > [Promise, pState]
+			NConcurrency::fg_Timeout(_MaxLingerTime, false)(ProcessingActor) > [Promise = fg_Move(Promise.m_Promise), pState]() -> NConcurrency::TCFuture<void>
 				{
 					if (pState->m_bHandled.f_Exchange(true))
-						return;
+						co_return {};
 
 					Promise.f_SetException(DMibErrorInstance("Timed out waiting for socket to close gracefully"));
 					pState->f_Finish();
+
+					co_return {};
 				}
 			;
 		}
 
 		co_await fg_ContinueRunningOnActor(ProcessingActor);
 
-		co_return co_await Promise.f_MoveFuture();
+		co_return co_await fg_Move(Promise.m_Future);
 	}
 
-	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pMessage, uint32 _Priority)
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const _pMessage, uint32 _Priority)
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
@@ -485,7 +487,7 @@ namespace NMib::NNetwork
 
 		if (m_Callbacks.m_fOnClose)
 		{
-			m_Callbacks.m_fOnClose(_Status, _Message, _Origin) > NConcurrency::fg_DiscardResult();
+			m_Callbacks.m_fOnClose.f_CallDiscard(_Status, _Message, _Origin);
 			return;
 		}
 
@@ -715,8 +717,9 @@ namespace NMib::NNetwork
 		}
 
 		if (m_Callbacks.m_fOnReceiveData)
-			m_Callbacks.m_fOnReceiveData(fg_Construct(fg_Move(_Data))) > NConcurrency::fg_DiscardResult();
+			m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Construct(fg_Move(_Data)));
 	}
+
 
 	void CAsyncSocketActor::fp_ProcessIncoming()
 	{
@@ -752,15 +755,11 @@ namespace NMib::NNetwork
 		if (Internal.m_Callbacks.m_fOnReceiveData)
 		{
 			for (auto &pMessage : Internal.m_DeferredOnReciveData)
-				Internal.m_Callbacks.m_fOnReceiveData(fg_Move(pMessage)) > NConcurrency::fg_DiscardResult();
+				Internal.m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(pMessage));
 			Internal.m_DeferredOnReciveData.f_Clear();
 		}
 		if (Internal.m_Callbacks.m_fOnClose && Internal.m_bOnCloseCalled)
-		{
-			Internal.m_Callbacks.m_fOnClose(Internal.m_DeferredNotifyClose.m_Status, Internal.m_DeferredNotifyClose.m_Message, Internal.m_DeferredNotifyClose.m_Origin)
-				> NConcurrency::fg_DiscardResult()
-			;
-		}
+			Internal.m_Callbacks.m_fOnClose.f_CallDiscard(Internal.m_DeferredNotifyClose.m_Status, Internal.m_DeferredNotifyClose.m_Message, Internal.m_DeferredNotifyClose.m_Origin);
 	}
 
 	void CAsyncSocketActor::fp_RejectConnection(NStr::CStr const &_Error)
@@ -805,7 +804,7 @@ namespace NMib::NNetwork
 		fp_ProcessState(State);
 	}
 
-	NConcurrency::CActorSubscription CAsyncSocketActor::fp_AcceptConnection(CAsyncSocketCallbacks &&_Callbacks)
+	NConcurrency::CActorSubscription CAsyncSocketActor::fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_Callbacks = fg_Move(_Callbacks);
@@ -900,7 +899,7 @@ namespace NMib::NNetwork
 			fp_UpdateSend();
 	}
 
-	void CAsyncSocketActor::fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket)
+	void CAsyncSocketActor::fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_pSocket = fg_Move(_pSocket);
@@ -928,7 +927,7 @@ namespace NMib::NNetwork
 	auto CAsyncSocketActor::fp_FinishConnection() -> NConcurrency::TCFuture<CFinishConnectionResult>
 	{
 		auto &Internal = *mp_pInternal;
-		return Internal.m_FinishConnectionPromise.f_Future();
+		co_return co_await Internal.m_FinishConnectionPromise.f_Future();
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)

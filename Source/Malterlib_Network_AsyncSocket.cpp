@@ -28,23 +28,18 @@ namespace NMib::NNetwork
 	{
 		if (!mp_pHelper->m_bRepliedToConnection.f_Exchange(true))
 		{
-			mp_Connection(&CAsyncSocketActor::fp_RejectConnection, _Error)
-				> NConcurrency::fg_DiscardResult()
-			;
+			mp_Connection.f_Bind<&CAsyncSocketActor::fp_RejectConnection>(_Error).f_DiscardResult();
 		}
 	}
 
-	NConcurrency::TCFuture<NConcurrency::TCActorInterface<CAsyncSocketActor>> CAsyncSocketNewConnection::f_Accept(CAsyncSocketCallbacks &&_Callbacks)
+	NConcurrency::TCUnsafeFuture<NConcurrency::TCActorInterface<CAsyncSocketActor>> CAsyncSocketNewConnection::f_Accept(CAsyncSocketCallbacks _Callbacks)
 	{
-		co_await NConcurrency::ECoroutineFlag_AllowReferences;
-
-		auto Callbacks = fg_Move(_Callbacks);
-
 		if (mp_pHelper->m_bRepliedToConnection.f_Exchange(true))
 			co_return DMibErrorInstance("Connection already accepted or rejected");
+
 		auto Connection = fg_Move(mp_Connection);
 
-		auto Subscription = co_await Connection(&CAsyncSocketActor::fp_AcceptConnection, fg_Move(Callbacks));
+		auto Subscription = co_await Connection(&CAsyncSocketActor::fp_AcceptConnection, fg_Move(_Callbacks));
 		co_return NConcurrency::TCActorInterface<CAsyncSocketActor>(fg_Move(Connection), fg_Move(Subscription));
 	}
 
@@ -56,7 +51,7 @@ namespace NMib::NNetwork
 	CAsyncSocketNewConnection::CRepliedHelper::~CRepliedHelper()
 	{
 		if (!m_bRepliedToConnection.f_Exchange(true))
-			m_Connection(&CAsyncSocketActor::fp_RejectConnection, "Abandoned") > NConcurrency::fg_DiscardResult();
+			m_Connection.f_Bind<&CAsyncSocketActor::fp_RejectConnection>("Abandoned").f_DiscardResult();
 	}
 
 	///

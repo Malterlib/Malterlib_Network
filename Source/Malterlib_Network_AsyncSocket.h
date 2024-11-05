@@ -42,8 +42,8 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CSecureByteVector> &&_pMessage)> m_fOnReceiveData;
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr &&_Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CSecureByteVector> _pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
 	class CAsyncSocketActor : public NConcurrency::CActor
@@ -71,9 +71,9 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
 
-		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pMessage, uint32 _Priority);
-		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, const NStr::CStr &_Reason);
-		NConcurrency::TCFuture<CCloseInfo> f_CloseWithLinger(EAsyncSocketStatus _Status, const NStr::CStr &_Reason, fp64 _MaxLingerTime);
+		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> _pMessage, uint32 _Priority);
+		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);
+		NConcurrency::TCFuture<CCloseInfo> f_CloseWithLinger(EAsyncSocketStatus _Status, NStr::CStr _Reason, fp64 _MaxLingerTime);
 
 		NConcurrency::TCFuture<void> f_DebugStopProcessing(fp64 _Timeout);
 
@@ -101,15 +101,15 @@ namespace NMib::NNetwork
 
 		void fp_StateAdded(NNetwork::ENetTCPState _StateAdded);
 		void fp_Disconnect(EAsyncSocketStatus _Status, NStr::CStr const &_Reason, bool _bFatal, EAsyncSocketCloseOrigin _Origin);
-		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
+		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket);
 		void fp_ProcessIncoming();
 		bool fp_ProcessIncomingMessage();
 		void fp_ProcessState(NNetwork::ENetTCPState _StateAdded);
 		void fp_UpdateSend();
 		void fp_Shutdown();
-		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks &&_Callbacks);
+		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks);
 		void fp_CheckHandshake(CInternal &_Internal);
-		void fp_RejectServerConnection(NStr::CStr const &_Error, NStr::CStr const &_Content = NStr::CStr());
+		void fp_RejectServerConnection(NStr::CStr _Error, NStr::CStr _Content = NStr::CStr());
 		void fp_StopDeferring();
 		void fp_TryStopDeferring();
 		void fp_RejectConnection(NStr::CStr const &_Error);
@@ -125,7 +125,7 @@ namespace NMib::NNetwork
 		CAsyncSocketNewConnection(CAsyncSocketNewConnection &&_Other);
 		~CAsyncSocketNewConnection();
 
-		NConcurrency::TCFuture<NConcurrency::TCActorInterface<CAsyncSocketActor>> f_Accept(CAsyncSocketCallbacks &&_Callbacks);
+		NConcurrency::TCUnsafeFuture<NConcurrency::TCActorInterface<CAsyncSocketActor>> f_Accept(CAsyncSocketCallbacks _Callbacks);
 		void f_Reject(NStr::CStr const &_Error) const;
 
 	protected:
@@ -188,20 +188,20 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_Connect
 			(
-				NStr::CStr const &_ConnectToAddress	// The server to connect to
-				, NStr::CStr const &_BindAddress	// The src address to bind to. Leave empty to not bind
+				NStr::CStr _ConnectToAddress	// The server to connect to
+				, NStr::CStr _BindAddress	// The src address to bind to. Leave empty to not bind
 				, NMib::NNetwork::ENetAddressType _PreferAddress // The preferred type of address to connect to
 				, uint16 _Port	// The port to connect to
-				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 		; // You will receive an exception if connection fails
 
 		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_ConnectAddress
 			(
-				NNetwork::CNetAddress const &_ConnectToAddress	// The server to connect to
-				, NNetwork::CNetAddress const &_BindAddress	// The src address to bind to. Leave empty to not bind
-				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
-				, NStr::CStr const &_Hostname // Tthe hostname to use for SSL connections
+				NNetwork::CNetAddress _ConnectToAddress	// The server to connect to
+				, NNetwork::CNetAddress _BindAddress	// The src address to bind to. Leave empty to not bind
+				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NStr::CStr _Hostname // Tthe hostname to use for SSL connections
 			)
 		; // You will receive an exception if connection fails
 
@@ -224,8 +224,8 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketServerCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketNewServerConnection &&_Connection)> m_fNewConnection;
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo)> m_fFailedConnection;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketNewServerConnection _Connection)> m_fNewConnection;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketActor::CConnectionInfo _ConnectionInfo)> m_fFailedConnection;
 	};
 
 	class CAsyncSocketServerActor : public NConcurrency::CActor
@@ -247,17 +247,17 @@ namespace NMib::NNetwork
 				uint16 _StartListen		// The port to listen to
 				, uint16 _nListen		// The number of ports to listen to. In consecutive order from the _StartListen port
 				, NMib::NNetwork::ENetFlag _ListenFlags
-				, CAsyncSocketServerCallbacks &&_Callbacks
-				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, CAsyncSocketServerCallbacks _Callbacks
+				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 		;
 
 		NConcurrency::TCFuture<CListenResult> f_StartListenAddress
 			(
-				NContainer::TCVector<NNetwork::CNetAddress> &&_AddressesToListenTo // The addresses to listen to
+				NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo // The addresses to listen to
 				, NMib::NNetwork::ENetFlag _ListenFlags
-				, CAsyncSocketServerCallbacks &&_Callbacks
-				, NNetwork::FVirtualSocketFactory &&_SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, CAsyncSocketServerCallbacks _Callbacks
+				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 		;
 
@@ -268,7 +268,7 @@ namespace NMib::NNetwork
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
-		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, mint _ListenID);
+		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, mint _ListenID);
 
 	public:
 		struct CInternal;

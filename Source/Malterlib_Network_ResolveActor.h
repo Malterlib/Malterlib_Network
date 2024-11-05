@@ -8,7 +8,7 @@ namespace NMib::NNetwork
 	class CResolveActor : public NConcurrency::CActor
 	{
 	public:
-		NConcurrency::TCFuture<NMib::NNetwork::CNetAddress> f_Resolve(NStr::CStr const &_Address, NNetwork::ENetAddressType _PreferType);
+		NConcurrency::TCFuture<NMib::NNetwork::CNetAddress> f_Resolve(NStr::CStr _Address, NNetwork::ENetAddressType _PreferType);
 
 	private:
 		NContainer::TCLinkedList<NNetwork::CAsyncResolver> mp_PendingResolves;

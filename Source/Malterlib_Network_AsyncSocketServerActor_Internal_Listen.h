@@ -13,10 +13,10 @@ namespace NMib::NNetwork::NAsyncSocket
 	class CListenActor : public NConcurrency::CActor
 	{
 	public:
-		CListenActor(NConcurrency::TCActor<CAsyncSocketServerActor> const& _Server, mint _MaxMesageSize, mint _FragmentationSize, fp64 _Timeout, mint _ListenID);
+		CListenActor(NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server, mint _MaxMesageSize, mint _FragmentationSize, fp64 _Timeout, mint _ListenID);
 		~CListenActor();
 
-		void f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
+		void f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket);
 		void f_StateAdded(NNetwork::ENetTCPState _StateAdded);
 
 	private:

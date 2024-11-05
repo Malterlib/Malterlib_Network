@@ -21,7 +21,7 @@ namespace NMib::NNetwork::NAsyncSocket
 	{
 	}
 
-	void CListenActor::f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> && _pSocket)
+	void CListenActor::f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket)
 	{
 		mp_pSocket = fg_Move(_pSocket);
 		fp_ProcessState();
@@ -58,11 +58,7 @@ namespace NMib::NNetwork::NAsyncSocket
 							{
 								auto ConnectionActor = WeakConnectionActor.f_Lock();
 								if (ConnectionActor)
-								{
-									ConnectionActor(&CAsyncSocketActor::fp_StateAdded, _StateAdded)
-										> NConcurrency::fg_DiscardResult()
-									;
-								}
+									ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
 							}
 						)
 					;
@@ -70,14 +66,14 @@ namespace NMib::NNetwork::NAsyncSocket
 					if (!pAcceptedSocket)
 						break;
 
-					ConnectionActor(&CAsyncSocketActor::fp_SetSocket, fg_Move(pAcceptedSocket)) > NConcurrency::fg_DiscardResult();
+					ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pAcceptedSocket)).f_DiscardResult();
 
 					auto Server = mp_Server.f_Lock();
 
 					if (!Server)
 						return;
 
-					Server(&CAsyncSocketServerActor::fp_AddConnection, fg_Move(ConnectionActor), mp_ListenID) > NConcurrency::fg_DiscardResult();
+					Server.f_Bind<&CAsyncSocketServerActor::fp_AddConnection>(fg_Move(ConnectionActor), mp_ListenID).f_DiscardResult();
 				}
 				catch (NException::CException const &)
 				{

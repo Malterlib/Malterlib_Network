@@ -40,10 +40,10 @@ namespace NMib::NNetwork
 
 	auto CAsyncSocketServerActor::f_StartListenAddress
 		(
-			NContainer::TCVector<NNetwork::CNetAddress> &&_AddressesToListenTo
+			NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo
 			, NMib::NNetwork::ENetFlag _ListenFlags
-			, CAsyncSocketServerCallbacks &&_Callbacks
-			, NNetwork::FVirtualSocketFactory &&_SocketFactory
+			, CAsyncSocketServerCallbacks _Callbacks
+			, NNetwork::FVirtualSocketFactory _SocketFactory
 		)
 		-> NConcurrency::TCFuture<CListenResult>
 	{
@@ -51,9 +51,11 @@ namespace NMib::NNetwork
 		if (!SocketFactory)
 			SocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
 
+		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
+
 		auto CaptureScope = co_await NConcurrency::g_CaptureExceptions;
 
-		NConcurrency::TCActorResultVector<void> SetSocketResults;
+		NConcurrency::TCFutureVector<void> SetSocketResults;
 		CListenResult ListenResults;
 		{
 			auto &Internal = *mp_pInternal;
@@ -68,16 +70,16 @@ namespace NMib::NNetwork
 					if (!pListen)
 						co_return {};
 
-					NConcurrency::TCActorResultVector<void> DestroyResults;
+					NConcurrency::TCFutureVector<void> DestroyResults;
 					{
-						fg_Move(pListen->m_fOnNewConnection).f_Destroy() > DestroyResults.f_AddResult();
-						fg_Move(pListen->m_fOnFailedConnection).f_Destroy() > DestroyResults.f_AddResult();
+						fg_Move(pListen->m_fOnNewConnection).f_Destroy() > DestroyResults;
+						fg_Move(pListen->m_fOnFailedConnection).f_Destroy() > DestroyResults;
 						for (auto &ListenSocket : pListen->m_ListenSockets)
-							fg_Move(ListenSocket).f_Destroy() > DestroyResults.f_AddResult();
+							fg_Move(ListenSocket).f_Destroy() > DestroyResults;
 					}
 
 					Internal.m_Listens.f_Remove(ListenID);
-					co_await DestroyResults.f_GetResults();
+					co_await fg_AllDoneWrapped(DestroyResults);
 
 					co_return {};
 				}
@@ -119,7 +121,7 @@ namespace NMib::NNetwork
 							if (!ListenActor)
 								return;
 
-							ListenActor(&CListenActor::f_StateAdded, _StateAdded) > NConcurrency::fg_DiscardResult();
+							ListenActor.f_Bind<&CListenActor::f_StateAdded>(_StateAdded).f_DiscardResult();
 						}
 						, _ListenFlags
 					)
@@ -127,11 +129,11 @@ namespace NMib::NNetwork
 
 				ListenResults.m_ListenPorts.f_Insert(pListenSocket->f_GetListenPort());
 
-				ListenActor(&CListenActor::f_SetSocket, fg_Move(pListenSocket)) > SetSocketResults.f_AddResult();
+				ListenActor(&CListenActor::f_SetSocket, fg_Move(pListenSocket)) > SetSocketResults;
 			}
 		}
 
-		co_await (co_await SetSocketResults.f_GetResults() | NConcurrency::g_Unwrap);
+		co_await fg_AllDone(SetSocketResults);
 
 		co_return fg_Move(ListenResults);
 	}
@@ -141,8 +143,8 @@ namespace NMib::NNetwork
 			uint16 _StartListen
 			, uint16 _nListen
 			, NMib::NNetwork::ENetFlag _ListenFlags
-			, CAsyncSocketServerCallbacks &&_Callbacks
-			, NNetwork::FVirtualSocketFactory &&_SocketFactory
+			, CAsyncSocketServerCallbacks _Callbacks
+			, NNetwork::FVirtualSocketFactory _SocketFactory
 		)
 		-> NConcurrency::TCFuture<CListenResult>
 	{
@@ -156,7 +158,7 @@ namespace NMib::NNetwork
 			AddressesToListenTo.f_Insert(fg_Move(Address));
 		}
 
-		co_return co_await self(&CAsyncSocketServerActor::f_StartListenAddress, fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_SocketFactory));
+		co_return co_await f_StartListenAddress(fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_SocketFactory));
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketServerActor::fp_Destroy()
@@ -164,23 +166,26 @@ namespace NMib::NNetwork
 		NConcurrency::CLogError LogError("AsyncSocketServer");
 
 		auto &Internal = *mp_pInternal;
-		NConcurrency::TCActorResultVector<void> Results;
+		NConcurrency::TCFutureVector<void> Results;
 
 		for (auto &Listen : Internal.m_Listens)
 		{
-			fg_Move(Listen.m_fOnNewConnection).f_Destroy() > Results.f_AddResult();
-			fg_Move(Listen.m_fOnFailedConnection).f_Destroy() > Results.f_AddResult();
+			fg_Move(Listen.m_fOnNewConnection).f_Destroy() > Results;
+			fg_Move(Listen.m_fOnFailedConnection).f_Destroy() > Results;
 
 			for (auto &ListenSocket : Listen.m_ListenSockets)
-				ListenSocket.f_Destroy() > Results.f_AddResult();
+				fg_Move(ListenSocket).f_Destroy() > Results;
+			Listen.m_ListenSockets.f_Clear();
 		}
 
-		co_await Results.f_GetUnwrappedResults().f_Wrap() > LogError.f_Warning("Failed to destroy async socket server");
+		Internal.m_Listens.f_Clear();
+
+		co_await fg_AllDone(Results).f_Wrap() > LogError.f_Warning("Failed to destroy async socket server");
 
 		co_return {};
 	}
 
-	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, mint _ListenID)
+	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, mint _ListenID)
 	{
 		self / [this, Connection = fg_Move(_Connection), _ListenID]() mutable -> NConcurrency::TCFuture<void>
 			{
@@ -196,13 +201,13 @@ namespace NMib::NNetwork
 				case CAsyncSocketActor::EFinishConnectionResult_Error:
 					{
 						if (pListen->m_fOnFailedConnection)
-							pListen->m_fOnFailedConnection(fg_Move(ConnectionResult.m_ConnectionInfo)) > NConcurrency::fg_DiscardResult();
+							pListen->m_fOnFailedConnection.f_CallDiscard(fg_Move(ConnectionResult.m_ConnectionInfo));
 					}
 					break;
 				case CAsyncSocketActor::EFinishConnectionResult_Success:
 					{
 						if (pListen->m_fOnNewConnection)
-							pListen->m_fOnNewConnection(CAsyncSocketNewServerConnection(fg_Move(ConnectionResult.m_ConnectionInfo), Connection)) > NConcurrency::fg_DiscardResult();
+							pListen->m_fOnNewConnection.f_CallDiscard(CAsyncSocketNewServerConnection(fg_Move(ConnectionResult.m_ConnectionInfo), Connection));
 					}
 					break;
 				default:
@@ -211,7 +216,7 @@ namespace NMib::NNetwork
 				}
 				co_return {};
 			}
-			> NConcurrency::fg_DiscardResult()
+			> NConcurrency::g_DiscardResult
 		;
 	}
 }

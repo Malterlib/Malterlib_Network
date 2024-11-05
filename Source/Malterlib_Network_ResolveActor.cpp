@@ -4,26 +4,24 @@
 
 namespace NMib::NNetwork
 {
-	NConcurrency::TCFuture<NMib::NNetwork::CNetAddress> CResolveActor::f_Resolve(NStr::CStr const &_Address, NNetwork::ENetAddressType _PreferType)
+	NConcurrency::TCFuture<NMib::NNetwork::CNetAddress> CResolveActor::f_Resolve(NStr::CStr _Address, NNetwork::ENetAddressType _PreferType)
 	{
-		NConcurrency::TCPromise<NMib::NNetwork::CNetAddress> Promise;
-
 		if (_Address.f_IsEmpty())
-		{
-			Promise.f_SetResult(NMib::NNetwork::CNetAddress());
-			return Promise.f_MoveFuture();
-		}
+			co_return {};
+
 		auto &Resolve = mp_PendingResolves.f_Insert();
 
 		auto *pResolve = &Resolve;
 
 		auto ThisWeak = fg_ThisActor(this).f_Weak();
 
+		NConcurrency::TCPromiseFuturePair<NMib::NNetwork::CNetAddress> Promise;
+
 		Resolve.f_Open
 			(
 				_Address
 				, _PreferType
-				, [this, ThisWeak, pResolve, Promise]()
+				, [this, ThisWeak, pResolve, Promise = fg_Move(Promise.m_Promise)]() mutable
 				{
 					auto This = ThisWeak.f_Lock();
 					if (!This)
@@ -32,10 +30,9 @@ namespace NMib::NNetwork
 						return;
 					}
 
-					This
+					This.f_Bind<&CActor::f_Dispatch>
 						(
-							&CActor::f_Dispatch
-							, [this, pResolve, Promise]
+							[this, pResolve = fg_Move(pResolve), Promise = fg_Move(Promise)]
 							{
 								NNetwork::CNetAddress Address;
 								NStr::CStr Error;
@@ -47,12 +44,12 @@ namespace NMib::NNetwork
 								mp_PendingResolves.f_Remove(*pResolve);
 							}
 						)
-						> NConcurrency::fg_DiscardResult()
+						.f_DiscardResult()
 					;
 				}
 			)
 		;
 
-		return Promise.f_MoveFuture();
+		co_return co_await fg_Move(Promise.m_Future);
 	}
 }

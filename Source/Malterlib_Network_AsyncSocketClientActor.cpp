@@ -49,11 +49,11 @@ namespace NMib::NNetwork
 
 	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_Connect
 		(
-			NStr::CStr const &_ConnectToAddress
-			, NStr::CStr const &_BindToAddress
+			NStr::CStr _ConnectToAddress
+			, NStr::CStr _BindToAddress
 			, NMib::NNetwork::ENetAddressType _PreferAddress
 			, uint16 _Port
-			, NNetwork::FVirtualSocketFactory &&_SocketFactory
+			, NNetwork::FVirtualSocketFactory _SocketFactory
 		)
 	{
 		if (_ConnectToAddress.f_IsEmpty())
@@ -72,15 +72,15 @@ namespace NMib::NNetwork
 		if (_Port)
 			ConnectToAddress.f_SetPort(_Port);
 
-		co_return co_await self(&CAsyncSocketClientActor::f_ConnectAddress, ConnectToAddress, BindToAddress, fg_Move(_SocketFactory), _ConnectToAddress);
+		co_return co_await f_ConnectAddress(fg_Move(ConnectToAddress), fg_Move(BindToAddress), fg_Move(_SocketFactory), fg_Move(_ConnectToAddress));
 	}
 
 	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_ConnectAddress
 		(
-			NNetwork::CNetAddress const &_ConnectToAddress
-			, NNetwork::CNetAddress const &_BindAddress
-			, NNetwork::FVirtualSocketFactory &&_SocketFactory
-			, NStr::CStr const &_Hostname
+			NNetwork::CNetAddress _ConnectToAddress
+			, NNetwork::CNetAddress _BindAddress
+			, NNetwork::FVirtualSocketFactory _SocketFactory
+			, NStr::CStr _Hostname
 		)
 	{
 		if (!_SocketFactory)
@@ -104,7 +104,7 @@ namespace NMib::NNetwork
 			}
 		;
 
-		NConcurrency::TCPromise<CAsyncSocketNewClientConnection> Promise;
+		NConcurrency::TCPromiseFuturePair<CAsyncSocketNewClientConnection> Promise;
 
 		auto CaptureScope = co_await NConcurrency::g_CaptureExceptions.f_Specific<NCryptography::CExceptionCryptography, NNetwork::CExceptionNet>();
 
@@ -119,7 +119,7 @@ namespace NMib::NNetwork
 					, pPending
 					, pPendingDeleted = pPending->m_pDeleted
 					, WeakThis = fg_ThisActor(this).f_Weak()
-					, Promise
+					, Promise = fg_Move(Promise.m_Promise)
 					, this
 					, CleanupPending = fg_Move(CleanupPending)
 				]
@@ -149,7 +149,7 @@ namespace NMib::NNetwork
 
 										Promise.f_SetException(DMibErrorInstance(Error));
 									}
-									> NConcurrency::fg_DiscardResult()
+									> NConcurrency::g_DiscardResult
 								;
 							}
 						}
@@ -194,9 +194,10 @@ namespace NMib::NNetwork
 
 								auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise]() mutable
 									{
-										ConnectionActor(&CAsyncSocketActor::fp_SetSocket, fg_Move(pNewSocket)) > NConcurrency::fg_DiscardResult();
+										ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket)).f_DiscardResult();
 
-										NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor())
+										(
+											NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor())
 											/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 											{
 												auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
@@ -212,13 +213,14 @@ namespace NMib::NNetwork
 													)
 												;
 											}
-											> NConcurrency::fg_DirectResultActor()
-											/ [Promise, pCleanupPromise]
-											(NConcurrency::TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
+										)
+										.f_OnResultSet
+										(
+											[Promise, pCleanupPromise](NConcurrency::TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
 											{
 												Promise.f_SetResult(fg_Move(_Result));
 											}
-										;
+										);
 									}
 								;
 
@@ -230,14 +232,14 @@ namespace NMib::NNetwork
 											auto ConnectionActor = WeakConnectionActor.f_Lock();
 											if (!ConnectionActor)
 												return;
-											ConnectionActor(&CAsyncSocketActor::fp_StateAdded, _StateAdded) > NConcurrency::fg_DiscardResult();
+											ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
 										}
 									)
 								;
 
 								fFinishConnection();
 							}
-							> NConcurrency::fg_DiscardResult()
+							> NConcurrency::g_DiscardResult
 						;
 					}
 				}
@@ -246,6 +248,6 @@ namespace NMib::NNetwork
 		;
 		pReplied.f_Clear();
 
-		co_return co_await Promise.f_MoveFuture();
+		co_return co_await fg_Move(Promise.m_Future);
 	}
 }
