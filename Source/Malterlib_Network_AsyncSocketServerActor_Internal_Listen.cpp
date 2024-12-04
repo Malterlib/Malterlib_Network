@@ -48,34 +48,40 @@ namespace NMib::NNetwork::NAsyncSocket
 		{
 			while (true)
 			{
-				NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = NConcurrency::fg_ConstructActor<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout);
-				NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
-				NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
-					(
-						[WeakConnectionActor](NNetwork::ENetTCPState _StateAdded)
-						{
-							auto ConnectionActor = WeakConnectionActor.f_Lock();
-							if (ConnectionActor)
+				try
+				{
+					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = NConcurrency::fg_ConstructActor<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout);
+					NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
+					NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
+						(
+							[WeakConnectionActor](NNetwork::ENetTCPState _StateAdded)
 							{
-								ConnectionActor(&CAsyncSocketActor::fp_StateAdded, _StateAdded)
-									> NConcurrency::fg_DiscardResult()
-								;
+								auto ConnectionActor = WeakConnectionActor.f_Lock();
+								if (ConnectionActor)
+								{
+									ConnectionActor(&CAsyncSocketActor::fp_StateAdded, _StateAdded)
+										> NConcurrency::fg_DiscardResult()
+									;
+								}
 							}
-						}
-					)
-				;
+						)
+					;
 
-				if (!pAcceptedSocket)
-					break;
+					if (!pAcceptedSocket)
+						break;
 
-				ConnectionActor(&CAsyncSocketActor::fp_SetSocket, fg_Move(pAcceptedSocket)) > NConcurrency::fg_DiscardResult();
+					ConnectionActor(&CAsyncSocketActor::fp_SetSocket, fg_Move(pAcceptedSocket)) > NConcurrency::fg_DiscardResult();
 
-				auto Server = mp_Server.f_Lock();
+					auto Server = mp_Server.f_Lock();
 
-				if (!Server)
-					return;
+					if (!Server)
+						return;
 
-				Server(&CAsyncSocketServerActor::fp_AddConnection, fg_Move(ConnectionActor), mp_ListenID) > NConcurrency::fg_DiscardResult();
+					Server(&CAsyncSocketServerActor::fp_AddConnection, fg_Move(ConnectionActor), mp_ListenID) > NConcurrency::fg_DiscardResult();
+				}
+				catch (NException::CException const &)
+				{
+				}
 			}
 		}
 	}
