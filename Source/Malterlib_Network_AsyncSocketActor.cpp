@@ -44,7 +44,7 @@ namespace NMib::NNetwork
 					m_pPromise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
 			}
 
-			NStorage::TCSharedPointer<NContainer::CSecureByteVector> m_pData;
+			NStorage::TCSharedPointer<NContainer::CIOByteVector> m_pData;
 			NStorage::TCUniquePointer<NConcurrency::TCPromise<void>> m_pPromise;
 			bool m_bFinished = false;
 		};
@@ -104,11 +104,11 @@ namespace NMib::NNetwork
 
 		void f_ShutdownDone(NStr::CStr const &_Error);
 
-		void f_HandleDataMessage(NContainer::CSecureByteVector &&_Data);
+		void f_HandleDataMessage(NContainer::CIOByteVector &&_Data);
 		void f_SendMessage(uint8 const *_pData, mint _nBytes);
 		void f_FinishConnection();
 
-		COutgoingMessage &f_QueueMessage(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pData, uint32 _Priority);
+		COutgoingMessage &f_QueueMessage(NStorage::TCSharedPointer<NContainer::CIOByteVector> const &_pData, uint32 _Priority);
 		COutgoingMessage &f_QueueFragmentedMessage(uint8 const *_pData, mint _nBytes, uint32 _Priority);
 		void f_WriteQueuedMessages();
 
@@ -133,7 +133,7 @@ namespace NMib::NNetwork
 		NContainer::TCLinkedList<NFunction::TCFunction<void (NStr::CStr const &_Error)>> m_OnShutdown;
 
 		CAsyncSocketCallbacks m_Callbacks;
-		NContainer::TCVector<NStorage::TCSharedPointer<NContainer::CSecureByteVector>> m_DeferredOnReciveData;
+		NContainer::TCVector<NStorage::TCSharedPointer<NContainer::CIOByteVector>> m_DeferredOnReciveData;
 		CNotifyClose m_DeferredNotifyClose;
 
 		NConcurrency::TCPromise<CFinishConnectionResult> m_FinishConnectionPromise;
@@ -172,7 +172,7 @@ namespace NMib::NNetwork
 
 	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueMessage
 		(
-			NStorage::TCSharedPointer<NContainer::CSecureByteVector> const &_pData
+			NStorage::TCSharedPointer<NContainer::CIOByteVector> const &_pData
 			, uint32 _Priority
 		)
 	{
@@ -193,7 +193,7 @@ namespace NMib::NNetwork
 		while (true)
 		{
 			mint ThisTime = fg_Min(nBytes, m_FramentationSize);
-			NContainer::CSecureByteVector VectorData;
+			NContainer::CIOByteVector VectorData;
 			VectorData.f_Insert(pBytes, ThisTime);
 			nBytes -= ThisTime;
 			pBytes += ThisTime;
@@ -433,7 +433,7 @@ namespace NMib::NNetwork
 		co_return co_await fg_Move(Promise.m_Future);
 	}
 
-	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> const _pMessage, uint32 _Priority)
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SendData(NStorage::TCSharedPointer<NContainer::CIOByteVector> const _pMessage, uint32 _Priority)
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
@@ -686,7 +686,7 @@ namespace NMib::NNetwork
 		DMibLog(DebugVerbose3, " ++++ {} fp_ProcessIncomingMessage", !Internal.m_bClient);
 
 		mint Length = Internal.m_IncomingData.f_GetLen();
-		NContainer::CSecureByteVector Data;
+		NContainer::CIOByteVector Data;
 		Data.f_Reserve(Length);
 
 		Internal.m_IncomingData.f_ReadFront
@@ -707,7 +707,7 @@ namespace NMib::NNetwork
 		return true;
 	}
 
-	void CAsyncSocketActor::CInternal::f_HandleDataMessage(NContainer::CSecureByteVector &&_Data)
+	void CAsyncSocketActor::CInternal::f_HandleDataMessage(NContainer::CIOByteVector &&_Data)
 	{
 		DMibLog(DebugVerbose3, " ++++ {} call m_OnReceiveData", !m_bClient);
 		if (m_bDeferringCallbacks)

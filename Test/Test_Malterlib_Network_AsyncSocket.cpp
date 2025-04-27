@@ -212,7 +212,7 @@ public:
 						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=](TCSharedPointer<CSecureByteVector> _pData) -> TCFuture<void>
+							/ [=](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -393,7 +393,7 @@ public:
 							}
 						;
 
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CSecureByteVector> _pData) -> TCFuture<void>
+						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -583,7 +583,7 @@ public:
 
 				auto fTextBuffer = [&](CStr const &_Text)
 					{
-						TCSharedPointer<CSecureByteVector> pBuffer = fg_Construct();
+						TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
 						pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
 						pBuffer->f_Insert('\n');
 						return pBuffer;

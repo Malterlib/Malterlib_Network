@@ -42,7 +42,7 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CSecureByteVector> _pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CIOByteVector> _pMessage)> m_fOnReceiveData;
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
@@ -71,7 +71,7 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
 
-		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CSecureByteVector> _pMessage, uint32 _Priority);
+		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CIOByteVector> _pMessage, uint32 _Priority);
 		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);
 		NConcurrency::TCFuture<CCloseInfo> f_CloseWithLinger(EAsyncSocketStatus _Status, NStr::CStr _Reason, fp64 _MaxLingerTime);
 
