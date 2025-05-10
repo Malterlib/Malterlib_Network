@@ -406,7 +406,7 @@ namespace NMib::NNetwork
 			;
 
 			ERR_clear_error();
-			if (!SSL_CTX_set1_curves(mp_pContext, s_SupportedCurves, sizeof(s_SupportedCurves) / sizeof(s_SupportedCurves[0])))
+			if (!SSL_CTX_set1_curves(mp_pContext, s_SupportedCurves, fg_ArraySize(s_SupportedCurves)))
 				DMibErrorCryptography(fg_GetExceptionStr("Failed to set supported curves on ssl context"));
 
 			bool bVerifyCertAndKey = false;
@@ -585,7 +585,7 @@ namespace NMib::NNetwork
 					, SSL_SIGN_RSA_PKCS1_SHA256
 				}
 			;
-			mint nAlgos = sizeof(s_DefaultAlgos) / sizeof(s_DefaultAlgos[0]);
+			mint nAlgos = fg_ArraySize(s_DefaultAlgos);
 			const uint16_t *pAlgos = s_DefaultAlgos;
 
 			switch (_CurveName)
@@ -606,7 +606,7 @@ namespace NMib::NNetwork
 							, SSL_SIGN_RSA_PKCS1_SHA256
 						}
 					;
-					nAlgos = sizeof(s_CustomAlgos) / sizeof(s_CustomAlgos[0]);
+					nAlgos = fg_ArraySize(s_CustomAlgos);
 					pAlgos = s_CustomAlgos;
 				}
 				break;
@@ -626,7 +626,7 @@ namespace NMib::NNetwork
 							, SSL_SIGN_RSA_PKCS1_SHA512
 						}
 					;
-					nAlgos = sizeof(s_CustomAlgos) / sizeof(s_CustomAlgos[0]);
+					nAlgos = fg_ArraySize(s_CustomAlgos);
 					pAlgos = s_CustomAlgos;
 				}
 				break;
