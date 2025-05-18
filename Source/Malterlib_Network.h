@@ -103,12 +103,12 @@ namespace NMib::NNetwork
 
 		CNetAddressIPv4(const CNetAddressIPv4 &_Src)
 		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
+			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 		}
 
 		CNetAddressIPv4 &operator = (const CNetAddressIPv4 &_Src)
 		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
+			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 
 			return *this;
 		}
@@ -156,12 +156,12 @@ namespace NMib::NNetwork
 
 		CNetAddressIPv6(const CNetAddressIPv6 &_Src)
 		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
+			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 		}
 
 		CNetAddressIPv6 &operator = (const CNetAddressIPv6 &_Src)
 		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
+			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 
 			return *this;
 		}
