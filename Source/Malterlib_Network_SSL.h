@@ -200,8 +200,8 @@ namespace NMib::NNetwork
 			EState_ShutdownFailed,
 		};
 
-		typedef NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)> FAuthenticationResultCallback;
-		typedef NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)> FUserTrustDecisionCallback;
+		using FAuthenticationResultCallback = NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)>;
+		using FUserTrustDecisionCallback = NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)>;
 
 		CSSLConnection
 			(

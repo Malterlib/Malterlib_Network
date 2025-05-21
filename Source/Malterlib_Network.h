@@ -16,7 +16,7 @@
 						CSocket
 
 					System Specifics in NMib::NSys::NNetwork:
-						typedef void* CAddress;
+						using CAddress = void*;
 
 						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
 
@@ -74,7 +74,7 @@
 
 						TODO:
 							Typedef for sockets in NSys::NNetwork
-								typedef void* CSocket;
+								using CSocket = void *;
 
 \*_____________________________________________________________________________________________*/
 #ifndef DMibSafety_IncMalterlib_H
@@ -240,8 +240,8 @@ namespace NMib::NNetwork
 		}
 	};
 
-	typedef TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4> CNetAddressTCPv4;
-	typedef TCNetAddressTCP<CNetAddressIPv6, ENetAddressType_TCPv6> CNetAddressTCPv6;
+	using CNetAddressTCPv4 = TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4>;
+	using CNetAddressTCPv6 = TCNetAddressTCP<CNetAddressIPv6, ENetAddressType_TCPv6>;
 
 	enum ENetTCPState
 	{
@@ -335,8 +335,7 @@ namespace NMib::NStream
 namespace NMib::NSys::NNetwork
 {
 // Addresses
-
-	typedef void* CAddress;
+	using CAddress = void *;
 
 	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
 	CAddress fg_DuplicateAddress(CAddress _Address);

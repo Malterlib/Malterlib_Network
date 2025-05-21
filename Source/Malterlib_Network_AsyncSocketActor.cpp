@@ -16,7 +16,7 @@
 #endif
 
 #ifdef DEnableVector
-typedef uint32 vec4uint32 __attribute__((ext_vector_type(4)));
+using vec4uint32 = uint32 __attribute__((ext_vector_type(4)));
 #endif
 
 namespace NMib::NNetwork
