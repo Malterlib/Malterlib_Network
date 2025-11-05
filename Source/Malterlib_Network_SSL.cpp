@@ -1011,12 +1011,12 @@ namespace NMib::NNetwork
 			auto pSSL = f_GetSSL();
 			auto pReadBio = SSL_get_rbio(pSSL);
 			auto pWriteBio = SSL_get_wbio(pSSL);
-			auto SocketNumRead = pReadBio->num_read;
-			auto SocketNumWrite = pWriteBio->num_write;
+			auto SocketNumRead = BIO_number_read(pReadBio);
+			auto SocketNumWrite = BIO_number_written(pWriteBio);
 			int Ret = SSL_write(pSSL, _pData, (int)_nLen);
-			if (pReadBio->num_read != SocketNumRead)
+			if (BIO_number_read(pReadBio) != SocketNumRead)
 				Result.m_bReceivedNetwork = true;
-			if (pReadBio->num_write != SocketNumWrite)
+			if (BIO_number_written(pReadBio) != SocketNumWrite)
 				Result.m_bSentNetwork = true;
 			if (Ret <= 0)
 			{
@@ -1069,12 +1069,12 @@ namespace NMib::NNetwork
 			auto pSSL = f_GetSSL();
 			auto pReadBio = SSL_get_rbio(pSSL);
 			auto pWriteBio = SSL_get_wbio(pSSL);
-			auto SocketNumRead = pReadBio->num_read;
-			auto SocketNumWrite = pWriteBio->num_write;
+			auto SocketNumRead = BIO_number_read(pReadBio);
+			auto SocketNumWrite = BIO_number_written(pWriteBio);
 			int Ret = SSL_read(pSSL, _pData, _nLen);
-			if (pReadBio->num_read != SocketNumRead)
+			if (BIO_number_read(pReadBio) != SocketNumRead)
 				Result.m_bReceivedNetwork = true;
-			if (pReadBio->num_write != SocketNumWrite)
+			if (BIO_number_written(pReadBio) != SocketNumWrite)
 				Result.m_bSentNetwork = true;
 
 			if (Ret <= 0)
