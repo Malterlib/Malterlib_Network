@@ -75,8 +75,9 @@ namespace NMib::NNetwork
 		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);
 		NConcurrency::TCFuture<CCloseInfo> f_CloseWithLinger(EAsyncSocketStatus _Status, NStr::CStr _Reason, fp64 _MaxLingerTime);
 
+#if DMibConfig_Tests_Enable
 		NConcurrency::TCFuture<void> f_DebugStopProcessing(fp64 _Timeout);
-
+#endif
 	private:
 		friend class NAsyncSocket::CListenActor;
 		friend class CAsyncSocketServerActor;

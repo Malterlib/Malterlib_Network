@@ -150,10 +150,12 @@ namespace NMib::NNetwork
 		mint m_FramentationSize = 0;
 
 		bool m_bClient = false;
-		bool m_bDebugNoProcessing = false;
 		bool m_bOnCloseCalled = false;
 		bool m_bDeferringCallbacks = true;
 		bool m_bShutdownCalled = false;
+#if DMibConfig_Tests_Enable
+		bool m_bDebugNoProcessing = false;
+#endif
 #if DMibEnableSafeCheck > 0
 		bool m_bDestroyed = false;
 #endif
@@ -264,6 +266,7 @@ namespace NMib::NNetwork
 			m_pLastPendingMessagesList = pList;
 	}
 
+#if DMibConfig_Tests_Enable
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_DebugStopProcessing(fp64 _Timeout)
 	{
 		if (f_IsDestroyed())
@@ -276,6 +279,7 @@ namespace NMib::NNetwork
 
 		co_return {};
 	}
+#endif
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::fp_Destroy()
 	{
@@ -591,8 +595,10 @@ namespace NMib::NNetwork
 		else
 			fp_CheckHandshake(Internal);
 
+#if DMibConfig_Tests_Enable
 		if (Internal.m_bDebugNoProcessing)
 			return;
+#endif
 
 		bool bDidSend = false;
 		while (!Internal.m_OutgoingData.f_IsEmpty() && Internal.m_pSocket->f_IsValid())
@@ -830,7 +836,13 @@ namespace NMib::NNetwork
 		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid() || f_IsDestroyed())
 			return;
 
-		if ((_StateAdded & NNetwork::ENetTCPState_Read) && !Internal.m_bDebugNoProcessing)
+		if
+		(
+			(_StateAdded & NNetwork::ENetTCPState_Read)
+#if DMibConfig_Tests_Enable
+			&& !Internal.m_bDebugNoProcessing
+#endif
+		)
 		{
 			NNetwork::CSocketOperationResult CombinedResults;
 			uint8 Data[4096];
@@ -895,8 +907,16 @@ namespace NMib::NNetwork
 			return;
 		}
 
-		if ((_StateAdded & NNetwork::ENetTCPState_Write) && !Internal.m_bDebugNoProcessing)
+		if
+		(
+			(_StateAdded & NNetwork::ENetTCPState_Write)
+#if DMibConfig_Tests_Enable
+			&& !Internal.m_bDebugNoProcessing
+#endif
+		)
+		{
 			fp_UpdateSend();
+		}
 	}
 
 	void CAsyncSocketActor::fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket)
