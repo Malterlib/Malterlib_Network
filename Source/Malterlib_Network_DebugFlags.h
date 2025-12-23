@@ -15,6 +15,7 @@ namespace NMib::NNetwork
 		, ESocketDebugFlag_StopProcessingReceive = DMibBit(2)
 		, ESocketDebugFlag_StopProcessingSend = DMibBit(3)
 		, ESocketDebugFlag_DelayClose = DMibBit(4)
+		, ESocketDebugFlag_StopWriteQueuedMessages = DMibBit(5)
 	};
 }
 
