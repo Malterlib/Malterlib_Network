@@ -1591,13 +1591,13 @@ namespace NMib::NNetwork
 
 	void CSSLConnectionResult::f_LogError(mint _Depth, int _Error)
 	{
-		bool bCreated = false;
-		CResultCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
-		DMibSafeCheck(!bCreated, "Cert chain should have been logged before error logging.");
+		auto MapResult = mp_Certificates(_Depth);
+		CResultCertificate &Certificate = *MapResult;
+		DMibSafeCheck(!MapResult.f_WasCreated(), "Cert chain should have been logged before error logging.");
 
-		bCreated = false;
-		int& Error = Certificate.m_Errors.f_Map(_Error, bCreated);
-		if (bCreated)
+		auto ErrorMapResult = Certificate.m_Errors(_Error);
+		int &Error = *ErrorMapResult;
+		if (ErrorMapResult.f_WasCreated())
 			Error = 0;
 		++Error;
 
@@ -1610,9 +1610,9 @@ namespace NMib::NNetwork
 
 	void CSSLConnectionResult::f_LogMiscError(EMiscError _Error)
 	{
-		bool bCreated = false;
-		int& Error = mp_MiscErrors.f_Map(_Error, bCreated);
-		if (bCreated)
+		auto MapResult = mp_MiscErrors(_Error);
+		int &Error = *MapResult;
+		if (MapResult.f_WasCreated())
 			Error = 0;
 
 		++Error;
@@ -1623,8 +1623,7 @@ namespace NMib::NNetwork
 
 	void CSSLConnectionResult::f_LogCertificate(mint _Depth, NContainer::CByteVector const &_Certificate)
 	{
-		bool bCreated = false;
-		CResultCertificate& Certificate = mp_Certificates.f_Map(_Depth, bCreated);
+		CResultCertificate &Certificate = mp_Certificates[_Depth];
 		Certificate.m_Data = _Certificate;
 	}
 
