@@ -195,7 +195,7 @@ auto Connection = co_await NewConnection.f_Accept(fg_Move(Callbacks));
 
 ```bash
 # Build and run all network tests
-./mib build Tests macOS x86_64 Debug
+MalterlibBuildShowProgress=false ./mib build Tests macOS arm64 Debug
 /opt/Deploy/Tests/RunAllTests --paths '["Malterlib/Network/*"]'
 
 # Run specific test
