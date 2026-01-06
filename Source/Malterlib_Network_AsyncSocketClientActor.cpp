@@ -167,7 +167,7 @@ namespace NMib::NNetwork
 									Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
 							}
 						;
-						
+
 						auto This = WeakThis.f_Lock();
 						if (!This || pPendingDeleted->f_Load())
 							return (void)pCleanupPromise.f_Clear();

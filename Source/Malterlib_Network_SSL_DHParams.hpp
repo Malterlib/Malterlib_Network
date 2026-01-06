@@ -53,7 +53,7 @@ namespace NMib::NNetwork
 
 			return fg_BinToDH(ParamP, ParamG, sizeof(ParamP), sizeof(ParamG));
 		}
-		
+
 		DH *fg_Get_dh2048()
 		{
 			static constexpr uint8 ParamP[] =
@@ -90,7 +90,7 @@ namespace NMib::NNetwork
 
 			return fg_BinToDH(ParamP, ParamG, sizeof(ParamP), sizeof(ParamG));
 		}
-		
+
 		DH *fg_Get_dh4096()
 		{
 			static constexpr uint8 ParamP[] =
@@ -148,7 +148,7 @@ namespace NMib::NNetwork
 
 			return fg_BinToDH(ParamP, ParamG, sizeof(ParamP), sizeof(ParamG));
 		}
-		
+
 		DH *fg_Get_dh8192()
 		{
 			static constexpr uint8 ParamP[] =

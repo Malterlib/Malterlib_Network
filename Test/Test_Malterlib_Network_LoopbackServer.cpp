@@ -1,4 +1,4 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include <Mib/Core/Core>
@@ -18,25 +18,25 @@ namespace
 		NNetwork::CSocket m_EchoListenSocketV6;
 		NNetwork::CSocket m_MirrorListenSocketV4;
 		NNetwork::CSocket m_MirrorListenSocketV6;
-		
+
 		NStorage::TCUniquePointer<NThread::CThreadObject> m_pThread;
-		
+
 		NContainer::TCThreadSafeQueue<NFunction::TCFunction<void ()>> m_DispatchQueue;
 		NContainer::TCLinkedList<NStorage::TCSharedPointer<NStorage::TCSharedPointer<CSocket>>> m_ConnectedSockets;
-		
+
 		void f_Dispatch(NFunction::TCFunction<void ()> const &_fDispatch)
 		{
 			m_DispatchQueue.f_Push(_fDispatch);
 			m_pThread->m_EventWantQuit.f_Signal();
 		}
-		
+
 		enum ELoopbackType
 		{
 			ELoopbackType_Normal
 			, ELoopbackType_Echo
 			, ELoopbackType_Mirror
 		};
-		
+
 		CLoopbackServer()
 		{
 			m_pThread = NThread::CThreadObject::fs_StartThread
@@ -72,7 +72,7 @@ namespace
 												*pSocket = fg_Construct(fg_Construct());
 												auto pSocketShared = *pSocket;
 												NStorage::TCSharedPointer<NContainer::CByteVector> pSendBuffer = fg_Construct();
-												
+
 												try
 												{
 													(**pSocket)->f_Accept
@@ -142,11 +142,11 @@ namespace
 														*pSocketMirror = fg_Construct(fg_Construct());
 														auto pSocketSharedMirror = *pSocketMirror;
 														NStorage::TCSharedPointer<NContainer::CByteVector> pSendBufferMirror = fg_Construct();
-														
+
 														auto Peer = (*pSocketShared)->f_GetPeerAddress();
-														
+
 														Peer.f_SetPort(20680);
-														
+
 														(*pSocketSharedMirror)->f_AsyncConnect
 															(
 																Peer
@@ -185,7 +185,7 @@ namespace
 																						(*pSocketSharedMirror).f_Clear();
 																					}
 																				}
-																				
+
 																				if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
 																					(*pSocketSharedMirror)->f_Shutdown();
 
@@ -201,8 +201,8 @@ namespace
 																}
 															)
 														;
-														
-													}										
+
+													}
 												}
 												catch (CExceptionNet const &)
 												{
@@ -219,7 +219,7 @@ namespace
 					;
 				}
 			;
-			
+
 			{
 				CNetAddressTCPv4 ListenV4;
 				ListenV4.f_SetLocalhost();
@@ -228,7 +228,7 @@ namespace
 				CNetAddressTCPv6 ListenV6;
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20679;
-				
+
 				m_ListenSocketV4.f_Listen
 					(
 						CNetAddress(ListenV4)
@@ -253,7 +253,7 @@ namespace
 				CNetAddressTCPv6 ListenV6;
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20677;
-				
+
 				m_EchoListenSocketV4.f_Listen
 					(
 						CNetAddress(ListenV4)
@@ -278,7 +278,7 @@ namespace
 				CNetAddressTCPv6 ListenV6;
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20678;
-				
+
 				m_MirrorListenSocketV4.f_Listen
 					(
 						CNetAddress(ListenV4)
@@ -295,7 +295,7 @@ namespace
 				;
 			}
 		}
-		
+
 		~CLoopbackServer()
 		{
 			m_pThread->f_Stop();
@@ -320,7 +320,7 @@ namespace
 			m_pThread = nullptr;
 		}
 	};
-	
+
 	NStorage::TCUniquePointer<CLoopbackServer> g_pLoopbackServer;
 }
 

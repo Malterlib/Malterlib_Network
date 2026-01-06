@@ -1,4 +1,4 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include <Mib/Core/Core>
@@ -86,7 +86,7 @@ public:
 		CActorSubscription m_ListenCallbackReference;
 
 		TCMap<CStr, CServerConnection> m_ServerConnections;
-		
+
 		CStr m_AcceptError;
 		bool m_bAcceptError = false;
 		CStr m_ListenError;
@@ -97,7 +97,7 @@ public:
 
 		CStr m_ClientConnectionError;
 		bool m_bClientConnectionResult = false;
-		
+
 		EAsyncSocketCloseOrigin m_ClientConnectionCloseOrigin = EAsyncSocketCloseOrigin_Local;
 		EAsyncSocketCloseOrigin m_ServerConnectionCloseOrigin = EAsyncSocketCloseOrigin_Local;
 		EAsyncSocketStatus m_ClientConnectionCloseStatus = EAsyncSocketStatus_None;
@@ -144,7 +144,7 @@ public:
 			}
 			return false;
 		}
-		
+
 		void f_Clear()
 		{
 			TCFutureVector<void> Destroys;
@@ -190,7 +190,7 @@ public:
 				}
 			}
 		}
-		
+
 		void f_StartListen(CNetAddress _ListenAddress, FVirtualSocketFactory const &_ServerFactory)
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
@@ -346,13 +346,13 @@ public:
 						pState->m_ListenError = _Result.f_GetExceptionStr();
 					pState->f_Signal();
 				}
-			;			
+			;
 			bool bTimedOutListenStart = f_Wait();
 			DMibAssert(m_ListenError, ==, "");
 			DMibAssertFalse(bTimedOutListenStart);
 			DMibAssertTrue(m_ListenCallbackReference);
 		}
-		
+
 		void f_Connect(CStr const &_Address, FVirtualSocketFactory const &_ClientFactory)
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
@@ -457,7 +457,7 @@ public:
 			;
 		}
 	};
-	
+
 	bool fp_TestConnect(TCSharedPointerSupportWeak<CState> const &_pState, CStr const &_AcceptError, CStr const &_ConnectError)
 	{
 		auto pState = _pState;
@@ -473,13 +473,13 @@ public:
 					break; // Server accept failed
 				if (pState->m_bClientConnectionResult)
 				{
-					if 
+					if
 						(
-							!pState->m_ClientSocket 
-							&& 
+							!pState->m_ClientSocket
+							&&
 							(
-								pState->m_bAcceptError 
-								|| !pState->m_ServerConnections.f_IsEmpty() 
+								pState->m_bAcceptError
+								|| !pState->m_ServerConnections.f_IsEmpty()
 								|| (!pState->m_ClientConnectionError.f_IsEmpty() && _AcceptError.f_IsEmpty())
 							)
 						)
@@ -551,10 +551,10 @@ public:
 		{
 			DMibTestPath("Connection");
 			CActorRunLoopTestHelper RunLoopHelper;
-			
+
 			auto Factories = _fGetFactories();
 			auto ServerFactory = fg_Get<0>(Factories);
-			auto ClientFactory = fg_Get<1>(Factories); 
+			auto ClientFactory = fg_Get<1>(Factories);
 
 			CNetAddress ListenAddress;
 			if (_Address == "localhost")
@@ -574,7 +574,7 @@ public:
 						pState->f_Clear();
 					}
 				;
-				
+
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
 				pState->f_StartListen(ListenAddress, ServerFactory);
 
@@ -620,7 +620,7 @@ public:
 					DMibTestPath("Disconnect");
 
 					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0).f_DiscardResult();
-					
+
 					bool bTimedOut = false;
 					while (!bTimedOut)
 					{
@@ -642,21 +642,21 @@ public:
 			{
 				DMibTestPath("Timeout");
 				TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
-				auto Cleanup 
+				auto Cleanup
 					= g_OnScopeExit / [&]
 					{
 						pState->f_Clear();
 					}
 				;
-				
+
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
 				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 				pState->f_StartListen(ListenAddress, ServerFactory);
-				
+
 				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
 				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 				pState->f_Connect(_Address, ClientFactory);
-				
+
 				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
 					return;
 				{
@@ -684,7 +684,7 @@ public:
 			}
 		};
 	}
-	
+
 	void f_DoTests()
 	{
 		DMibTestSuite("Tests")

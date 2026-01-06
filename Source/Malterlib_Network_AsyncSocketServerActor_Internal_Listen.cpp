@@ -1,4 +1,4 @@
-// Copyright © 2019 Nonna Holding AB 
+// Copyright © 2019 Nonna Holding AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include <Mib/Concurrency/ConcurrencyManager>
