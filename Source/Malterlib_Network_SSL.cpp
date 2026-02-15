@@ -1189,7 +1189,7 @@ namespace NMib::NNetwork
 			{
 				auto pChipher = SSL_get_current_cipher(f_GetSSL());
 				auto pVerson = SSL_get_version(f_GetSSL());
-				DMibConOut2("Negotiated: {}   {}\n", pVerson, SSL_CIPHER_get_name(pChipher));
+				DMibConOut("Negotiated: {}   {}\n", pVerson, SSL_CIPHER_get_name(pChipher));
 			}
 #endif
 			return ResultForCallback == EAuthenticationResult_Success;
