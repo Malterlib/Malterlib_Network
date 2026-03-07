@@ -139,8 +139,8 @@ namespace NMib::NNetwork
 		NConcurrency::TCPromise<CFinishConnectionResult> m_FinishConnectionPromise;
 
 		NConcurrency::CActorSubscription m_TimeoutTimerSubscription;
-		NTime::CClock m_TimeoutReceivedData;
-		NTime::CClock m_TimeoutSentData;
+		NTime::CStopwatch m_TimeoutReceivedData;
+		NTime::CStopwatch m_TimeoutSentData;
 
 		fp64 m_Timeout = 0.0;
 		mint m_TimeoutTimerSubscriptionSequence = 0;

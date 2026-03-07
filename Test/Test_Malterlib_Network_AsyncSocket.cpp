@@ -523,13 +523,13 @@ public:
 	{
 		bool bTimedOut = false;
 
-		NTime::CClock Clock;
-		Clock.f_Start();
+		NTime::CStopwatch Stopwatch;
+		Stopwatch.f_Start();
 
 		while (!_fPredicate())
 		{
 			NSys::fg_Thread_Sleep(0.01f);
-			if (Clock.f_GetTime() > 30.0)
+			if (Stopwatch.f_GetTime() > 30.0)
 			{
 				bTimedOut = true;
 				break;

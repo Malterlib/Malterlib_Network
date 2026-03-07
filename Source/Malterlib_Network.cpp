@@ -151,11 +151,11 @@ namespace NMib::NNetwork
 
 		NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 
-		NTime::CClock Clock(true);
+		NTime::CStopwatch Stopwatch(true);
 
-		while (!pState->m_bConnected && Clock.f_GetTime() < _Timeout)
+		while (!pState->m_bConnected && Stopwatch.f_GetTime() < _Timeout)
 		{
-			fp64 TimeLeft = _Timeout - Clock.f_GetTime();
+			fp64 TimeLeft = _Timeout - Stopwatch.f_GetTime();
 			if (TimeLeft <= 0)
 				DMibErrorNet("Timed out waiting for connection");
 			pState->m_Event.f_WaitTimeout(TimeLeft);

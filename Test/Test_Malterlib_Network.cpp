@@ -37,6 +37,7 @@
 */
 
 #include <Mib/Core/Core>
+#include <Mib/Time/Timeout>
 
 #include "Test_Malterlib_Network.h"
 
@@ -380,7 +381,7 @@ public:
 				{
 					do
 					{
-						CClock WaitTime;
+						CStopwatch WaitTime;
 						WaitTime.f_Start();
 						if (SocketEvent.f_WaitTimeout(gc_Timeout))
 						{
