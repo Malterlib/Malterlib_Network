@@ -33,7 +33,7 @@ namespace NMib::NNetwork
 			EProtocol_TLS,
 		};
 
-		bool operator == (CSSLSettings const &_Other) const
+		bool operator == (CSSLSettings const &_Other) const noexcept
 		{
 			return
 				m_PublicCertificateData == _Other.m_PublicCertificateData
@@ -112,13 +112,13 @@ namespace NMib::NNetwork
 			NContainer::CByteVector m_Data;
 			NContainer::TCMap<int,int> m_Errors;
 
-			bool operator == (CResultCertificate const &_Other) const
+			bool operator == (CResultCertificate const &_Other) const noexcept
 			{
 				return m_Data == _Other.m_Data && m_Errors == _Other.m_Errors;
 			}
 		};
 
-		bool operator == (CSSLConnectionResult const &_Other) const
+		bool operator == (CSSLConnectionResult const &_Other) const noexcept
 		{
 			return (mp_Certificates == _Other.mp_Certificates &&
 				mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured &&
