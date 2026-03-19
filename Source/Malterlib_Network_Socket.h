@@ -51,10 +51,10 @@ namespace NMib::NNetwork
 		virtual void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
 		virtual ENetTCPState f_GetState() = 0;
 		virtual NStr::CStr f_GetCloseReason() = 0;
-		virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) = 0;
-		virtual CSocketOperationResult f_Send(const void *_pData, mint _DataLen) = 0;
-		virtual mint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen) = 0;
-		virtual mint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen) = 0;
+		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) = 0;
+		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) = 0;
+		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) = 0;
+		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) = 0;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const = 0;
 		virtual uint32 f_GetListenPort() const = 0;
 		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;

@@ -74,7 +74,7 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketActor::CInternal
 	{
-		CInternal(CAsyncSocketActor *_pThis, bool _bClient, mint _MaxMessageSize, mint _FragmentationSize, fp64 _Timeout)
+		CInternal(CAsyncSocketActor *_pThis, bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout)
 			: m_pThis(_pThis)
 			, m_IncomingData(EIncomingPageSize)
 			, m_OutgoingData(EOutgoingPageSize)
@@ -105,11 +105,11 @@ namespace NMib::NNetwork
 		void f_ShutdownDone(NStr::CStr const &_Error);
 
 		void f_HandleDataMessage(NContainer::CIOByteVector &&_Data);
-		void f_SendMessage(uint8 const *_pData, mint _nBytes);
+		void f_SendMessage(uint8 const *_pData, umint _nBytes);
 		void f_FinishConnection();
 
 		COutgoingMessage &f_QueueMessage(NStorage::TCSharedPointer<NContainer::CIOByteVector> const &_pData, uint32 _Priority);
-		COutgoingMessage &f_QueueFragmentedMessage(uint8 const *_pData, mint _nBytes, uint32 _Priority);
+		COutgoingMessage &f_QueueFragmentedMessage(uint8 const *_pData, umint _nBytes, uint32 _Priority);
 		void f_WriteQueuedMessages();
 
 		void f_NotifyClose(EAsyncSocketStatus _Status, NStr::CStr const &_Message, EAsyncSocketCloseOrigin _Origin);
@@ -143,11 +143,11 @@ namespace NMib::NNetwork
 		NTime::CStopwatch m_TimeoutSentData;
 
 		fp64 m_Timeout = 0.0;
-		mint m_TimeoutTimerSubscriptionSequence = 0;
+		umint m_TimeoutTimerSubscriptionSequence = 0;
 		uint64 m_nSentBytes = 0;
 
-		mint m_MaxMessageSize = 0;
-		mint m_FramentationSize = 0;
+		umint m_MaxMessageSize = 0;
+		umint m_FramentationSize = 0;
 
 		bool m_bClient = false;
 		bool m_bOnCloseCalled = false;
@@ -161,7 +161,7 @@ namespace NMib::NNetwork
 #endif
 	};
 
-	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, mint _MaxMessageSize, mint _FragmentationSize, fp64 _Timeout)
+	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout)
 		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout))
 	{
 		auto &Internal = *mp_pInternal;
@@ -187,14 +187,14 @@ namespace NMib::NNetwork
 		return NewMessage;
 	}
 
-	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueFragmentedMessage(uint8 const *_pData, mint _nBytes, uint32 _Priority)
+	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueFragmentedMessage(uint8 const *_pData, umint _nBytes, uint32 _Priority)
 	{
 		COutgoingMessage *pLastMessage = nullptr;
 		uint8 const *pBytes = _pData;
-		mint nBytes = _nBytes;
+		umint nBytes = _nBytes;
 		while (true)
 		{
-			mint ThisTime = fg_Min(nBytes, m_FramentationSize);
+			umint ThisTime = fg_Min(nBytes, m_FramentationSize);
 			NContainer::CIOByteVector VectorData;
 			VectorData.f_Insert(pBytes, ThisTime);
 			nBytes -= ThisTime;
@@ -236,7 +236,7 @@ namespace NMib::NNetwork
 			bFinished = pPending->m_bFinished;
 
 			f_SendMessage(pPending->m_pData->f_GetArray(), pPending->m_pData->f_GetLen());
-			mint OutgoingData = m_OutgoingData.f_GetLen();
+			umint OutgoingData = m_OutgoingData.f_GetLen();
 
 			if (pPending->m_pPromise)
 			{
@@ -446,7 +446,7 @@ namespace NMib::NNetwork
 		DMibLog(DebugVerbose3, " ++++ {} f_SendBinary", !Internal.m_bClient);
 
 		auto &Massage = *_pMessage;
-		mint nBytes = Massage.f_GetLen();
+		umint nBytes = Massage.f_GetLen();
 
 		if (nBytes > Internal.m_MaxMessageSize)
 			co_return DMibErrorInstance("Message is bigger than max message size");
@@ -478,7 +478,7 @@ namespace NMib::NNetwork
 		fp_ProcessState(_StateAdded);
 	}
 
-	void CAsyncSocketActor::CInternal::f_SendMessage(uint8 const *_pData, mint _nBytes)
+	void CAsyncSocketActor::CInternal::f_SendMessage(uint8 const *_pData, umint _nBytes)
 	{
 		m_OutgoingData.f_InsertBack(_pData, _nBytes);
 	}
@@ -603,13 +603,13 @@ namespace NMib::NNetwork
 		bool bDidSend = false;
 		while (!Internal.m_OutgoingData.f_IsEmpty() && Internal.m_pSocket->f_IsValid())
 		{
-			mint SentBytes = 0;
+			umint SentBytes = 0;
 			bool bStuffed = false;
 			bool bDisconnected = false;
 			NNetwork::CSocketOperationResult CombinedResults;
 			Internal.m_OutgoingData.f_ReadFront
 				(
-					[&](mint _iStart, uint8 const* _pPtr, mint _nBytes) -> bool
+					[&](umint _iStart, uint8 const* _pPtr, umint _nBytes) -> bool
 					{
 						try
 						{
@@ -691,14 +691,14 @@ namespace NMib::NNetwork
 		auto &Internal = *mp_pInternal;
 		DMibLog(DebugVerbose3, " ++++ {} fp_ProcessIncomingMessage", !Internal.m_bClient);
 
-		mint Length = Internal.m_IncomingData.f_GetLen();
+		umint Length = Internal.m_IncomingData.f_GetLen();
 		NContainer::CIOByteVector Data;
 		Data.f_Reserve(Length);
 
 		Internal.m_IncomingData.f_ReadFront
 			(
 				Length
-				, [&](mint _iStart, uint8 const *_pData, mint _nBytes) -> bool
+				, [&](umint _iStart, uint8 const *_pData, umint _nBytes) -> bool
 				{
 					Data.f_Insert(_pData, _nBytes);
 					return _iStart + _nBytes < Length;
@@ -850,7 +850,7 @@ namespace NMib::NNetwork
 			{
 				while (true)
 				{
-					mint Size = 4096;
+					umint Size = 4096;
 					NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive(Data, Size);
 					if (Internal.m_State == EState_None)
 						fp_CheckHandshake(Internal);

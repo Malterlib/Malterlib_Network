@@ -160,16 +160,16 @@ public:
 			return;
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
-		static mint const nMessageBytes = sizeof(Message);
+		static umint const nMessageBytes = sizeof(Message);
 
 		{
-			mint nSent = Socket.f_Send(Message, nMessageBytes);
+			umint nSent = Socket.f_Send(Message, nMessageBytes);
 			DMibExpect(nSent, ==, nMessageBytes);
 		}
 
 		{
-			mint nReceived = 0;
-			mint nBytes = -1;
+			umint nReceived = 0;
+			umint nBytes = -1;
 			uint8 Incoming[nMessageBytes];
 			fg_MemClear(Incoming, nMessageBytes);
 			CTimeout Timeout(gc_Timeout);
@@ -209,7 +209,7 @@ public:
 		}
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
-		static mint const nMessageBytes = sizeof(Message);
+		static umint const nMessageBytes = sizeof(Message);
 
 		CEventAutoReset ServerReady;
 
@@ -253,7 +253,7 @@ public:
 						if (!Client.f_IsValid())
 							return -1;
 
-						mint nSent = Client.f_Send(Message, nMessageBytes);
+						umint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
 					catch (CExceptionNet const& _Exception)
@@ -287,7 +287,7 @@ public:
 						if (!Client.f_IsValid())
 							return -1;
 
-						mint nReceived = 0, nBytes;
+						umint nReceived = 0, nBytes;
 						uint8 Incoming[nMessageBytes];
 						fg_MemClear(Incoming, nMessageBytes);
 						CTimeout Timeout(gc_Timeout);
@@ -358,14 +358,14 @@ public:
 		if (!Socket.f_IsValid())
 			return;
 
-		static mint const nBufferBytes = 1024*1024*16;
+		static umint const nBufferBytes = 1024*1024*16;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
-			mint nTotalSent = 0;
-			mint nSent = -1;
+			umint nTotalSent = 0;
+			umint nSent = -1;
 
 			while(nTotalSent < nBufferBytes)
 			{
@@ -420,7 +420,7 @@ public:
 		}
 
 		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
-		static mint const nMessageBytes = sizeof(Message);
+		static umint const nMessageBytes = sizeof(Message);
 
 		CEventAutoReset ServerReady;
 
@@ -476,7 +476,7 @@ public:
 						if (!Client.f_IsValid())
 							return -1;
 
-						mint nSent = Client.f_Send(Message, nMessageBytes);
+						umint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
 					catch (CExceptionNet const& _Exception)
@@ -510,7 +510,7 @@ public:
 							return -1;
 
 						{
-							mint nReceived = 0, nBytes;
+							umint nReceived = 0, nBytes;
 							uint8 Incoming[nMessageBytes];
 							fg_MemClear(Incoming, nMessageBytes);
 							CTimeout Timeout(gc_Timeout);
@@ -593,14 +593,14 @@ public:
 			;
 		}
 
-		static mint const nBufferBytes = 1024*1024*4;
+		static umint const nBufferBytes = 1024*1024*4;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
-			mint nTotalSent = 0;
-			mint nSent = -1;
+			umint nTotalSent = 0;
+			umint nSent = -1;
 
 			while(nTotalSent < nBufferBytes)
 			{
@@ -673,14 +673,14 @@ public:
 
 		DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
 
-		static mint const nBufferBytes = 1024*1024*4;
+		static umint const nBufferBytes = 1024*1024*4;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
-			mint nTotalSent = 0;
-			mint nSent = -1;
+			umint nTotalSent = 0;
+			umint nSent = -1;
 
 			while (nTotalSent < nBufferBytes)
 			{

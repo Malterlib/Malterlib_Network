@@ -585,7 +585,7 @@ namespace NMib::NNetwork
 					, SSL_SIGN_RSA_PKCS1_SHA256
 				}
 			;
-			mint nAlgos = fg_ArraySize(s_DefaultAlgos);
+			umint nAlgos = fg_ArraySize(s_DefaultAlgos);
 			const uint16_t *pAlgos = s_DefaultAlgos;
 
 			switch (_CurveName)
@@ -925,7 +925,7 @@ namespace NMib::NNetwork
 
 		bool f_GiveSocket(void *_pSocket)
 		{
-			if (!SSL_set_fd(f_GetSSL(), (int)(mint)_pSocket))
+			if (!SSL_set_fd(f_GetSSL(), (int)(umint)_pSocket))
 				return false;
 
 			return true;
@@ -938,7 +938,7 @@ namespace NMib::NNetwork
 
 		void* f_GetSocket() const
 		{
-			return (void*)(mint)SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL());
+			return (void*)(umint)SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL());
 		}
 
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest()
@@ -999,7 +999,7 @@ namespace NMib::NNetwork
 			return false;
 		}
 
-		CSocketOperationResult f_Send(const void *_pData, mint _nLen)
+		CSocketOperationResult f_Send(const void *_pData, umint _nLen)
 		{
 			DMibRequire(_nLen > 0);
 			DMibRequire(mp_bConnected);
@@ -1051,13 +1051,13 @@ namespace NMib::NNetwork
 			{
 				DMibLog(DebugVerbose3, " **** SSL wrote {}", Ret);
 				// Write succeeded, return the number of bytes written.
-				Result.m_nBytes = (mint)Ret;
+				Result.m_nBytes = (umint)Ret;
 			}
 
 			return Result;
 		}
 
-		CSocketOperationResult f_Receive(void *_pData, mint _nLen)
+		CSocketOperationResult f_Receive(void *_pData, umint _nLen)
 		{
 			DMibRequire(_nLen > 0);
 			DMibRequire(mp_bConnected);
@@ -1109,7 +1109,7 @@ namespace NMib::NNetwork
 			else
 			{
 				// Read succeeded, return the number of bytes read.
-				Result.m_nBytes = (mint)Ret;
+				Result.m_nBytes = (umint)Ret;
 			}
 
 			return Result;
@@ -1551,7 +1551,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	CSocketOperationResult CSSLConnection::f_Send(const void *_pData, mint _nLen)
+	CSocketOperationResult CSSLConnection::f_Send(const void *_pData, umint _nLen)
 	{
 		return fg_RunProtectRegisters
 			(
@@ -1563,7 +1563,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	CSocketOperationResult CSSLConnection::f_Receive(void *_pData, mint _nLen)
+	CSocketOperationResult CSSLConnection::f_Receive(void *_pData, umint _nLen)
 	{
 		return fg_RunProtectRegisters
 			(
@@ -1589,7 +1589,7 @@ namespace NMib::NNetwork
 
 	// CSSLConnectionResult
 
-	void CSSLConnectionResult::f_LogError(mint _Depth, int _Error)
+	void CSSLConnectionResult::f_LogError(umint _Depth, int _Error)
 	{
 		auto MapResult = mp_Certificates(_Depth);
 		CResultCertificate &Certificate = *MapResult;
@@ -1621,7 +1621,7 @@ namespace NMib::NNetwork
 			mp_bVerificationErrorsOccured = true;
 	}
 
-	void CSSLConnectionResult::f_LogCertificate(mint _Depth, NContainer::CByteVector const &_Certificate)
+	void CSSLConnectionResult::f_LogCertificate(umint _Depth, NContainer::CByteVector const &_Certificate)
 	{
 		CResultCertificate &Certificate = mp_Certificates[_Depth];
 		Certificate.m_Data = _Certificate;
@@ -1686,7 +1686,7 @@ namespace NMib::NNetwork
 			if (_Certificate.f_IsEmpty())
 				return false;
 
-			return (mp_Certificates[mint(0)].m_Data == _Certificate);
+			return (mp_Certificates[umint(0)].m_Data == _Certificate);
 		};
 
 		for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
@@ -1715,7 +1715,7 @@ namespace NMib::NNetwork
 
 		NContainer::CByteVector ConvertedCert = fg_ConvertX509ToBinary(pPeerCertificate);
 
-		bool bMatches = (mp_Certificates[mint(0)].m_Data == ConvertedCert);
+		bool bMatches = (mp_Certificates[umint(0)].m_Data == ConvertedCert);
 		return bMatches;
 	}
 
@@ -1770,7 +1770,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return NStr::CStr();
 
-		return CCertificate::fs_GetCertificateDescription(mp_Certificates[mint(0)].m_Data);
+		return CCertificate::fs_GetCertificateDescription(mp_Certificates[umint(0)].m_Data);
 	}
 
 	NStr::CStr CSSLConnectionResult::f_GetPeerCertificateInformation() const
@@ -1778,13 +1778,13 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return NStr::CStr();
 
-		return CCertificate::fs_GetCertificateInformation(mp_Certificates[mint(0)].m_Data);
+		return CCertificate::fs_GetCertificateInformation(mp_Certificates[umint(0)].m_Data);
 	}
 
 	NContainer::CByteVector CSSLConnectionResult::f_GetPeerCertificate() const
 	{
 		if (!mp_Certificates.f_IsEmpty())
-			return mp_Certificates[mint(0)].m_Data;
+			return mp_Certificates[umint(0)].m_Data;
 
 		return NContainer::CByteVector();
 	}
@@ -1803,7 +1803,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return NStr::CStr();
 
-		return CCertificate::fs_GetCertificateName(mp_Certificates[mint(0)].m_Data);
+		return CCertificate::fs_GetCertificateName(mp_Certificates[umint(0)].m_Data);
 	}
 
 	NStr::CStr CSSLConnectionResult::f_GetPeerCertificateDistinguishedName_RFC2253() const
@@ -1811,7 +1811,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return NStr::CStr();
 
-		return CCertificate::fs_GetCertificateDistinguishedName_RFC2253(mp_Certificates[mint(0)].m_Data);
+		return CCertificate::fs_GetCertificateDistinguishedName_RFC2253(mp_Certificates[umint(0)].m_Data);
 	}
 
 	NStr::CStr CSSLConnectionResult::f_GetPeerCertificateFingerprint() const
@@ -1819,7 +1819,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return NStr::CStr();
 
-		return CCertificate::fs_GetCertificateFingerprint(mp_Certificates[mint(0)].m_Data);
+		return CCertificate::fs_GetCertificateFingerprint(mp_Certificates[umint(0)].m_Data);
 	}
 
 	NStr::CStr CSSLConnectionResult::fp_GetLibraryStringForError(int _Error) const

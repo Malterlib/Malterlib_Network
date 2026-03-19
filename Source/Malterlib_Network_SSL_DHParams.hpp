@@ -7,7 +7,7 @@ namespace NMib::NNetwork
 {
 	namespace
 	{
-		DH *fg_BinToDH(uint8 const *_pParamP, uint8 const *_pParamG, mint _LengthP, mint _LengthG)
+		DH *fg_BinToDH(uint8 const *_pParamP, uint8 const *_pParamG, umint _LengthP, umint _LengthG)
 		{
 			DH *pDH = DH_new();
 

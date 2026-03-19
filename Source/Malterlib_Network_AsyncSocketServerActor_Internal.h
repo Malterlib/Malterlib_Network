@@ -27,12 +27,12 @@ namespace NMib::NNetwork
 			NContainer::TCVector<NConcurrency::TCActor<NAsyncSocket::CListenActor>> m_ListenSockets;
 		};
 
-		NContainer::TCMap<mint, CListen> m_Listens;
+		NContainer::TCMap<umint, CListen> m_Listens;
 
 		CAsyncSocketServerActor *m_pThis;
 		fp64 m_Timeout;
-		mint m_MaxMessageSize;
-		mint m_FragmentationSize;
-		mint m_ListenID = 0;
+		umint m_MaxMessageSize;
+		umint m_FragmentationSize;
+		umint m_ListenID = 0;
 	};
 }

@@ -8,7 +8,7 @@
 
 namespace NMib::NNetwork::NAsyncSocket
 {
-	CListenActor::CListenActor(NConcurrency::TCActor<CAsyncSocketServerActor> const& _Server, mint _MaxMesageSize, mint _FragmentationSize, fp64 _Timeout, mint _ListenID)
+	CListenActor::CListenActor(NConcurrency::TCActor<CAsyncSocketServerActor> const& _Server, umint _MaxMesageSize, umint _FragmentationSize, fp64 _Timeout, umint _ListenID)
 		: mp_Server(_Server)
 		, mp_MaxMessageSize(_MaxMesageSize)
 		, mp_FragmentationSize(_FragmentationSize)

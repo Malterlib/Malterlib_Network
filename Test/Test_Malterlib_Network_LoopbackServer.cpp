@@ -93,7 +93,7 @@ namespace
 																				try
 																				{
 																					uint8 Buffer[4096];
-																					while (mint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096))
+																					while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096))
 																					{
 																						if (_LoopbackType == ELoopbackType_Echo)
 																						{
@@ -102,7 +102,7 @@ namespace
 																					}
 																					while (!pSendBuffer->f_IsEmpty())
 																					{
-																						mint nSent = (*pSocketShared)->f_Send(pSendBuffer->f_GetArray(), pSendBuffer->f_GetLen());
+																						umint nSent = (*pSocketShared)->f_Send(pSendBuffer->f_GetArray(), pSendBuffer->f_GetLen());
 																						if (!nSent)
 																							break;
 																						pSendBuffer->f_Remove(0, nSent);
@@ -163,13 +163,13 @@ namespace
 																					try
 																					{
 																						uint8 Buffer[4096];
-																						while (mint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096))
+																						while (umint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096))
 																							pSendBufferMirror->f_Insert(Buffer, nBytes);
 																						if (*pSocketShared)
 																						{
 																							while (!pSendBufferMirror->f_IsEmpty())
 																							{
-																								mint nSent = (*pSocketShared)->f_Send(pSendBufferMirror->f_GetArray(), pSendBufferMirror->f_GetLen());
+																								umint nSent = (*pSocketShared)->f_Send(pSendBufferMirror->f_GetArray(), pSendBufferMirror->f_GetLen());
 																								if (!nSent)
 																									break;
 																								pSendBufferMirror->f_Remove(0, nSent);

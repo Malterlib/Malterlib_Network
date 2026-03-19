@@ -133,10 +133,10 @@ namespace NMib::NNetwork
 		CSSLConnectionResult() : mp_bTrustErrorsOccured(false), mp_bVerificationErrorsOccured(false), mp_bConnectionRefused(false) {}
 		~CSSLConnectionResult() {}
 
-		void f_LogError(mint _Depth, int _Error);
+		void f_LogError(umint _Depth, int _Error);
 		void f_LogMiscError(EMiscError _Error);
 		bool f_HasLoggedCertificateChain() const { return !mp_Certificates.f_IsEmpty(); }
-		void f_LogCertificate(mint _Depth, NContainer::CByteVector const &_Certificate);
+		void f_LogCertificate(umint _Depth, NContainer::CByteVector const &_Certificate);
 
 		NStr::CStr f_GetPeerCertificateName() const;
 		NStr::CStr f_GetPeerCertificateDistinguishedName_RFC2253() const;
@@ -166,7 +166,7 @@ namespace NMib::NNetwork
 		NStr::CStr fp_StringForError(int _Error) const;
 		NStr::CStr fp_GetLibraryStringForError(int _Error) const;
 
-		NContainer::TCMap<mint, CResultCertificate> mp_Certificates;
+		NContainer::TCMap<umint, CResultCertificate> mp_Certificates;
 		NContainer::TCMap<EMiscError, int> mp_MiscErrors;
 		NStr::CStr mp_SSLErrors;
 		bool mp_bTrustErrorsOccured;
@@ -230,8 +230,8 @@ namespace NMib::NNetwork
 		bool f_HandshakeInProgress() const;
 		bool f_Shutdown();
 
-		CSocketOperationResult f_Send(const void *_pData, mint _nLen);
-		CSocketOperationResult f_Receive(void *_pData, mint _nLen);
+		CSocketOperationResult f_Send(const void *_pData, umint _nLen);
+		CSocketOperationResult f_Receive(void *_pData, umint _nLen);
 
 		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 		CSSLConnectionResult &f_GetConnectionResult() { return mp_Result; }

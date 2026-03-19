@@ -23,12 +23,12 @@ namespace NMib::NNetwork
 	{
 	}
 
-	void CAsyncSocketServerActor::f_SetDefaultMaxMessageSize(mint _MaxMessageSize)
+	void CAsyncSocketServerActor::f_SetDefaultMaxMessageSize(umint _MaxMessageSize)
 	{
 		mp_pInternal->m_MaxMessageSize = _MaxMessageSize;
 	}
 
-	void CAsyncSocketServerActor::f_SetDefaultFragmentationSize(mint _FragmentationSize)
+	void CAsyncSocketServerActor::f_SetDefaultFragmentationSize(umint _FragmentationSize)
 	{
 		mp_pInternal->m_FragmentationSize = _FragmentationSize;
 	}
@@ -89,11 +89,11 @@ namespace NMib::NNetwork
 			Listen.m_fOnFailedConnection = fg_Move(_Callbacks.m_fFailedConnection);
 
 
-			mint nListenTo = _AddressesToListenTo.f_GetLen();
+			umint nListenTo = _AddressesToListenTo.f_GetLen();
 
 			Listen.m_ListenSockets.f_SetLen(nListenTo);
 
-			for (mint i = 0; i < nListenTo; ++i)
+			for (umint i = 0; i < nListenTo; ++i)
 			{
 				NNetwork::CNetAddress &Address = _AddressesToListenTo[i];
 
@@ -149,7 +149,7 @@ namespace NMib::NNetwork
 		-> NConcurrency::TCFuture<CListenResult>
 	{
 		NContainer::TCVector<NNetwork::CNetAddress> AddressesToListenTo;
-		for (mint i = 0; i < _nListen; ++i)
+		for (umint i = 0; i < _nListen; ++i)
 		{
 			NNetwork::CNetAddressTCPv4 AnyAddress;
 			AnyAddress.m_Port = _StartListen + i;
@@ -185,7 +185,7 @@ namespace NMib::NNetwork
 		co_return {};
 	}
 
-	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, mint _ListenID)
+	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, umint _ListenID)
 	{
 		self / [this, Connection = fg_Move(_Connection), _ListenID]() mutable -> NConcurrency::TCFuture<void>
 			{

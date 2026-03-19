@@ -86,13 +86,13 @@ pSocket->f_Connect
 
 // Send data
 char const *pMessage = "Hello Server";
-mint nBytesTransferred = pSocket->f_Send(pMessage, fg_StrLen(pMessage));
+umint nBytesTransferred = pSocket->f_Send(pMessage, fg_StrLen(pMessage));
 if (nBytesTransferred > 0)
 	DMibLog(Info, "Sent {} bytes", nBytesTransferred);
 
 // Receive data
 char Buffer[1024];
-mint nBytesTransferred = pSocket->f_Receive(Buffer, sizeof(Buffer));
+umint nBytesTransferred = pSocket->f_Receive(Buffer, sizeof(Buffer));
 if (nBytesTransferred > 0)
 	DMibLog(Info, "Received: {}", NStr::CStr(Buffer, nBytesTransferred));
 

@@ -21,12 +21,12 @@ namespace NMib::NNetwork
 	{
 	}
 
-	void CAsyncSocketClientActor::f_SetDefaultMaxMessageSize(mint _MaxMessageSize)
+	void CAsyncSocketClientActor::f_SetDefaultMaxMessageSize(umint _MaxMessageSize)
 	{
 		mp_MaxMessageSize = _MaxMessageSize;
 	}
 
-	void CAsyncSocketClientActor::f_SetDefaultFragmentationSize(mint _FragmentationSize)
+	void CAsyncSocketClientActor::f_SetDefaultFragmentationSize(umint _FragmentationSize)
 	{
 		mp_FragmentationSize = _FragmentationSize;
 	}

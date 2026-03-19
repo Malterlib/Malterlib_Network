@@ -18,11 +18,11 @@
 					System Specifics in NMib::NSys::NNetwork:
 						using CAddress = void*;
 
-						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
+						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, umint _nDataBytes);
 
 						::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
-						bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
-						CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, mint _nDataBytes);
+						bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
+						CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
 
 						CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
@@ -44,8 +44,8 @@
 
 						void fg_Close(void *_pSocket); // Closes the socket and connection
 
-						mint fg_Receive(void *_pSocket, void *_pData, mint _DataLen); // Returns bytes received
-						mint fg_Send(void *_pSocket, const void *_pData, mint _DataLen); // Returns bytes sent
+						umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen); // Returns bytes received
+						umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
 
 					// Socket Properties & State
 
@@ -337,16 +337,16 @@ namespace NMib::NSys::NNetwork
 // Addresses
 	using CAddress = void *;
 
-	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, mint _nDataBytes);
+	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, umint _nDataBytes);
 	CAddress fg_DuplicateAddress(CAddress _Address);
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
-	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, mint _nDataBytes);
-	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, mint _nDataBytes);
+	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
+	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
 
 	CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
-	mint fg_GetMaxUnixSocketNameLength();
+	umint fg_GetMaxUnixSocketNameLength();
 
 	void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
 	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
@@ -375,10 +375,10 @@ namespace NMib::NSys::NNetwork
 
 	void fg_Close(void *_pSocket); // Closes the socket and connection
 
-	mint fg_Receive(void *_pSocket, void *_pData, mint _DataLen); // Returns bytes received
-	mint fg_Send(void *_pSocket, const void *_pData, mint _DataLen); // Returns bytes sent
-	mint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, mint _DataLen); // Returns bytes sent
-	mint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, mint _DataLen); // Returns bytes received
+	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen); // Returns bytes received
+	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
+	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
+	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
 
 // Socket Properties & State
 
@@ -705,7 +705,7 @@ namespace NMib::NNetwork
 
 	struct CSocketOperationResult
 	{
-		mint m_nBytes = 0;
+		umint m_nBytes = 0;
 		bool m_bSentNetwork = false;
 		bool m_bReceivedNetwork = false;
 
@@ -911,28 +911,28 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GetCloseReason(mp_pSocket);
 		}
 
-		mint f_Receive(void *_pData, mint _DataLen)
+		umint f_Receive(void *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen);
 		}
 
-		mint f_Send(const void *_pData, mint _DataLen)
+		umint f_Send(const void *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_Send(mp_pSocket, _pData, _DataLen);
 		}
 
-		mint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen)
+		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_SendDatagram(mp_pSocket, _Address, _pData, _DataLen);
 		}
 
-		mint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen)
+		umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 

@@ -121,7 +121,7 @@ namespace NMib::NNetwork
 		return mp_Socket.f_GetCloseReason();
 	}
 
-	CSocketOperationResult CSocket_TCP::f_Receive(void *_pData, mint _DataLen)
+	CSocketOperationResult CSocket_TCP::f_Receive(void *_pData, umint _DataLen)
 	{
 		CSocketOperationResult Result;
 		Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen);
@@ -130,7 +130,7 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
-	CSocketOperationResult CSocket_TCP::f_Send(const void *_pData, mint _DataLen)
+	CSocketOperationResult CSocket_TCP::f_Send(const void *_pData, umint _DataLen)
 	{
 		if (!_DataLen)
 			return {};
@@ -141,12 +141,12 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
-	mint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen)
+	umint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
 	{
 		return mp_Socket.f_SendDatagram(_Address, _pData, _DataLen);
 	}
 
-	mint CSocket_TCP::f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen)
+	umint CSocket_TCP::f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen)
 	{
 		return mp_Socket.f_ReceiveDatagram(_Address, _pData, _DataLen);
 	}

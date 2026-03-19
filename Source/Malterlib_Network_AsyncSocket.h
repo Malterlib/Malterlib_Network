@@ -66,7 +66,7 @@ namespace NMib::NNetwork
 	public:
 		struct CInternal;
 
-		CAsyncSocketActor(bool _bClient, mint _MaxMessageSize, mint _FragmentationSize, fp64 _Timeout);
+		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout);
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
@@ -183,8 +183,8 @@ namespace NMib::NNetwork
 		CAsyncSocketClientActor();
 		~CAsyncSocketClientActor();
 
-		void f_SetDefaultMaxMessageSize(mint _MaxMessageSize);
-		void f_SetDefaultFragmentationSize(mint _FragmentationSize);
+		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
+		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 
 		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_Connect
@@ -218,8 +218,8 @@ namespace NMib::NNetwork
 		};
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;
-		mint mp_MaxMessageSize;
-		mint mp_FragmentationSize;
+		umint mp_MaxMessageSize;
+		umint mp_FragmentationSize;
 		fp64 mp_Timeout;
 	};
 
@@ -262,14 +262,14 @@ namespace NMib::NNetwork
 			)
 		;
 
-		void f_SetDefaultMaxMessageSize(mint _MaxMessageSize);
-		void f_SetDefaultFragmentationSize(mint _FragmentationSize);
+		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
+		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
-		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, mint _ListenID);
+		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, umint _ListenID);
 
 	public:
 		struct CInternal;

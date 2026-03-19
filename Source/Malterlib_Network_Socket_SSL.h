@@ -68,10 +68,10 @@ namespace NMib::NNetwork
 		virtual void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual ENetTCPState f_GetState() override;
 		virtual NStr::CStr f_GetCloseReason() override;
-		virtual CSocketOperationResult f_Receive(void *_pData, mint _DataLen) override;
-		virtual CSocketOperationResult f_Send(const void *_pData, mint _DataLen) override;
-		virtual mint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen) override;
-		virtual mint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen) override;
+		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override;
+		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override;
+		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) override;
+		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
 		virtual uint32 f_GetListenPort() const override;
 		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;

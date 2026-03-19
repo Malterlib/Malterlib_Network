@@ -75,7 +75,7 @@ namespace NMib::NNetwork
 	{
 		using namespace NStr;
 
-		mint MaxLength = NSys::NNetwork::fg_GetMaxUnixSocketNameLength();
+		umint MaxLength = NSys::NNetwork::fg_GetMaxUnixSocketNameLength();
 		if (_WantedPath.f_GetLen() <= aint(MaxLength))
 			return _WantedPath;
 

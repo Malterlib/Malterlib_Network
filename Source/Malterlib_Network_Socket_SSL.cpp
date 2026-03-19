@@ -198,7 +198,7 @@ namespace NMib::NNetwork
 		}
 	}
 
-	CSocketOperationResult CSocket_SSL::f_Receive(void *_pData, mint _DataLen)
+	CSocketOperationResult CSocket_SSL::f_Receive(void *_pData, umint _DataLen)
 	{
 		if (!fp_HandleHandshake())
 			return {};
@@ -215,7 +215,7 @@ namespace NMib::NNetwork
 		return Return;
 	}
 
-	CSocketOperationResult CSocket_SSL::f_Send(const void *_pData, mint _DataLen)
+	CSocketOperationResult CSocket_SSL::f_Send(const void *_pData, umint _DataLen)
 	{
 		if (mp_State == EState_ShutdownSocket)
 			return {};
@@ -240,12 +240,12 @@ namespace NMib::NNetwork
 		return Return;
 	}
 
-	mint CSocket_SSL::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, mint _DataLen)
+	umint CSocket_SSL::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
 		return 0;
 	}
-	mint CSocket_SSL::f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, mint _DataLen)
+	umint CSocket_SSL::f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
 		return 0;
