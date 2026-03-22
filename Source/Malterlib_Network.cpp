@@ -114,6 +114,7 @@ namespace NMib::NNetwork
 			NMib::NThread::CEventAutoReset m_Event;
 			NAtomic::TCAtomic<bool> m_bEventAbandonned = false;
 			NAtomic::TCAtomic<bool> m_bConnected = false;
+			NAtomic::TCAtomic<bool> m_bClosed = false;
 		};
 
 		NStorage::TCSharedPointer<CState> pState = fg_Construct();
@@ -135,6 +136,12 @@ namespace NMib::NNetwork
 						pState->m_Event.f_Signal();
 						return;
 					}
+					if (!pState->m_bEventAbandonned && (_StateAdded & ENetTCPState_Closed))
+					{
+						pState->m_bClosed = true;
+						pState->m_Event.f_Signal();
+						return;
+					}
 					if (fOnStateChange)
 						fOnStateChange(_StateAdded);
 				}
@@ -153,8 +160,10 @@ namespace NMib::NNetwork
 
 		NTime::CStopwatch Stopwatch(true);
 
-		while (!pState->m_bConnected && Stopwatch.f_GetTime() < _Timeout)
+		while (!pState->m_bConnected)
 		{
+			if (pState->m_bClosed)
+				DMibErrorNet(NMib::NSys::NNetwork::fg_GetCloseReason(mp_pSocket));
 			fp64 TimeLeft = _Timeout - Stopwatch.f_GetTime();
 			if (TimeLeft <= 0)
 				DMibErrorNet("Timed out waiting for connection");

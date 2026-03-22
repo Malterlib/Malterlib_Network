@@ -38,6 +38,7 @@
 
 #include <Mib/Core/Core>
 #include <Mib/Time/Timeout>
+#include <Mib/Test/Exception>
 
 #include "Test_Malterlib_Network.h"
 
@@ -123,6 +124,40 @@ public:
 			DMibExpectTrue(Resolved.f_Get(Return));
 			DMibExpect(fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 		}
+	}
+
+	template <typename t_CNetAddress, ENetAddressType t_Type>
+	void f_TestConnectRefused(uint16 _Port)
+	{
+		CNetAddress Address = CSocket::fs_ResolveAddress("localhost", t_Type);
+		DMibExpectFalse(Address.f_IsEmpty());
+
+		if (Address.f_IsEmpty())
+			return;
+
+		{
+			t_CNetAddress Return;
+			DMibExpectTrue(Address.f_Get(Return));
+			Return.m_Port = _Port;
+			Address.f_Set(Return);
+		}
+
+		CSocket Socket;
+		DMibExpectException
+			(
+				Socket.f_Connect(Address)
+#if defined(DPlatformFamily_Linux)
+				, DMibImpExceptionInstance(CExceptionNet, "Connection refused (111)")
+#elif defined(DPlatformFamily_macOS)
+				, DMibImpExceptionInstance(CExceptionNet, "Connection refused (61)")
+#elif defined(DPlatformFamily_Windows)
+				, DMibImpExceptionInstance(CExceptionNet, "10061 No connection could be made because the target machine actively refused it.")
+#else
+				, DMibImpExceptionInstance(CExceptionNet, "Implement this")
+#endif
+			)
+		;
+		DMibExpectFalse(Socket.f_IsValid());
 	}
 
 	template <typename t_CNetAddress, ENetAddressType _Type>
@@ -752,6 +787,14 @@ public:
 			{
 				DMibTestPath("AsyncResolve_TCPv6");
 				f_TestAsyncResolve("localhost", Localhost_TCPv6);
+			}
+			{
+				DMibTestPath("ConnectRefused_TCPv4");
+				f_TestConnectRefused<CNetAddressTCPv4, ENetAddressType_TCPv4>(20681);
+			}
+			{
+				DMibTestPath("ConnectRefused_TCPv6");
+				f_TestConnectRefused<CNetAddressTCPv6, ENetAddressType_TCPv6>(20681);
 			}
 			{
 				DMibTestPath("Connect_TCPv4");
