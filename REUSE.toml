@@ -1,0 +1,7 @@
+version = 1
+
+[[annotations]]
+path = ["ImportCache/**", "**/ImportCache/**", "IC/**", "**/IC/**", "**.MRepo", ".gitignore", "**/.gitignore", "**.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "Unbroken AB"
+SPDX-License-Identifier = "Apache-2.0 WITH LLVM-exception"

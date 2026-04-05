@@ -1,3 +1,5 @@
+// Copyright © Unbroken AB
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Network_Socket_TCP.h"
 
