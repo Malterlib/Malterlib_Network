@@ -70,6 +70,7 @@ namespace NMib::NNetwork
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
+		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname);
 
 		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CIOByteVector> _pMessage, uint32 _Priority);
 		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);

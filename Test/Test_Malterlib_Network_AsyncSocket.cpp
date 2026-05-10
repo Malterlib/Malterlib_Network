@@ -4,9 +4,11 @@
 #include <Mib/Core/Core>
 #include <Mib/Test/Test>
 #include <Mib/Network/AsyncSocket>
+#include <Mib/Network/Sockets/TCP>
 #include <Mib/Network/Sockets/SSL>
 #include <Mib/Cryptography/Certificate>
 #include <Mib/Cryptography/RandomID>
+#include <Mib/Concurrency/Actor/Timer>
 #include <Mib/Concurrency/DistributedActorTestHelpers>
 
 using namespace NMib::NNetwork;
@@ -685,6 +687,218 @@ public:
 		};
 	}
 
+	void fp_TestUpgradeToSSL()
+	{
+		DMibTestPath("Upgrade To SSL");
+
+		CActorRunLoopTestHelper RunLoopHelper;
+
+		CSSLSettings ServerSettings;
+		CCertificateOptions Options;
+		Options.m_CommonName = "Malterlib test Upgrade";
+		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+		Options.m_KeySetting = gc_TestTestKeySetting;
+		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+		TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+		CSSLSettings ClientSettings;
+		ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+		FVirtualSocketFactory ServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+		FVirtualSocketFactory ClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+
+		struct CUpgradeState
+		{
+			CMutual m_Lock;
+			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+			CStr m_ServerBuffer;
+			CStr m_ClientBuffer;
+			CStr m_Response;
+			bool m_bServerUpgraded = false;
+			bool m_bClientUpgraded = false;
+		};
+
+		TCSharedPointerSupportWeak<CUpgradeState> pState = fg_Construct();
+		TCWeakPointer<CUpgradeState> pStateWeak = pState;
+		auto fTextBuffer = [](CStr const &_Text)
+			{
+				TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
+				pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+				return pBuffer;
+			}
+		;
+
+		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto CleanupServer = g_OnScopeExit / [&]
+			{
+				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			}
+		;
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				CAsyncSocketCallbacks SocketCallbacks;
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+					{
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+							co_return {};
+
+						bool bStartTLS = false;
+						bool bEncryptedMessage = false;
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_ServerBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+							bStartTLS = pState->m_ServerBuffer == "STARTTLS";
+							bEncryptedMessage = pState->m_ServerBuffer == "Encrypted";
+							if (bStartTLS || bEncryptedMessage)
+								pState->m_ServerBuffer.f_Clear();
+						}
+
+						if (bStartTLS)
+						{
+							(
+								NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, ServerSSLFactory, fTextBuffer]() -> TCFuture<void>
+								{
+									TCActor<CAsyncSocketActor> ServerSocket;
+									NTime::CStopwatch Timeout;
+									Timeout.f_Start();
+									while (!ServerSocket)
+									{
+										{
+											DMibLock(pState->m_Lock);
+											ServerSocket = pState->m_ServerSocket.f_GetActor();
+										}
+
+										if (Timeout.f_GetTime() > g_Timeout)
+											co_return DMibErrorInstance("Timed out waiting for server socket accept");
+
+										if (!ServerSocket)
+											co_await NConcurrency::fg_Timeout(0.001);
+									}
+
+									co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("S"), 0);
+									co_await ServerSocket(&CAsyncSocketActor::f_UpgradeSocket, ServerSSLFactory, CStr());
+									DMibLock(pState->m_Lock);
+									pState->m_bServerUpgraded = true;
+									co_return {};
+								}
+							).f_DiscardResult();
+						}
+						else if (bEncryptedMessage)
+							pState->m_ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("EncryptedResponse"), 0).f_DiscardResult();
+
+						co_return {};
+					}
+				;
+
+				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+				if (auto pState = pStateWeak.f_Lock())
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_ServerSocket = fg_Move(Socket);
+				}
+				co_return {};
+			}
+		;
+		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+			{
+				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+			}
+		;
+
+		CNetAddressTCPv4 ListenAddress;
+		ListenAddress.f_SetLocalhost();
+		ListenAddress.m_Port = 10503;
+		auto ListenResult = ServerActor(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector<CNetAddress>(ListenAddress), ENetFlag_None, fg_Move(ServerCallbacks), CSocket_TCP::fs_GetFactory()).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		auto CleanupListen = g_OnScopeExit / [&]
+			{
+				ListenResult.m_Subscription.f_Clear();
+			}
+		;
+
+		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto CleanupClient = g_OnScopeExit / [&]
+			{
+				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			}
+		;
+
+		CAsyncSocketNewClientConnection NewClientConnection = ClientActor(&CAsyncSocketClientActor::f_Connect, CStr("localhost"), CStr(), ENetAddressType_TCPv4, uint16(10503), CSocket_TCP::fs_GetFactory()).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		CAsyncSocketCallbacks ClientCallbacks;
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+			{
+				auto pState = pStateWeak.f_Lock();
+				if (!pState)
+					co_return {};
+
+				bool bUpgrade = false;
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_ClientBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+					bUpgrade = pState->m_ClientBuffer == "S";
+					if (bUpgrade)
+						pState->m_ClientBuffer.f_Clear();
+					else
+						pState->m_Response = pState->m_ClientBuffer;
+				}
+
+				if (bUpgrade)
+				{
+					(NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, ClientSSLFactory, fTextBuffer]() -> TCFuture<void>
+						{
+							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, ClientSSLFactory, CStr("localhost"));
+							{
+								DMibLock(pState->m_Lock);
+								pState->m_bClientUpgraded = true;
+							}
+							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Encrypted"), 0);
+							co_return {};
+						}
+					) > NConcurrency::g_DiscardResult;
+				}
+				co_return {};
+			}
+		;
+
+		auto ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		pState->m_ClientSocket = fg_Move(ClientSocket);
+		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		bool bTimedOut = false;
+		NTime::CStopwatch Stopwatch;
+		Stopwatch.f_Start();
+		while (true)
+		{
+			{
+				DMibLock(pState->m_Lock);
+				if (pState->m_bServerUpgraded && pState->m_bClientUpgraded && pState->m_Response == "EncryptedResponse")
+					break;
+			}
+			RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+			if (Stopwatch.f_GetTime() > g_Timeout)
+			{
+				bTimedOut = true;
+				break;
+			}
+		}
+
+		DMibExpectFalse(bTimedOut);
+		{
+			DMibLock(pState->m_Lock);
+			DMibExpect(pState->m_bServerUpgraded, ==, true);
+			DMibExpect(pState->m_bClientUpgraded, ==, true);
+			DMibExpect(pState->m_Response, ==, CStr("EncryptedResponse"));
+		}
+	}
+
 	void f_DoTests()
 	{
 		DMibTestSuite("Tests")
@@ -734,6 +948,7 @@ public:
 					)
 				;
 			}
+			fp_TestUpgradeToSSL();
 			{
 				DMibTestPath("SSL Client Certificate");
 				fp_Test

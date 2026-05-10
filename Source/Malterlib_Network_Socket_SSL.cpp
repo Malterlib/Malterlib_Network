@@ -143,7 +143,20 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
-		DMibErrorNet("Not implemented");
+		mp_fOnStateChange = fg_Move(_fOnStateChange);
+		mp_Socket.f_InheritHandle2(_pSocketHandle, fp_SharedOnStateChange());
+		if (!mp_Socket.f_IsValid())
+			return;
+
+		if (mp_pSSLContext->f_IsClientContext())
+			mp_State = EState_Connected;
+		else if (mp_pSSLContext->f_IsServerContext())
+			mp_State = EState_Accept;
+		else
+			DMibErrorNet("SSL context is neither client nor server context when inheriting socket");
+
+		mp_SSLConnection.f_GiveSocket(mp_Socket.f_GetOSSocket());
+		fp_HandleHandshake();
 	}
 
 	void *CSocket_SSL::f_GiveUpForInherit()

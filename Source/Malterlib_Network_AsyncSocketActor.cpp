@@ -93,6 +93,8 @@ namespace NMib::NNetwork
 
 			if (m_pClosePromise)
 				m_pClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
+			if (m_pUpgradeSocketPromise)
+				m_pUpgradeSocketPromise->f_SetException(DMibErrorInstance("Abandoned socket upgrade"));
 		}
 
 		void f_OnReceivedData();
@@ -137,6 +139,7 @@ namespace NMib::NNetwork
 		CNotifyClose m_DeferredNotifyClose;
 
 		NConcurrency::TCPromise<CFinishConnectionResult> m_FinishConnectionPromise;
+		NStorage::TCUniquePointer<NConcurrency::TCPromise<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>>> m_pUpgradeSocketPromise;
 
 		NConcurrency::CActorSubscription m_TimeoutTimerSubscription;
 		NTime::CStopwatch m_TimeoutReceivedData;
@@ -299,6 +302,50 @@ namespace NMib::NNetwork
 		}
 
 		return g_Void;
+	}
+
+	NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname)
+	{
+		if (f_IsDestroyed())
+			co_return DMibErrorInstance("Destroying socket");
+		if (!_SocketFactory)
+			co_return DMibErrorInstance("Socket upgrade requires a socket factory");
+
+		auto &Internal = *mp_pInternal;
+		if (!Internal.m_pSocket || Internal.m_State != EState_Connected)
+			co_return DMibErrorInstance("Socket upgrade requires a connected socket");
+		if (!Internal.m_IncomingData.f_IsEmpty() || !Internal.m_OutgoingData.f_IsEmpty() || !Internal.m_PendingMessages.f_IsEmpty() || !Internal.m_OutgoingDataPromises.empty())
+			co_return DMibErrorInstance("Socket upgrade requires empty incoming and outgoing buffers");
+		if (Internal.m_pUpgradeSocketPromise)
+			co_return DMibErrorInstance("Socket upgrade already in progress");
+
+		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _SocketFactory(_Hostname);
+		void *pSocketHandle = Internal.m_pSocket->f_GiveUpForInherit();
+		Internal.m_pSocket.f_Clear();
+
+		NConcurrency::TCActor<CAsyncSocketActor> ThisActor = fg_ThisActor(this);
+		pNewSocket->f_InheritHandle
+			(
+				pSocketHandle
+				, [WeakThis = ThisActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
+				{
+					auto This = WeakThis.f_Lock();
+					if (!This)
+						return;
+					This.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
+				}
+			)
+		;
+
+		Internal.m_pSocket = fg_Move(pNewSocket);
+		Internal.m_State = EState_None;
+		Internal.m_pUpgradeSocketPromise = fg_Construct();
+		auto Future = Internal.m_pUpgradeSocketPromise->f_Future();
+		fp_CheckHandshake(Internal);
+
+		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
+
+		co_return co_await fg_Move(Future);
 	}
 
 	NConcurrency::TCFuture<CAsyncSocketActor::CCloseInfo> CAsyncSocketActor::f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason)
@@ -541,6 +588,11 @@ namespace NMib::NNetwork
 				Result.m_ConnectionInfo.m_Error = _Reason;
 
 				Internal.m_FinishConnectionPromise.f_SetResult(fg_Move(Result));
+			}
+			if (Internal.m_pUpgradeSocketPromise)
+			{
+				Internal.m_pUpgradeSocketPromise->f_SetException(DMibErrorInstance(_Reason));
+				Internal.m_pUpgradeSocketPromise.f_Clear();
 			}
 		}
 
@@ -790,7 +842,15 @@ namespace NMib::NNetwork
 			return;
 
 		_Internal.m_State = EState_Connected;
-		if (!_Internal.m_FinishConnectionPromise.f_IsSet())
+		if (_Internal.m_pUpgradeSocketPromise)
+		{
+			NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo> pSocketInfo;
+			if (_Internal.m_pSocket)
+				pSocketInfo = _Internal.m_pSocket->f_GetConnectionInfo();
+			_Internal.m_pUpgradeSocketPromise->f_SetResult(fg_Move(pSocketInfo));
+			_Internal.m_pUpgradeSocketPromise.f_Clear();
+		}
+		else if (!_Internal.m_FinishConnectionPromise.f_IsSet())
 		{
 			CFinishConnectionResult Result;
 			Result.m_Result = EFinishConnectionResult_Success;
