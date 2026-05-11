@@ -879,6 +879,7 @@ namespace NMib::NNetwork
 			: mp_pSSL(_pSSL)
 			, mp_pSession(mp_pContext->fp_CreateSession())
 			, mp_pContext(_pContext)
+			, mp_Hostname(_Hostname)
 			, mp_State(EState_None)
 			, mp_bConnected(false)
 			, mp_AuthenticationResultCallback(fg_Move(_AuthenticationResultCallback))
