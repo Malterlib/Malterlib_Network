@@ -7,6 +7,7 @@
 #include <Mib/Concurrency/ConcurrencyManager>
 #include <Mib/Concurrency/ActorInterface>
 #include <Mib/Concurrency/ActorFunctor>
+#include <Mib/Container/PagedByteVector>
 #include <Mib/Network/Socket>
 #include <Mib/Memory/Allocators/Secure>
 #include <Mib/Network/ResolveActor>
@@ -28,6 +29,22 @@ namespace NMib::NNetwork
 		EAsyncSocketCloseOrigin_Local
 		, EAsyncSocketCloseOrigin_Remote
 	};
+
+	enum EAsyncSocketUpgradeCheckResult : uint16
+	{
+		EAsyncSocketUpgradeCheckResult_MoreDataNeeded = 0
+		, EAsyncSocketUpgradeCheckResult_Upgrade
+		, EAsyncSocketUpgradeCheckResult_UpgradeWillNeverHappen
+	};
+
+	struct CAsyncSocketUpgradeCheckResult
+	{
+		EAsyncSocketUpgradeCheckResult m_Result = EAsyncSocketUpgradeCheckResult_MoreDataNeeded;
+		umint m_nBytesConsumed = 0;
+	};
+
+	using FAsyncSocketUpgradeCheck = NFunction::TCFunctionMovable<CAsyncSocketUpgradeCheckResult (NContainer::CPagedByteVector const &_Message)>;
+	using FAsyncSocketUpgradeCheckFactory = NFunction::TCFunction<FAsyncSocketUpgradeCheck ()>;
 
 	namespace NAsyncSocket
 	{
@@ -66,7 +83,7 @@ namespace NMib::NNetwork
 	public:
 		struct CInternal;
 
-		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout);
+		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
@@ -104,6 +121,7 @@ namespace NMib::NNetwork
 		void fp_StateAdded(NNetwork::ENetTCPState _StateAdded);
 		void fp_Disconnect(EAsyncSocketStatus _Status, NStr::CStr const &_Reason, bool _bFatal, EAsyncSocketCloseOrigin _Origin);
 		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket);
+		void fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
 		void fp_ProcessIncoming();
 		bool fp_ProcessIncomingMessage();
 		void fp_ProcessState(NNetwork::ENetTCPState _StateAdded);
@@ -187,6 +205,7 @@ namespace NMib::NNetwork
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
+		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
 		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_Connect
 			(
@@ -222,6 +241,7 @@ namespace NMib::NNetwork
 		umint mp_MaxMessageSize;
 		umint mp_FragmentationSize;
 		fp64 mp_Timeout;
+		FAsyncSocketUpgradeCheckFactory mp_fCheckUpgradeFactory;
 	};
 
 	struct CAsyncSocketServerCallbacks
@@ -266,6 +286,7 @@ namespace NMib::NNetwork
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
+		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy() override;

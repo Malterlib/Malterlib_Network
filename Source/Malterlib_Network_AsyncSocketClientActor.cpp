@@ -36,6 +36,11 @@ namespace NMib::NNetwork
 		mp_Timeout = _Timeout;
 	}
 
+	void CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory)
+	{
+		mp_fCheckUpgradeFactory = _fCheckUpgradeFactory;
+	}
+
 	NConcurrency::TCFuture<void> CAsyncSocketClientActor::fp_Destroy()
 	{
 		mp_PendingConnects.f_Clear();
@@ -188,8 +193,12 @@ namespace NMib::NNetwork
 								NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = fg_Move(pPending->m_pSocket);
 								CleanupPending.f_Clear();
 
+								FAsyncSocketUpgradeCheck fCheckUpgrade;
+								if (mp_fCheckUpgradeFactory)
+									fCheckUpgrade = mp_fCheckUpgradeFactory();
+
 								NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor
-									= NConcurrency::fg_ConstructActor<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout)
+									= NConcurrency::fg_ConstructActor<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fCheckUpgrade))
 								;
 
 								auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise]() mutable

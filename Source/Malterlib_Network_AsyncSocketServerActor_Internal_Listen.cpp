@@ -8,11 +8,20 @@
 
 namespace NMib::NNetwork::NAsyncSocket
 {
-	CListenActor::CListenActor(NConcurrency::TCActor<CAsyncSocketServerActor> const& _Server, umint _MaxMesageSize, umint _FragmentationSize, fp64 _Timeout, umint _ListenID)
-		: mp_Server(_Server)
+	CListenActor::CListenActor
+		(
+			NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
+			, umint _MaxMesageSize
+			, umint _FragmentationSize
+			, fp64 _Timeout
+			, NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> const &_pCheckUpgradeFactory
+			, umint _ListenID
+		)
+		: mp_Timeout(_Timeout)
+		, mp_Server(_Server)
 		, mp_MaxMessageSize(_MaxMesageSize)
 		, mp_FragmentationSize(_FragmentationSize)
-		, mp_Timeout(_Timeout)
+		, mp_pCheckUpgradeFactory(_pCheckUpgradeFactory)
 		, mp_ListenID(_ListenID)
 	{
 	}
@@ -50,7 +59,8 @@ namespace NMib::NNetwork::NAsyncSocket
 			{
 				try
 				{
-					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = NConcurrency::fg_ConstructActor<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout);
+					FAsyncSocketUpgradeCheck fEmptyCheckUpgrade;
+					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = NConcurrency::fg_ConstructActor<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade));
 					NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
 					NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
 						(
@@ -66,7 +76,11 @@ namespace NMib::NNetwork::NAsyncSocket
 					if (!pAcceptedSocket)
 						break;
 
-					ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pAcceptedSocket)).f_DiscardResult();
+					FAsyncSocketUpgradeCheck fCheckUpgrade;
+					if (mp_pCheckUpgradeFactory && *mp_pCheckUpgradeFactory)
+						fCheckUpgrade = (*mp_pCheckUpgradeFactory)();
+
+					ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocketAndUpgradeCheck>(fg_Move(pAcceptedSocket), fg_Move(fCheckUpgrade)).f_DiscardResult();
 
 					auto Server = mp_Server.f_Lock();
 

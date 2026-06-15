@@ -36,6 +36,13 @@ namespace NMib::NNetwork
 			, EIncomingPageSize = 2048
 		};
 
+		enum EIncomingDataResult
+		{
+			EIncomingDataResult_Continue
+			, EIncomingDataResult_ProcessIncoming
+			, EIncomingDataResult_StopReceiving
+		};
+
 		struct COutgoingMessage
 		{
 			~COutgoingMessage()
@@ -74,10 +81,20 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketActor::CInternal
 	{
-		CInternal(CAsyncSocketActor *_pThis, bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout)
+		CInternal
+			(
+				CAsyncSocketActor *_pThis
+				, bool _bClient
+				, umint _MaxMessageSize
+				, umint _FragmentationSize
+				, fp64 _Timeout
+				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
+			)
 			: m_pThis(_pThis)
 			, m_IncomingData(EIncomingPageSize)
+			, m_UpgradeCheckData(EIncomingPageSize)
 			, m_OutgoingData(EOutgoingPageSize)
+			, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
 			, m_bClient(_bClient)
 			, m_MaxMessageSize(_MaxMessageSize)
 			, m_FramentationSize(_FragmentationSize)
@@ -107,6 +124,10 @@ namespace NMib::NNetwork
 		void f_ShutdownDone(NStr::CStr const &_Error);
 
 		void f_HandleDataMessage(NContainer::CIOByteVector &&_Data);
+		EIncomingDataResult f_CheckIncomingData();
+		EIncomingDataResult f_HandleIncomingData(uint8 const *_pData, umint _nBytes);
+		void f_MoveUpgradeCheckDataToIncoming(umint _nBytes);
+		void f_MoveAllUpgradeCheckDataToIncoming();
 		void f_SendMessage(uint8 const *_pData, umint _nBytes);
 		void f_FinishConnection();
 
@@ -123,6 +144,8 @@ namespace NMib::NNetwork
 		EState m_State = EState_None;
 
 		NContainer::CPagedByteVector m_IncomingData;
+		NContainer::CPagedByteVector m_UpgradeCheckData;
+		FAsyncSocketUpgradeCheck m_fCheckUpgrade;
 		NContainer::CPagedByteVector m_OutgoingData;
 		std::deque<COutgoingDataPromise> m_OutgoingDataPromises;
 
@@ -144,6 +167,7 @@ namespace NMib::NNetwork
 		NConcurrency::CActorSubscription m_TimeoutTimerSubscription;
 		NTime::CStopwatch m_TimeoutReceivedData;
 		NTime::CStopwatch m_TimeoutSentData;
+		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
 
 		fp64 m_Timeout = 0.0;
 		umint m_TimeoutTimerSubscriptionSequence = 0;
@@ -155,6 +179,7 @@ namespace NMib::NNetwork
 		bool m_bClient = false;
 		bool m_bOnCloseCalled = false;
 		bool m_bDeferringCallbacks = true;
+		bool m_bUpgradeRequired = false;
 		bool m_bShutdownCalled = false;
 #if DMibConfig_Tests_Enable
 		bool m_bDebugNoProcessing = false;
@@ -164,8 +189,8 @@ namespace NMib::NNetwork
 #endif
 	};
 
-	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout)
-		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout))
+	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout, fg_Move(_fCheckUpgrade)))
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.f_SetupTimeout();
@@ -314,12 +339,17 @@ namespace NMib::NNetwork
 		auto &Internal = *mp_pInternal;
 		if (!Internal.m_pSocket || Internal.m_State != EState_Connected)
 			co_return DMibErrorInstance("Socket upgrade requires a connected socket");
-		if (!Internal.m_IncomingData.f_IsEmpty() || !Internal.m_OutgoingData.f_IsEmpty() || !Internal.m_PendingMessages.f_IsEmpty() || !Internal.m_OutgoingDataPromises.empty())
+		if (!Internal.m_bUpgradeRequired)
+			co_return DMibErrorInstance("Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return EAsyncSocketUpgradeCheckResult_Upgrade");
+		if (!Internal.m_IncomingData.f_IsEmpty() || !Internal.m_UpgradeCheckData.f_IsEmpty() || !Internal.m_OutgoingData.f_IsEmpty() || !Internal.m_PendingMessages.f_IsEmpty() || !Internal.m_OutgoingDataPromises.empty())
 			co_return DMibErrorInstance("Socket upgrade requires empty incoming and outgoing buffers");
 		if (Internal.m_pUpgradeSocketPromise)
 			co_return DMibErrorInstance("Socket upgrade already in progress");
 
 		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _SocketFactory(_Hostname);
+		Internal.m_bUpgradeRequired = false;
+		auto DeferredTCPState = Internal.m_DeferredTCPState;
+		Internal.m_DeferredTCPState = NNetwork::ENetTCPState_None;
 		void *pSocketHandle = Internal.m_pSocket->f_GiveUpForInherit();
 		Internal.m_pSocket.f_Clear();
 
@@ -342,6 +372,8 @@ namespace NMib::NNetwork
 		Internal.m_pUpgradeSocketPromise = fg_Construct();
 		auto Future = Internal.m_pUpgradeSocketPromise->f_Future();
 		fp_CheckHandshake(Internal);
+		if (DeferredTCPState)
+			fp_ProcessState(DeferredTCPState);
 
 		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
 
@@ -778,10 +810,90 @@ namespace NMib::NNetwork
 			m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Construct(fg_Move(_Data)));
 	}
 
+	EIncomingDataResult CAsyncSocketActor::CInternal::f_HandleIncomingData(uint8 const *_pData, umint _nBytes)
+	{
+		if (!_nBytes)
+			return EIncomingDataResult_Continue;
+
+		if (!m_fCheckUpgrade)
+		{
+			m_IncomingData.f_InsertBack(_pData, _nBytes);
+			return EIncomingDataResult_Continue;
+		}
+
+		m_UpgradeCheckData.f_InsertBack(_pData, _nBytes);
+
+		return f_CheckIncomingData();
+	}
+
+	EIncomingDataResult CAsyncSocketActor::CInternal::f_CheckIncomingData()
+	{
+		if (!m_fCheckUpgrade)
+			return EIncomingDataResult_Continue;
+
+		CAsyncSocketUpgradeCheckResult const CheckResult = m_fCheckUpgrade(m_UpgradeCheckData);
+		if (CheckResult.m_nBytesConsumed > m_UpgradeCheckData.f_GetLen())
+			DMibError("Async socket upgrade check consumed more bytes than were available");
+
+		switch (CheckResult.m_Result)
+		{
+		case EAsyncSocketUpgradeCheckResult_MoreDataNeeded:
+			{
+				f_MoveUpgradeCheckDataToIncoming(CheckResult.m_nBytesConsumed);
+
+				return CheckResult.m_nBytesConsumed ? EIncomingDataResult_ProcessIncoming : EIncomingDataResult_Continue;
+			}
+		case EAsyncSocketUpgradeCheckResult_Upgrade:
+			{
+				f_MoveUpgradeCheckDataToIncoming(CheckResult.m_nBytesConsumed);
+				m_fCheckUpgrade.f_Clear();
+				m_bUpgradeRequired = true;
+
+				return EIncomingDataResult_StopReceiving;
+			}
+		case EAsyncSocketUpgradeCheckResult_UpgradeWillNeverHappen:
+			{
+				f_MoveUpgradeCheckDataToIncoming(CheckResult.m_nBytesConsumed);
+				m_fCheckUpgrade.f_Clear();
+				f_MoveAllUpgradeCheckDataToIncoming();
+
+				return !m_IncomingData.f_IsEmpty() ? EIncomingDataResult_ProcessIncoming : EIncomingDataResult_Continue;
+			}
+		}
+
+		DMibError("Invalid async socket upgrade check result");
+	}
+
+	void CAsyncSocketActor::CInternal::f_MoveUpgradeCheckDataToIncoming(umint _nBytes)
+	{
+		if (!_nBytes)
+			return;
+
+		DMibCheck(_nBytes <= m_UpgradeCheckData.f_GetLen());
+
+		umint const nBytes = _nBytes;
+		m_UpgradeCheckData.f_ReadFront
+			(
+				nBytes
+				, [&](umint _iStart, uint8 const *_pData, umint _nChunkBytes) -> bool
+				{
+					m_IncomingData.f_InsertBack(_pData, _nChunkBytes);
+					return _iStart + _nChunkBytes < nBytes;
+				}
+			)
+		;
+		m_UpgradeCheckData.f_RemoveFront(nBytes);
+	}
+
+	void CAsyncSocketActor::CInternal::f_MoveAllUpgradeCheckDataToIncoming()
+	{
+		f_MoveUpgradeCheckDataToIncoming(m_UpgradeCheckData.f_GetLen());
+	}
 
 	void CAsyncSocketActor::fp_ProcessIncoming()
 	{
 		auto &Internal = *mp_pInternal;
+
 		bool bMoreWork = true;
 		while (bMoreWork && !Internal.m_IncomingData.f_IsEmpty())
 		{
@@ -877,12 +989,15 @@ namespace NMib::NNetwork
 		auto Subscription = NConcurrency::g_ActorSubscription / [this]() -> NConcurrency::TCFuture<void>
 			{
 				auto &Internal = *mp_pInternal;
+				Internal.m_fCheckUpgrade.f_Clear();
 				co_await (fg_Move(Internal.m_Callbacks.m_fOnClose).f_Destroy() + fg_Move(Internal.m_Callbacks.m_fOnReceiveData).f_Destroy());
 				co_return {};
 			}
 		;
 
 		fp_StopDeferring();
+		if (!Internal.m_IncomingData.f_IsEmpty())
+			fp_ProcessIncoming();
 
 		fp_CheckHandshake(Internal);
 
@@ -903,28 +1018,42 @@ namespace NMib::NNetwork
 			&& !Internal.m_bDebugNoProcessing
 #endif
 		)
+		do
 		{
+			if (Internal.m_State == EState_Connected && Internal.m_bUpgradeRequired)
+			{
+				Internal.m_DeferredTCPState = NNetwork::ENetTCPState_Read;
+				break;
+			}
+
 			NNetwork::CSocketOperationResult CombinedResults;
 			uint8 Data[4096];
 			try
 			{
 				while (true)
 				{
-					umint Size = 4096;
+					umint Size = Internal.m_fCheckUpgrade ? 1 : 4096;
 					NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive(Data, Size);
 					if (Internal.m_State == EState_None)
 						fp_CheckHandshake(Internal);
 					CombinedResults += Result;
 					if (Result.m_nBytes == 0 && !Result.m_bSentNetwork && !Result.m_bReceivedNetwork)
 					{
-						fp_ProcessIncoming();
+						if (!Internal.m_fCheckUpgrade)
+							fp_ProcessIncoming();
 						break;
 					}
 					DMibLog(DebugVerbose3, " ++++ {} Received data {}", !Internal.m_bClient, Result.m_nBytes);
-					Internal.m_IncomingData.f_InsertBack(Data, Result.m_nBytes);
+					EIncomingDataResult IncomingDataResult = Internal.f_HandleIncomingData(Data, Result.m_nBytes);
 
-					if (Internal.m_IncomingData.f_GetLen() >= Internal.m_FramentationSize)
+					if (IncomingDataResult == EIncomingDataResult_ProcessIncoming || (!Internal.m_fCheckUpgrade && Internal.m_IncomingData.f_GetLen() >= Internal.m_FramentationSize))
 						fp_ProcessIncoming();
+
+					if (IncomingDataResult == EIncomingDataResult_StopReceiving)
+					{
+						fp_ProcessIncoming();
+						break;
+					}
 
 					if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
 					{
@@ -948,15 +1077,35 @@ namespace NMib::NNetwork
 			if (CombinedResults.m_bSentNetwork)
 				Internal.f_OnSentData();
 		}
+		while (false)
+			;
+
+		auto fFlushIncomingBeforeClose = [&]
+			{
+				if (Internal.m_State != EState_Connected)
+					return;
+
+				if (Internal.m_fCheckUpgrade)
+				{
+					Internal.m_fCheckUpgrade.f_Clear();
+					Internal.f_MoveAllUpgradeCheckDataToIncoming();
+				}
+
+				if (!Internal.m_IncomingData.f_IsEmpty())
+					fp_ProcessIncoming();
+			}
+		;
 
 		if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
 		{
+			fFlushIncomingBeforeClose();
 			if (Internal.m_State != EState_Disconnected)
 				fp_Disconnect(EAsyncSocketStatus_NormalClosure, NStr::fg_Format("Socket closed: {}", Internal.m_pSocket->f_GetCloseReason()), false, EAsyncSocketCloseOrigin_Remote);
 		}
 
 		if (_StateAdded & NNetwork::ENetTCPState_Closed)
 		{
+			fFlushIncomingBeforeClose();
 			if (Internal.m_State != EState_Disconnected)
 				fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket closed: {}", Internal.m_pSocket->f_GetCloseReason()), true, EAsyncSocketCloseOrigin_Remote);
 			else
@@ -1002,6 +1151,14 @@ namespace NMib::NNetwork
 		}
 
 		fp_ProcessState(State);
+	}
+
+	void CAsyncSocketActor::fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+	{
+		auto &Internal = *mp_pInternal;
+		Internal.m_fCheckUpgrade = fg_Move(_fCheckUpgrade);
+
+		fp_SetSocket(fg_Move(_pSocket));
 	}
 
 	auto CAsyncSocketActor::fp_FinishConnection() -> NConcurrency::TCFuture<CFinishConnectionResult>

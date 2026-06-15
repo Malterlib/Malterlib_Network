@@ -30,6 +30,7 @@ namespace NMib::NNetwork
 		NContainer::TCMap<umint, CListen> m_Listens;
 
 		CAsyncSocketServerActor *m_pThis;
+		NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> m_pCheckUpgradeFactory;
 		fp64 m_Timeout;
 		umint m_MaxMessageSize;
 		umint m_FragmentationSize;

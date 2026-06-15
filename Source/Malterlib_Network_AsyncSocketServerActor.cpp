@@ -38,6 +38,14 @@ namespace NMib::NNetwork
 		mp_pInternal->m_Timeout = _Timeout;
 	}
 
+	void CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory)
+	{
+		if (_fCheckUpgradeFactory)
+			mp_pInternal->m_pCheckUpgradeFactory = fg_Construct(_fCheckUpgradeFactory);
+		else
+			mp_pInternal->m_pCheckUpgradeFactory.f_Clear();
+	}
+
 	auto CAsyncSocketServerActor::f_StartListenAddress
 		(
 			NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo
@@ -104,6 +112,7 @@ namespace NMib::NNetwork
 						, mp_pInternal->m_MaxMessageSize
 						, mp_pInternal->m_FragmentationSize
 						, mp_pInternal->m_Timeout
+						, mp_pInternal->m_pCheckUpgradeFactory
 						, ListenID
 					)
 				;
