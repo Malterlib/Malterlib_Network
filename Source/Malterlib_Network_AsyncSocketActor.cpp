@@ -168,6 +168,7 @@ namespace NMib::NNetwork
 		NTime::CStopwatch m_TimeoutReceivedData;
 		NTime::CStopwatch m_TimeoutSentData;
 		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
+		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
 
 		fp64 m_Timeout = 0.0;
 		umint m_TimeoutTimerSubscriptionSequence = 0;
@@ -177,6 +178,7 @@ namespace NMib::NNetwork
 		umint m_FramentationSize = 0;
 
 		bool m_bClient = false;
+		bool m_bInProcessState = false;
 		bool m_bOnCloseCalled = false;
 		bool m_bDeferringCallbacks = true;
 		bool m_bUpgradeRequired = false;
@@ -408,6 +410,11 @@ namespace NMib::NNetwork
 
 	void CAsyncSocketActor::CInternal::f_ShutdownDone(NStr::CStr const &_Error)
 	{
+		// The socket is gone, so queued messages and unsent data can never complete. Fail their promises instead of leaving them unresolved forever.
+		m_PendingMessages.f_Clear();
+		m_pLastPendingMessagesList = nullptr;
+		m_OutgoingDataPromises.clear();
+
 		for (auto &fOnShutdown : m_OnShutdown)
 			fOnShutdown(_Error);
 		m_OnShutdown.f_Clear();
@@ -533,6 +540,9 @@ namespace NMib::NNetwork
 		if (_Priority == TCLimitsInt<uint32>::mc_Max)
 			co_return DMibErrorInstance("0xffffffff priority is reserved for internal messages");
 
+		if (Internal.m_State == EState_Disconnected)
+			co_return DMibErrorInstance("Cannot send data on a disconnected socket");
+
 		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
 
 		if (nBytes <= Internal.m_FramentationSize)
@@ -642,6 +652,12 @@ namespace NMib::NNetwork
 			Internal.m_pSocket.f_Clear();
 			Internal.f_ShutdownDone(_Reason);
 		}
+
+		// Messages that were queued but not yet written can never be sent after a disconnect. Fail their promises instead of leaving them unresolved forever.
+		Internal.m_PendingMessages.f_Clear();
+		Internal.m_pLastPendingMessagesList = nullptr;
+		if (_bFatal)
+			Internal.m_OutgoingDataPromises.clear();
 
 		Internal.m_State = EState_Disconnected;
 		Internal.f_StopTimeout();
@@ -1005,6 +1021,38 @@ namespace NMib::NNetwork
 	}
 
 	void CAsyncSocketActor::fp_ProcessState(NNetwork::ENetTCPState _StateAdded)
+	{
+		auto &Internal = *mp_pInternal;
+
+		if (Internal.m_bInProcessState)
+		{
+			// fp_CheckHandshake recurses into fp_ProcessState from the receive loop before the outer
+			// frame has buffered the bytes it already received. Processing here would read newer
+			// socket data first and reorder the stream, so defer to the outer invocation instead.
+			Internal.m_PendingProcessState |= _StateAdded;
+			return;
+		}
+
+		Internal.m_bInProcessState = true;
+		auto ResetInProcessState = NMib::g_OnScopeExit / [&]
+			{
+				Internal.m_bInProcessState = false;
+			}
+		;
+
+		while (true)
+		{
+			fp_ProcessStateNow(_StateAdded);
+
+			_StateAdded = Internal.m_PendingProcessState;
+			if (!_StateAdded)
+				break;
+
+			Internal.m_PendingProcessState = NNetwork::ENetTCPState_None;
+		}
+	}
+
+	void CAsyncSocketActor::fp_ProcessStateNow(NNetwork::ENetTCPState _StateAdded)
 	{
 		auto &Internal = *mp_pInternal;
 

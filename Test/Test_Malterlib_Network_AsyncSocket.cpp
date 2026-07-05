@@ -1252,6 +1252,10 @@ public:
 			CStr m_ServerBuffer;
 			CStr m_ClientBuffer;
 			CStr m_Response;
+			CStr m_ServerCloseReason;
+			CStr m_ClientCloseReason;
+			EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
+			EAsyncSocketStatus m_ClientCloseStatus = EAsyncSocketStatus_None;
 			bool m_bServerReceivedPlain = false;
 			bool m_bClientReceivedPlainResponse = false;
 			bool m_bServerReceivedStartTLS = false;
@@ -1311,10 +1315,24 @@ public:
 		;
 		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, ServerCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
+		// The default socket timeout (60s) is shorter than g_Timeout under sanitizers, so a heavily loaded CI machine can silently close the connection while the test is still waiting
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
 		CAsyncSocketServerCallbacks ServerCallbacks;
 		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 			{
 				CAsyncSocketCallbacks SocketCallbacks;
+				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+					{
+						if (auto pState = pStateWeak.f_Lock())
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_ServerCloseStatus = _Status;
+							pState->m_ServerCloseReason = fg_Move(_Message);
+						}
+						co_return {};
+					}
+				;
 				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
@@ -1452,6 +1470,8 @@ public:
 			}
 		;
 
+		ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
 		FAsyncSocketUpgradeCheckFactory ClientCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
 			{
 				return [fUpgradeCheckMessage, UpgradeMessage = CStr("S")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
@@ -1476,6 +1496,17 @@ public:
 		;
 
 		CAsyncSocketCallbacks ClientCallbacks;
+		ClientCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+			{
+				if (auto pState = pStateWeak.f_Lock())
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_ClientCloseStatus = _Status;
+					pState->m_ClientCloseReason = fg_Move(_Message);
+				}
+				co_return {};
+			}
+		;
 		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
 			{
 				auto pState = pStateWeak.f_Lock();
@@ -1553,7 +1584,17 @@ public:
 				}
 			)
 		;
-		DMibExpectFalse(bPlainTimedOut);
+		if (bPlainTimedOut)
+		{
+			DMibLock(pState->m_Lock);
+			DMibExpect(pState->m_bServerReceivedPlain, ==, true);
+			DMibExpect(pState->m_bClientReceivedPlainResponse, ==, true);
+			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
+			DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
+			DMibExpect(pState->m_ServerCloseReason, ==, CStr());
+			DMibExpect(pState->m_ClientCloseReason, ==, CStr());
+		}
+		DMibAssertFalse(bPlainTimedOut);
 
 		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
@@ -1577,6 +1618,10 @@ public:
 			DMibExpect(pState->m_bClientUpgraded, ==, true);
 			DMibExpect(pState->m_bServerReceivedEncrypted, ==, true);
 			DMibExpect(pState->m_Response, ==, CStr("EncryptedResponse"));
+			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
+			DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
+			DMibExpect(pState->m_ServerCloseReason, ==, CStr());
+			DMibExpect(pState->m_ClientCloseReason, ==, CStr());
 		}
 	}
 
