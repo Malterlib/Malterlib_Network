@@ -262,6 +262,7 @@ namespace NMib::NNetwork
 
 	class CNetAddress;
 
+	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
 }
 
@@ -394,6 +395,34 @@ namespace NMib::NSys::NNetwork
 
 	CAddress fg_GetPeerAddress(void *_pSocket);
 	uint32 fg_GetListenPort(void *_pSocket);
+
+	// Kernel process identity of one endpoint of a connected unix domain socket. On Linux pidfs
+	// kernels (6.9 and later) the pidfs device and inode name the exact kernel process object:
+	// they are boot-unique, independent of pid namespaces and immune to pid-number recycling, so
+	// they are the preferred binding and support cross-namespace peers. The process id is the
+	// endpoint's pid in its own namespace; it is only comparable across a connection when both
+	// endpoints share a pid namespace, and it is 0 for a peer whose pid is not visible here.
+	struct CProcessIdentity
+	{
+		uint64 m_ProcessID = 0;
+		uint64 m_PidFSDevice = 0; // Non-zero only when the kernel serves pidfds from pidfs (Linux 6.9)
+		uint64 m_PidFSInode = 0;
+	};
+
+	// Kernel-authenticated process identities of a connected unix domain socket: the local process
+	// and the immediate peer process as reported by the kernel (getpid and SO_PEERCRED / LOCAL_PEERPID
+	// / SIO_AF_UNIX_GETPEERPID). Returns false when the platform cannot supply it (a Windows build too
+	// old for the peer pid ioctl) or the socket is not a connected unix socket. Defined by the Core platform layer (Malterlib/Core
+	// Malterlib_Core_PlatformImp_{MacOS,Linux,MSVC}.cpp), like the other NSys::NNetwork functions
+	// in this block: a platform without a network backend (for example Emscripten) defines none of
+	// this block's functions, so this adds no platform requirement the block does not already have
+	bool fg_GetProcessIdentity(void *_pSocket, CProcessIdentity &o_LocalIdentity, CProcessIdentity &o_PeerIdentity);
+
+	// Whether this machine can report the kernel peer process identity of a connected unix domain
+	// socket. Always true on macOS and Linux; on Windows true from the kernels that support
+	// SIO_AF_UNIX_GETPEERPID (Windows 10 1809, build 17763). The authenticated unix transport is
+	// gated on this
+	bool fg_HasUnixSocketPeerProcessIdentity();
 }
 
 namespace NMib::NNetwork
@@ -943,6 +972,12 @@ namespace NMib::NNetwork
 		{
 			fp_CheckSocket();
 			return CNetAddress(NMib::NSys::NNetwork::fg_GetPeerAddress(mp_pSocket));
+		}
+
+		bool f_GetProcessIdentity(NMib::NSys::NNetwork::CProcessIdentity &o_LocalIdentity, NMib::NSys::NNetwork::CProcessIdentity &o_PeerIdentity) const
+		{
+			fp_CheckSocket();
+			return NMib::NSys::NNetwork::fg_GetProcessIdentity(mp_pSocket, o_LocalIdentity, o_PeerIdentity);
 		}
 
 		uint32 f_GetListenPort() const
