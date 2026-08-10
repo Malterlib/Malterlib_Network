@@ -71,6 +71,12 @@ namespace NMib::NNetwork
 		NCryptography::CUniversallyUniqueIdentifier g_HostnameRootUUID("D2C365F0-3F5E-4056-9BBB-0724C411D2FA", NCryptography::EUniversallyUniqueIdentifierFormat_Bare);
 	}
 
+	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address)
+	{
+		// The prefixes the platform address parsers accept for unix socket paths
+		return _Address.f_StartsWith("UNIX:") || _Address.f_StartsWith("UNIX(");
+	}
+
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath)
 	{
 		using namespace NStr;
