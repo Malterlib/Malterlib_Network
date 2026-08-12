@@ -56,11 +56,21 @@ namespace NMib::NNetwork
 		virtual NStr::CStr f_GetCloseReason() = 0;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) = 0;
 		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) = 0;
+
+		// Sends the spans in order, as one kernel operation where the platform and socket
+		// implementation support it. The result byte count is total progress across the
+		// spans and may end mid span. Zero length spans are skipped
+		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans);
 		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) = 0;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) = 0;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const = 0;
 		virtual uint32 f_GetListenPort() const = 0;
 		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const = 0;
+
+		// The number of spans every implementation is required to handle in one call. Passing more
+		// than this is not supported: an implementation may consume them, stop at this many, or
+		// stop earlier, so callers gather at most this many spans per send
+		static constexpr umint mc_MaxSendSpans = 64;
 	};
 
 	using FVirtualSocketFactory = NFunction::TCFunction<NStorage::TCUniquePointer<ICSocket> (NStr::CStr const &_Hostname)>;

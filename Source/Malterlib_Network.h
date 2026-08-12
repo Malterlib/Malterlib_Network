@@ -378,6 +378,8 @@ namespace NMib::NSys::NNetwork
 
 	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen); // Returns bytes received
 	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
+	// Returns total bytes sent across the spans in order; may stop mid span on partial progress
+	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
 
@@ -952,6 +954,13 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_Send(mp_pSocket, _pData, _DataLen);
+		}
+
+		umint f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
+		{
+			fp_CheckSocket();
+
+			return NMib::NSys::NNetwork::fg_SendVectored(mp_pSocket, _pSpans, _nSpans);
 		}
 
 		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)

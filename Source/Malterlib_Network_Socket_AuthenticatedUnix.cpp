@@ -498,6 +498,32 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
+	CSocketOperationResult CSocket_AuthenticatedUnix::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
+	{
+		if (mp_State == EState::mc_ShutdownSocket || mp_bSendShutdown)
+			return {};
+
+		bool bHandshakeDone = fp_HandleHandshake();
+
+		// Report handshake bytes as network activity even though no payload was consumed, so the
+		// caller's inactivity accounting sees a progressing handshake
+		CSocketOperationResult Result;
+		Result.m_bSentNetwork = mp_bHandshakeSentNetwork;
+		Result.m_bReceivedNetwork = mp_bHandshakeReceivedNetwork;
+		mp_bHandshakeSentNetwork = false;
+		mp_bHandshakeReceivedNetwork = false;
+
+		if (!bHandshakeDone || !_nSpans)
+			return Result;
+
+		umint nBytes = mp_Socket.f_SendVectored(_pSpans, _nSpans);
+		Result.m_nBytes = nBytes;
+		if (nBytes != 0)
+			Result.m_bSentNetwork = true;
+
+		return Result;
+	}
+
 	umint CSocket_AuthenticatedUnix::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
