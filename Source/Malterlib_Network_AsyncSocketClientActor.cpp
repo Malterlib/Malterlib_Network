@@ -26,6 +26,7 @@ namespace NMib::NNetwork
 		mp_MaxMessageSize = _MaxMessageSize;
 	}
 
+	// Also sets per-connection receive allocation size; choose it in proportion to expected connection count.
 	void CAsyncSocketClientActor::f_SetDefaultFragmentationSize(umint _FragmentationSize)
 	{
 		mp_FragmentationSize = _FragmentationSize;
