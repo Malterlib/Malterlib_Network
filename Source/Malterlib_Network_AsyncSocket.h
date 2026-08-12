@@ -59,7 +59,7 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CIOByteVector> _pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CIOByteVector const> _pMessage)> m_fOnReceiveData;
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
@@ -81,6 +81,8 @@ namespace NMib::NNetwork
 		};
 
 	public:
+		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
+
 		struct CInternal;
 
 		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
@@ -89,7 +91,7 @@ namespace NMib::NNetwork
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
 		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname);
 
-		NConcurrency::TCFuture<void> f_SendData(NStorage::TCSharedPointer<NContainer::CIOByteVector> _pMessage, uint32 _Priority);
+		NConcurrency::TCFuture<void> f_SendData(NContainer::CSharedByteVector _Message, uint32 _Priority);
 		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);
 		NConcurrency::TCFuture<CCloseInfo> f_CloseWithLinger(EAsyncSocketStatus _Status, NStr::CStr _Reason, fp64 _MaxLingerTime);
 
@@ -204,6 +206,10 @@ namespace NMib::NNetwork
 		~CAsyncSocketClientActor();
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
+		// Also sizes the receive buffer: the steady state receive path lands bytes straight in the
+		// buffer that is handed to the callback, so one of these is allocated per connection as
+		// soon as it becomes readable. That is what keeps the path copy free, so it is up to the
+		// caller to keep this proportional to the number of connections it expects
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
@@ -285,6 +291,10 @@ namespace NMib::NNetwork
 		;
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
+		// Also sizes the receive buffer: the steady state receive path lands bytes straight in the
+		// buffer that is handed to the callback, so one of these is allocated per connection as
+		// soon as it becomes readable. That is what keeps the path copy free, so it is up to the
+		// caller to keep this proportional to the number of connections it expects
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
