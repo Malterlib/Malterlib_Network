@@ -214,7 +214,7 @@ public:
 						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+							/ [=](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -228,7 +228,7 @@ public:
 								for (auto &Connection : pState->m_ServerConnections)
 								{
 									if (Connection.m_Actor)
-										Connection.m_Actor(&CAsyncSocketActor::f_SendData, _pData, 0).f_DiscardResult();
+										Connection.m_Actor(&CAsyncSocketActor::f_SendData, CSharedByteVector(_pData), 0).f_DiscardResult();
 								}
 
 								pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
@@ -395,7 +395,7 @@ public:
 							}
 						;
 
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -603,9 +603,9 @@ public:
 		TCWeakPointer<CUpgradeCheckDeferredState> pStateWeak = pState;
 		auto fTextBuffer = [](CStr const &_Text)
 			{
-				TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
-				pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return pBuffer;
+				CIOByteVector Buffer;
+				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+				return CSharedByteVector(fg_Move(Buffer));
 			}
 		;
 		auto fWaitForCondition = [&](auto const &_fCondition)
@@ -662,7 +662,7 @@ public:
 				co_await NConcurrency::fg_Timeout(0.1);
 
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -764,9 +764,9 @@ public:
 		TCWeakPointer<CUpgradeCheckCloseState> pStateWeak = pState;
 		auto fTextBuffer = [](CStr const &_Text)
 			{
-				TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
-				pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return pBuffer;
+				CIOByteVector Buffer;
+				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+				return CSharedByteVector(fg_Move(Buffer));
 			}
 		;
 		auto fWaitForCondition = [&](auto const &_fCondition)
@@ -823,7 +823,7 @@ public:
 		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 			{
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -947,9 +947,9 @@ public:
 		TCWeakPointer<CDeferredCloseState> pStateWeak = pState;
 		auto fTextBuffer = [](CStr const &_Text)
 			{
-				TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
-				pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return pBuffer;
+				CIOByteVector Buffer;
+				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+				return CSharedByteVector(fg_Move(Buffer));
 			}
 		;
 		auto fWaitForCondition = [&](auto const &_fCondition)
@@ -985,7 +985,7 @@ public:
 				co_await NConcurrency::fg_Timeout(0.1);
 
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -1120,10 +1120,10 @@ public:
 
 				auto fTextBuffer = [&](CStr const &_Text)
 					{
-						TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
-						pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-						pBuffer->f_Insert('\n');
-						return pBuffer;
+						CIOByteVector Buffer;
+						Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+						Buffer.f_Insert('\n');
+						return CSharedByteVector(fg_Move(Buffer));
 					}
 				;
 
@@ -1269,9 +1269,9 @@ public:
 		TCWeakPointer<CUpgradeState> pStateWeak = pState;
 		auto fTextBuffer = [](CStr const &_Text)
 			{
-				TCSharedPointer<CIOByteVector> pBuffer = fg_Construct();
-				pBuffer->f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return pBuffer;
+				CIOByteVector Buffer;
+				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+				return CSharedByteVector(fg_Move(Buffer));
 			}
 		;
 		auto fUpgradeCheckMessage = [](CPagedByteVector const &_Data, CStr const &_UpgradeMessage) -> CAsyncSocketUpgradeCheckResult
@@ -1333,7 +1333,7 @@ public:
 						co_return {};
 					}
 				;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -1507,7 +1507,7 @@ public:
 				co_return {};
 			}
 		;
-		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector> _pData) -> TCFuture<void>
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
 			{
 				auto pState = pStateWeak.f_Lock();
 				if (!pState)
