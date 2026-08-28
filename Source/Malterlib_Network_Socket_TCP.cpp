@@ -15,12 +15,14 @@ namespace NMib::NNetwork
 
 	CSocket_TCP::CSocket_TCP(CSocket_TCP &&_Other)
 		: mp_Socket(fg_Move(_Other.mp_Socket))
+		, mp_nTransferSizeHint(fg_Exchange(_Other.mp_nTransferSizeHint, 0))
 	{
 	}
 
 	CSocket_TCP &CSocket_TCP::operator =(CSocket_TCP &&_Other)
 	{
 		mp_Socket = fg_Move(_Other.mp_Socket);
+		mp_nTransferSizeHint = fg_Exchange(_Other.mp_nTransferSizeHint, 0);
 		return *this;
 	}
 
@@ -37,6 +39,11 @@ namespace NMib::NNetwork
 	void CSocket_TCP::f_Close()
 	{
 		return mp_Socket.f_Close();
+	}
+
+	void CSocket_TCP::f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed)
+	{
+		mp_Socket.f_CloseAsync(fg_Move(_fOnClosed));
 	}
 
 	void CSocket_TCP::f_Shutdown()
@@ -103,6 +110,23 @@ namespace NMib::NNetwork
 		return mp_Socket.f_GiveUpForInherit();
 	}
 
+	void CSocket_TCP::f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (CInheritedSocketHandle &&_SocketHandle)> &&_fOnHandle)
+	{
+		mp_Socket.f_GiveUpForInheritAsync
+			(
+				[_fOnHandle = fg_Move(_fOnHandle)](void *_pSocketHandle) mutable
+				{
+					_fOnHandle(CInheritedSocketHandle(_pSocketHandle));
+				}
+			)
+		;
+	}
+
+	NMib::NSys::ICIoLoop *CSocket_TCP::f_GetOwningIoLoop()
+	{
+		return mp_Socket.f_GetOwningIoLoop();
+	}
+
 	void *CSocket_TCP::f_GetOSSocket()
 	{
 		return mp_Socket.f_GetOSSocket();
@@ -155,6 +179,127 @@ namespace NMib::NNetwork
 		if (Result.m_nBytes != 0)
 			Result.m_bSentNetwork = true;
 		return Result;
+	}
+
+	// The spans handed over are the caller's own memory and go to the loop untouched, so the
+	// loop's generation cap is the depth
+	umint CSocket_TCP::f_GetSendDepth() const
+	{
+		auto *pLoop = mp_Socket.f_GetOwningIoLoop();
+
+		return pLoop ? pLoop->f_GetCompletionSendDepth() : 1;
+	}
+
+	// The spans go to the loop untouched, so the loop's own release timing is the answer
+	bool CSocket_TCP::f_SendReleaseIsPrompt() const
+	{
+		return mp_Socket.f_SendReleaseIsPrompt();
+	}
+
+	ICSocketCompletionIo *CSocket_TCP::f_GetCompletionIo()
+	{
+		return mp_Socket.f_SupportsCompletionIo() ? this : nullptr;
+	}
+
+	void CSocket_TCP::f_SetTransferSizeHint(umint _nBytes)
+	{
+		mp_nTransferSizeHint = _nBytes;
+	}
+
+	bool CSocket_TCP::f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
+	{
+		return mp_Socket.f_IsSendWindowFull(_nUnreleasedBytes, _nStartBytes);
+	}
+
+	void CSocket_TCP::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
+	void CSocket_TCP::f_SetInheritable()
+	{
+		mp_Socket.f_SetInheritable();
+	}
+
+	CSocket CSocket_TCP::f_GiveUpSocket()
+	{
+		return fg_Move(mp_Socket);
+	}
+
+	void CSocket_TCP::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		mp_Socket.f_Adopt(fg_Move(_Socket), fg_Move(_fOnStateChange));
+	}
+
+	bool CSocket_TCP::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
+	{
+		return mp_Socket.f_QueryPathDeliveryRate(o_nBytes, o_bAppLimited);
+	}
+
+	// Receives are only carried by the stream; a loop that cannot provide one leaves this
+	// direction on readiness
+	bool CSocket_TCP::f_SupportsCompletionReceive() const
+	{
+		return mp_Socket.f_SupportsReceiveStream();
+	}
+
+	umint CSocket_TCP::f_GetReceiveBufferBytes() const
+	{
+		return fg_Max(mp_nTransferSizeHint, umint(4096));
+	}
+
+	bool CSocket_TCP::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+	{
+		if (!mp_Socket.f_SupportsReceiveStream())
+			return false;
+
+		return mp_Socket.f_StartReceiveStream(fg_Max(mp_nTransferSizeHint, umint(4096)), fg_Move(_pBackpressure), fg_Move(_fSink));
+	}
+
+	void CSocket_TCP::f_ResumeReceiveStream()
+	{
+		mp_Socket.f_ResumeReceiveStream();
+	}
+
+	// The segments are the payload as delivered: the caller gets a shared view of the buffer the
+	// kernel filled, riding its owner, and nothing is copied on the way
+	bool CSocket_TCP::f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &_Segment, NContainer::CSharedByteVector &o_Data, NSys::CIoCompletion &o_Result)
+	{
+		if (_Segment.m_Status != NSys::EIoCompletionStatus::mc_Done || !_Segment.m_nBytes)
+			return false;
+
+		o_Result.m_Status = NSys::EIoCompletionStatus::mc_Done;
+		o_Result.m_nBytes = _Segment.m_nBytes;
+		o_Data = NContainer::CSharedByteVector(_Segment.m_pData, _Segment.m_nBytes, fg_Move(_Segment.m_pOwner));
+
+		return true;
+	}
+
+	// Only terminals reach this — data goes through the shared resolve — and a terminal has
+	// nothing to deliver beyond its status
+	bool CSocket_TCP::f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result)
+	{
+		o_Result.m_Status = _Segment.m_Status;
+		o_Result.m_Error = _Segment.m_Error;
+		o_Result.m_nBytes = 0;
+
+		return true;
+	}
+
+	umint CSocket_TCP::f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased)
+	{
+		return mp_Socket.f_SubmitSendVectored
+			(
+				_pSpans
+				, _nSpans
+				, fg_Move(_fOnComplete)
+				,
+				[fOnReleased = fg_Move(_fOnReleased)]() mutable
+				{
+					fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
+				}
+			)
+		;
 	}
 
 	umint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)

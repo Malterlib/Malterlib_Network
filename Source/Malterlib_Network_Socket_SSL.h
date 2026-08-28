@@ -16,7 +16,7 @@ namespace NMib::NNetwork
 		NContainer::TCVector<NContainer::CByteVector> m_CertificateChain;
 	};
 
-	class CSocket_SSL final : public ICSocket
+	class CSocket_SSL final : public ICSocket, public ICSocketCompletionIo
 	{
 		CSocket_SSL(CSocket_SSL const &) = delete;
 		CSocket_SSL &operator = (CSocket_SSL const &) = delete;
@@ -35,6 +35,7 @@ namespace NMib::NNetwork
 		virtual bool f_IsValid() const override;
 		virtual bool f_HandshakeDone() const override;
 		virtual void f_Close() override;
+		virtual void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed) override;
 		virtual void f_Shutdown() override;
 		virtual void f_Connect
 			(
@@ -73,6 +74,36 @@ namespace NMib::NNetwork
 		virtual NStr::CStr f_GetCloseReason() override;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override;
 		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override;
+		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
+		virtual void f_SetTransferSizeHint(umint _nBytes) override;
+		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		virtual void f_SetInheritable() override;
+		virtual void f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		virtual bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited) override;
+		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
+		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
+
+		virtual umint f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased) override;
+		virtual bool f_ContinueSend(NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased) override;
+		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink) override;
+		virtual void f_ResumeReceiveStream() override;
+		virtual bool f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;
+		virtual bool f_ResolveHeld(void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;
+		virtual bool f_ResolveSend(NMib::NSys::CIoCompletion &_Result) override;
+		virtual void f_ResolveSendRelease(umint _iTransfer) override;
+		virtual void f_OnCompletionActivated() override;
+		virtual umint f_GetSendDepth() const override;
+		virtual bool f_SupportsCompletionSend() const override;
+		virtual bool f_CanSubmitSend() const override;
+		virtual bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes) override;
+		virtual bool f_SupportsSendStaging() const override;
+		virtual bool f_HasSendOperationInFlight() const override;
+		virtual bool f_ReceiveStreamEndedByProtocol() const override;
+		virtual bool f_SupportsCompletionReceive() const override;
+		virtual umint f_GetReceiveBufferBytes() const override;
+		virtual bool f_HasPendingOutput() const override;
+
+	public:
 		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) override;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
@@ -101,24 +132,104 @@ namespace NMib::NNetwork
 			, EState_Disconnected
 		};
 
+		// One caller transfer: the plaintext one f_SubmitSendVectored call handed over, the
+		// generation its seal landed in, and — for a transfer staged while an operation was in
+		// flight — the caller's functors, fired on the caller's thread when that generation's
+		// ciphertext has fully left. The transfer whose call submitted the operation carries no
+		// functors here: its own ride the operation and report through the ordinary completion
+		// One transfer in progress, laid out without padding
+		struct CSendOperation
+		{
+			NSys::FIoCompletion m_fOnComplete;
+			FSocketSendReleased m_fOnReleased;
+			umint m_nPlaintext = 0;
+
+			// The generation the seal landed in, the operations carrying the same generation as a
+			// list per generation, and the free operations as a list; -1 ends either list
+			uint32 m_iBuffer = 0;
+			int32 m_iNextForBuffer = -1;
+			int32 m_iNextFree = -1;
+			bool m_bHasFunctors : 1 = false;
+			bool m_bInUse : 1 = false;
+			bool m_bResolved : 1 = false;
+			bool m_bReleased : 1 = false;
+			bool m_bLinked : 1 = false;
+		};
+
 		bool fp_HandleHandshake();
 		void fp_HandleHandshakeDone();
 		void fp_CheckBrokenState();
 		void fp_AddTCPState(ENetTCPState _ToAdd);
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> fp_SharedOnStateChange();
 
-		NAtomic::TCAtomic<uint32> mp_ExtraState;
+		auto fp_AllocateSendOperation() -> smint;
+		void fp_TryFreeSendOperation(umint _iOperation);
+		void fp_LinkSendOperation(umint _iOperation);
+		void fp_ContinueShutdown();
+		void fp_FreeSendOperation(umint _iOperation);
+		bool fp_SubmitPinnedSend(void const *_pData, umint _nBytes, umint _iBuffer, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased);
+		void fp_ParkSendOperation(umint _iOperation, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased);
+		bool fp_CarrySend(smint _iOperation, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased);
+		// Fires the stored functors of every staged transfer whose seals the generation
+		// carried; the operation's own transfer reports through the completion instead
+		void fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext);
+		// Fires the releases likewise, freeing each transfer that has heard both halves
+		void fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer);
+		void fp_FailAllSendOperations();
+
+		// What one TLS record carries at most; gathered sends stage up to this per seal
+		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024;
+		// The transfers in progress, as many as the window has needed at once; the free ones a
+		// list through them, newest first, and the ones carrying a generation a list per generation
+		NContainer::TCVector<CSendOperation> mp_SendOperations;
+		NContainer::TCVector<int32> mp_iBufferOperationHead;
+		umint mp_nSendWindowBytes = 0;
+		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
 		CSocket mp_Socket;
+		// The io subsystem, cached since each access through the getter is an atomic operation
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		NStorage::TCSharedPointer<CSSLContext> mp_pSSLContext;
 		CSSLConnection::FAuthenticationResultCallback mp_AuthenticationResultCallback;
 		CSSLConnection::FUserTrustDecisionCallback mp_UserTrustDecisionCallback;
 
 		CSSLConnection mp_SSLConnection;
 
+		// Plaintext of the operation chain's own transfers that has not been reported yet:
+		// continuations carry nothing of their own, so the chain reports once
+		umint mp_nSendPlaintextHeld = 0;
+
+		// Sends with the kernel right now; the loop completes them in submission order, and
+		// the transport's pinned-generation depth bounds the count
+		umint mp_nSendOpsInFlight = 0;
+
+		NAtomic::TCAtomic<uint32> mp_ExtraState;
 		EState mp_State = EState_None;
+		int32 mp_iFreeOperationHead = -1;
+
+		// Set by the first send that failed; the connection is over and later completions only
+		// clear their records
+		bool mp_bSendFailed = false;
+
+		// Set when the caller says it is driving this socket's sends with submitted operations;
+		// the synchronous send entry point refuses from then on. Which directions are submitted
+		// comes from f_SupportsCompletionSend / Receive, so a connection can submit one way and
+		// stay synchronous the other
+		bool mp_bCompletionActive = false;
+
 		bool mp_bBrokenStateReported = false;
+
+		// Whether a send resolved against a full window since the last window ask. The full
+		// moment itself is unobservable from the ask — submissions are re-driven by the very
+		// releases that open the window — so the resolve remembers it and the next ask grows on
+		// the history instead
+		bool mp_bSendWindowWasFull = false;
+
+		// A window set while a generation was pinned; the transport takes a window only with
+		// nothing pinned, so the release that unpins the last one applies it
+		bool mp_bSendWindowPending = false;
 	};
 }
 

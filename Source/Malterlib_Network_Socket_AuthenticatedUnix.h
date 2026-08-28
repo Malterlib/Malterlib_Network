@@ -54,7 +54,7 @@ namespace NMib::NNetwork
 	// topologies (pre-fork accept, socket inheritance) must use the TLS wss transport.
 	// Connection info is reported as CSocketConnectionInfo_SSL so existing certificate-based
 	// identity checks work unchanged
-	struct CSocket_AuthenticatedUnix final : public ICSocket
+	struct CSocket_AuthenticatedUnix final : public ICSocket, public ICSocketCompletionIo
 	{
 		CSocket_AuthenticatedUnix(CSocket_AuthenticatedUnix const &) = delete;
 		CSocket_AuthenticatedUnix &operator = (CSocket_AuthenticatedUnix const &) = delete;
@@ -65,6 +65,7 @@ namespace NMib::NNetwork
 		virtual bool f_IsValid() const override;
 		virtual bool f_HandshakeDone() const override;
 		virtual void f_Close() override;
+		virtual void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed) override;
 		virtual void f_Shutdown() override;
 		virtual void f_Connect
 			(
@@ -109,6 +110,24 @@ namespace NMib::NNetwork
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
 		virtual uint32 f_GetListenPort() const override;
 		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;
+
+		// Completion transfers are a pure pass-through once the handshake has completed: frame
+		// reads during the handshake consume exactly their framed bytes, so no stream data is
+		// buffered in this layer when it finishes
+		virtual void f_SetTransferSizeHint(umint _nBytes) override;
+		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		virtual void f_SetInheritable() override;
+		virtual void f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		virtual bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited) override;
+		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
+		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
+		virtual bool f_SupportsCompletionReceive() const override;
+		virtual umint f_GetReceiveBufferBytes() const override;
+		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink) override;
+		virtual void f_ResumeReceiveStream() override;
+		virtual bool f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &_Segment, NContainer::CSharedByteVector &o_Data, NSys::CIoCompletion &o_Result) override;
+		virtual bool f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;
+		virtual umint f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased) override;
 
 		static FVirtualSocketFactory fs_GetFactory(NStorage::TCSharedPointer<CAuthenticatedUnixContext> const &_pContext);
 
@@ -175,6 +194,7 @@ namespace NMib::NNetwork
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
 		CSocket mp_Socket;
+		umint mp_nTransferSizeHint = 0;
 		NStorage::TCSharedPointer<CAuthenticatedUnixContext> mp_pContext;
 
 		NStorage::TCUniquePointer<CHandshakeState> mp_pHandshake; // Present only while the handshake runs

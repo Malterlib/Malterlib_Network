@@ -180,6 +180,11 @@ namespace NMib::NNetwork
 		return mp_Socket.f_Close();
 	}
 
+	void CSocket_AuthenticatedUnix::f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed)
+	{
+		mp_Socket.f_CloseAsync(fg_Move(_fOnClosed));
+	}
+
 	void CSocket_AuthenticatedUnix::f_Shutdown()
 	{
 		// On an established connection this is a half close: the underlying shutdown only closes
@@ -525,6 +530,131 @@ namespace NMib::NNetwork
 			Result.m_bSentNetwork = true;
 
 		return Result;
+	}
+
+	ICSocketCompletionIo *CSocket_AuthenticatedUnix::f_GetCompletionIo()
+	{
+		if (mp_State != EState::mc_Done)
+			return nullptr;
+
+		return mp_Socket.f_SupportsCompletionIo() ? this : nullptr;
+	}
+
+	NMib::NSys::ICIoLoop *CSocket_AuthenticatedUnix::f_GetOwningIoLoop()
+	{
+		return mp_Socket.f_GetOwningIoLoop();
+	}
+
+	void CSocket_AuthenticatedUnix::f_SetTransferSizeHint(umint _nBytes)
+	{
+		mp_nTransferSizeHint = _nBytes;
+	}
+
+	void CSocket_AuthenticatedUnix::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
+	void CSocket_AuthenticatedUnix::f_SetInheritable()
+	{
+		mp_Socket.f_SetInheritable();
+	}
+
+	// The upgrade form of f_InheritHandle: the connected socket arrives whole, registration and all
+	void CSocket_AuthenticatedUnix::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		mp_Socket.f_Close();
+		uint32 Generation;
+		{
+			DMibLock(mp_fOnStateChangeLock);
+			Generation = ++mp_ConnectionGeneration;
+			mp_fOnStateChange = fg_Move(_fOnStateChange);
+			mp_bHandshakePumpOnWrite = true;
+		}
+		fp_ResetConnectionState();
+		mp_Socket.f_Adopt(fg_Move(_Socket), fp_SharedOnStateChange(Generation));
+		if (!mp_Socket.f_IsValid())
+			return;
+
+		mp_bTransportConnected.f_Store(true);
+		mp_State = EState::mc_Handshake;
+		fp_StartHandshake();
+		fp_HandleHandshake();
+	}
+
+	bool CSocket_AuthenticatedUnix::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
+	{
+		return mp_Socket.f_QueryPathDeliveryRate(o_nBytes, o_bAppLimited);
+	}
+
+	bool CSocket_AuthenticatedUnix::f_SupportsCompletionReceive() const
+	{
+		return mp_Socket.f_SupportsReceiveStream();
+	}
+
+	umint CSocket_AuthenticatedUnix::f_GetReceiveBufferBytes() const
+	{
+		return fg_Max(mp_nTransferSizeHint, umint(4096));
+	}
+
+	bool CSocket_AuthenticatedUnix::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+	{
+		if (mp_State != EState::mc_Done || !mp_Socket.f_SupportsReceiveStream())
+			return false;
+
+		return mp_Socket.f_StartReceiveStream(fg_Max(mp_nTransferSizeHint, umint(4096)), fg_Move(_pBackpressure), fg_Move(_fSink));
+	}
+
+	void CSocket_AuthenticatedUnix::f_ResumeReceiveStream()
+	{
+		mp_Socket.f_ResumeReceiveStream();
+	}
+
+	// The segments are the payload as delivered: the caller gets a shared view of the buffer the
+	// kernel filled, riding its owner, and nothing is copied on the way
+	bool CSocket_AuthenticatedUnix::f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &_Segment, NContainer::CSharedByteVector &o_Data, NSys::CIoCompletion &o_Result)
+	{
+		if (_Segment.m_Status != NSys::EIoCompletionStatus::mc_Done || !_Segment.m_nBytes)
+			return false;
+
+		o_Result.m_Status = NSys::EIoCompletionStatus::mc_Done;
+		o_Result.m_nBytes = _Segment.m_nBytes;
+		o_Data = NContainer::CSharedByteVector(_Segment.m_pData, _Segment.m_nBytes, fg_Move(_Segment.m_pOwner));
+
+		return true;
+	}
+
+	// Only terminals reach this — data goes through the shared resolve — and a terminal has
+	// nothing to deliver beyond its status
+	bool CSocket_AuthenticatedUnix::f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result)
+	{
+		(void)_pDestination;
+		(void)_nDestination;
+
+		o_Result.m_Status = _Segment.m_Status;
+		o_Result.m_Error = _Segment.m_Error;
+		o_Result.m_nBytes = 0;
+
+		return true;
+	}
+
+	umint CSocket_AuthenticatedUnix::f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased)
+	{
+		if (mp_State != EState::mc_Done || mp_bSendShutdown)
+			return 0;
+
+		return mp_Socket.f_SubmitSendVectored
+			(
+				_pSpans
+				, _nSpans
+				, fg_Move(_fOnComplete)
+				,
+				[fOnReleased = fg_Move(_fOnReleased)]() mutable
+				{
+					fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
+				}
+			)
+		;
 	}
 
 	umint CSocket_AuthenticatedUnix::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)

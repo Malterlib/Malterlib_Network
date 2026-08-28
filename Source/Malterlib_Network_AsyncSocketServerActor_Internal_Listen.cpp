@@ -39,7 +39,26 @@ namespace NMib::NNetwork::NAsyncSocket
 	NConcurrency::TCFuture<void> CListenActor::fp_Destroy()
 	{
 		if (mp_pSocket)
+		{
+			// The close of a socket on a created loop completes on the loop's thread, and the
+			// listen address — a unix socket's file in particular — is free for a new listener
+			// only once it has, so the destroy waits for it
+			NConcurrency::TCPromise<void> ClosedPromise;
+			auto Closed = ClosedPromise.f_Future();
+
+			mp_pSocket->f_CloseAsync
+				(
+					[ClosedPromise = fg_Move(ClosedPromise)]() mutable
+					{
+						ClosedPromise.f_SetResult();
+					}
+				)
+			;
 			mp_pSocket.f_Clear();
+
+			co_await fg_Move(Closed);
+		}
+
 		co_return {};
 	}
 
@@ -57,13 +76,26 @@ namespace NMib::NNetwork::NAsyncSocket
 		{
 			while (true)
 			{
+				// The socket registers with a pool thread's event loop below, so an arriving
+				// message is reported on that thread and the actor call it enqueues stays on the
+				// local queue there. The actor's own manager, so a server hosted off the global
+				// one gets loops whose threads run its pool
+				auto Binding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+
 				try
 				{
+					NConcurrency::CIoLoopCreateScope IoLoopScope(Binding);
+
 					FAsyncSocketUpgradeCheck fEmptyCheckUpgrade;
 
-					// The actor's own manager, so a server hosted off the global one gets its
-					// connections in its own pool
+					// The actor's own manager, matching the loop the socket binds to
 					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade)));
+
+					// Seed the scheduler placement to the bound queue so even the first job runs
+					// where the loop reports the socket's events; no pinning — every later job
+					// keeps the marker fresh and migration under pressure stays free
+					if (Binding.m_pLoop)
+						ConnectionActor->f_SetInitialQueue(Binding.m_iQueue);
 					NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
 					NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
 						(
