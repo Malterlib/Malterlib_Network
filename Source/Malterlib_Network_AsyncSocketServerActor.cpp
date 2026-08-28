@@ -107,14 +107,18 @@ namespace NMib::NNetwork
 				NNetwork::CNetAddress &Address = _AddressesToListenTo[i];
 
 				NConcurrency::TCActor<CListenActor> &ListenActor = Listen.m_ListenSockets[i];
-				ListenActor = NConcurrency::fg_ConstructActor<CListenActor>
+
+				ListenActor = f_ConcurrencyManager().f_ConstructActor
 					(
-						fg_ThisActor(this)
-						, mp_pInternal->m_MaxMessageSize
-						, mp_pInternal->m_FragmentationSize
-						, mp_pInternal->m_Timeout
-						, mp_pInternal->m_pCheckUpgradeFactory
-						, ListenID
+						fg_Construct<CListenActor>
+						(
+							fg_ThisActor(this)
+							, mp_pInternal->m_MaxMessageSize
+							, mp_pInternal->m_FragmentationSize
+							, mp_pInternal->m_Timeout
+							, mp_pInternal->m_pCheckUpgradeFactory
+							, ListenID
+						)
 					)
 				;
 
