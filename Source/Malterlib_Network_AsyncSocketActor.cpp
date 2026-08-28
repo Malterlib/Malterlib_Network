@@ -31,12 +31,6 @@ namespace NMib::NNetwork
 			, EState_Disconnected
 		};
 
-		enum
-		{
-			EIncomingPageSize = 2048
-			, ECopySmallDeliveryThreshold = 1024
-		};
-
 		enum EIncomingDataResult
 		{
 			EIncomingDataResult_Continue
@@ -86,6 +80,9 @@ namespace NMib::NNetwork
 			NStr::CStr m_Message;
 			EAsyncSocketCloseOrigin m_Origin;
 		};
+
+		constexpr static umint gc_IncomingPageSize = 2048;
+		constexpr static umint gc_CopySmallDeliveryThreshold = 1024;
 	}
 
 	struct CAsyncSocketActor::CInternal
@@ -108,8 +105,8 @@ namespace NMib::NNetwork
 				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
 			)
 			: m_pThis(_pThis)
-			, m_IncomingData(EIncomingPageSize)
-			, m_UpgradeCheckData(EIncomingPageSize)
+			, m_IncomingData(gc_IncomingPageSize)
+			, m_UpgradeCheckData(gc_IncomingPageSize)
 			, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
 			, m_bClient(_bClient)
 			, m_MaxMessageSize(_MaxMessageSize)
@@ -1394,7 +1391,7 @@ namespace NMib::NNetwork
 				}
 #endif
 
-				if (SharedResult.m_nBytes <= ECopySmallDeliveryThreshold)
+				if (SharedResult.m_nBytes <= gc_CopySmallDeliveryThreshold)
 				{
 					// A small delivery is copied into a right sized buffer so the consumer never
 					// pins the full receive buffer
@@ -1692,7 +1689,7 @@ namespace NMib::NNetwork
 		if (!m_nReceiveFill)
 			return;
 
-		if (m_nReceiveFill <= ECopySmallDeliveryThreshold)
+		if (m_nReceiveFill <= gc_CopySmallDeliveryThreshold)
 		{
 			// A small delivery is copied into a right sized buffer so the consumer never
 			// pins the full receive buffer, which is kept and refilled instead
