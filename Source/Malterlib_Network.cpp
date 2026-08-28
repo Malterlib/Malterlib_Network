@@ -157,7 +157,8 @@ namespace NMib::NNetwork
 
 		auto Cleanup = g_OnScopeExit / [&]
 			{
-				NMib::NSys::NNetwork::fg_Close(mp_pSocket);
+				// A drop: the asynchronous form is legal on any loop and nothing waits for it
+				NMib::NSys::NNetwork::fg_CloseAsync(mp_pSocket, {});
 				mp_pSocket = nullptr;
 			}
 		;

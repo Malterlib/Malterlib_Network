@@ -8,6 +8,34 @@
 #include "Malterlib_Network_Exception.h"
 #include <Mib/Memory/Allocators/Secure>
 
+// TLS configuration defaults. In builds carrying the io debugging overrides each knob is
+// overridable at runtime: MalterlibSSLCompletionIoSend / MalterlibSSLCompletionIoReceive
+// (MalterlibSSLCompletionIo sets both), MalterlibSSLZeroCopy and MalterlibSSLSendBatching.
+
+// Submitted transfers for TLS, per direction: the ciphertext is this connection's own, so it
+// can be handed to the kernel and left alone until the completion says it has been read
+#ifndef DMibConfig_SSLCompletionIoSend
+	#define DMibConfig_SSLCompletionIoSend 1
+#endif
+
+#ifndef DMibConfig_SSLCompletionIoReceive
+	#define DMibConfig_SSLCompletionIoReceive 1
+#endif
+
+// Seals application records straight into the transport's buffer instead of letting the library
+// copy them out through the BIO, and gathers the caller's spans into each record rather than
+// staging them together first
+#ifndef DMibConfig_SSLZeroCopy
+	#define DMibConfig_SSLZeroCopy 1
+#endif
+
+// Whether a run of sends holds the records it produces in the transport and hands the whole
+// gather to the socket as one write, instead of each record leaving as it is made. Pays off
+// whenever a gather spans several records; costs a staging copy where it holds only one
+#ifndef DMibConfig_SSLSendBatching
+	#define DMibConfig_SSLSendBatching 1
+#endif
+
 namespace NMib::NNetwork
 {
 	struct CSSLSettings
@@ -206,6 +234,24 @@ namespace NMib::NNetwork
 		using FAuthenticationResultCallback = NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)>;
 		using FUserTrustDecisionCallback = NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)>;
 
+		// Scope that holds the records a run of sends produces in the transport, so a queue
+		// of messages leaves as one write instead of one per record
+		struct CSendBatch
+		{
+			CSendBatch(CSSLConnection &_Connection);
+			~CSendBatch();
+
+			CSendBatch(CSendBatch const &) = delete;
+			CSendBatch &operator = (CSendBatch const &) = delete;
+
+		protected:
+			CSSLConnection &mp_Connection;
+		};
+
+		// One whole TLS record with its framing. A destination smaller than this can never hold
+		// the record body the plaintext is paired against, so it is served the other way
+		static constexpr umint mc_nMaxRecordSize = 17 * 1024;
+
 		CSSLConnection
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
@@ -216,9 +262,87 @@ namespace NMib::NNetwork
 		;
 		~CSSLConnection();
 
-		bool f_GiveSocket(void *_pSocket);
-		void *f_GetSocket() const;
+		// The transport the connection reads and writes through. It stays the caller's to own and
+		// must outlive the connection; a socket that is closed under it stops the connection rather
+		// than being reached through
+		void f_GiveSocket(CSocket *_pSocket);
 		bool f_HasSocket() const;
+
+		// Hands the transport what a stalled send left behind, for the write readiness the socket
+		// layer reports afterwards. Records the library has produced are the transport's to deliver,
+		// and outside a transfer call nothing else would offer them again
+		CSocketOperationResult f_FlushPending();
+
+		// Holds the records a run of sends produces in the transport, so a queue of messages leaves
+		// as one write instead of one per record. Open it around sends only, and close it with
+		// f_FlushPending: the library considers a record delivered once it has handed it over and
+		// will never offer it again, so held records are owed by whoever held them
+		void f_SetSendBatching(bool _bBatching);
+
+		// What one transfer is worth to the consumer, which sizes the ciphertext buffering
+		void f_SetTransferSizeHint(umint _nBytes);
+
+		// Seals the spans into the transport buffer without copying the plaintext. Returns false
+		// when the library will not take that path, leaving the caller to fall back
+		bool f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result);
+
+		// Opens records into the caller's buffer without copying the plaintext. Returns false when
+		// the library will not take that path, leaving the caller to fall back
+		bool f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result);
+
+		// Completion transfers: the ciphertext is this connection's, so it can be handed to the
+		// kernel and left alone until the completion says it has been read
+		bool f_SupportsZeroCopy() const;
+		umint f_GetSendDepth() const;
+		void f_SetSendDepth(umint _nDepth);
+		bool f_SupportsCompletionIoSend() const;
+		bool f_SupportsCompletionIoReceive() const;
+		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);
+		// Whether a submitted send holds part of the outbound buffer
+		bool f_IsSendPinned() const;
+		// Whether a send operation could be begun right now; false while everything is blocked
+		// behind buffer-released notifications
+		bool f_CanBeginSend() const;
+		smint f_NextBeginSend() const;
+		umint f_GetPendingSend() const;
+		umint f_GetPendingSendUnpinned() const;
+		// Once submitted operations drive the send direction they are its only writer: the
+		// transport never flushes synchronously on its own from then on
+		void f_SetCompletionSend(bool _bCompletionSend);
+		// In completion mode inbound ciphertext arrives as a stream of segments; the standing
+		// kernel receive is then the connection's only reader and the synchronous fill refuses
+		void f_SetCompletionReceive(bool _bCompletionReceive);
+		umint f_GetInboundBufferSize() const;
+		// End the connection over something the caller cannot retry, in whichever direction it
+		// happened, so the state the close path reports says what actually went wrong
+		void f_FailSend(NStr::CStr _Error);
+		void f_FailReceive(NStr::CStr _Error);
+		// The memory an outstanding transfer refers to, which has to outlive this connection
+		// because the socket can be torn down before the completion runs
+		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const;
+		// True when the buffer's staged ciphertext has fully left with this completion — the
+		// moment the transfers whose seals it carries are done
+		bool f_SendCompleted(umint _iBuffer, umint _nBytes);
+		// The generation new seals land in, which names the operation a transfer resolves with
+		umint f_GetFillBuffer() const;
+		// The operation's buffer-released notification: the kernel no longer references the
+		// buffer and it may be filled again
+		void f_ReleaseSendBuffer(umint _iBuffer);
+		// One piece of the receive stream, appended in arrival order with the reference that
+		// keeps it alive; dropping the piece when it is consumed is all the retiring there is
+		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner);
+		// Drops every piece still queued, for a connection being torn down
+		void f_ClearCipherQueue();
+		// Copies stream-buffer pieces into owned storage when an incomplete record traps them:
+		// their window charges release, so a parked stream can deliver the completing bytes
+		void f_CompactCipherIfStalled();
+
+		// Give a buffer back untouched, for an operation the transport below would not accept;
+		// what f_BeginSend hands out belongs to an operation until released
+		void f_AbortSend(umint _iBuffer);
+		bool f_OpenHeld(void *_pData, umint _nLen, CSocketOperationResult &o_Result);
+
+		bool f_IsSendBufferFull() const;
 
 		void f_SetHostname(NStr::CStr const &_Hostname);
 		NStr::CStr f_GetHostname() const;
@@ -226,6 +350,7 @@ namespace NMib::NNetwork
 
 		NStr::CStr f_GetLastError() const;
 		bool f_BrokenState() const;
+		bool f_ReceivedShutdown() const;
 		bool f_Connected() const;
 
 		bool f_Connect();

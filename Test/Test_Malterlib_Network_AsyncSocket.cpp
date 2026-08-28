@@ -214,7 +214,7 @@ public:
 						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
 						Callbacks.m_fOnReceiveData = g_ActorFunctor
-							/ [=](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+							/ [=](CSharedByteVector _Data) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
@@ -228,10 +228,10 @@ public:
 								for (auto &Connection : pState->m_ServerConnections)
 								{
 									if (Connection.m_Actor)
-										Connection.m_Actor(&CAsyncSocketActor::f_SendData, CSharedByteVector(_pData), 0).f_DiscardResult();
+										Connection.m_Actor(&CAsyncSocketActor::f_SendData, CSharedByteVector(_Data), 0).f_DiscardResult();
 								}
 
-								pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+								pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 
 								while (pServerConnection->m_MessageBuffer.f_FindChar('\n') >= 0)
 								{
@@ -395,13 +395,13 @@ public:
 							}
 						;
 
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 							{
 								auto pState = pStateWeak.f_Lock();
 								if (!pState)
 									co_return {};
 								DMibLock(pState->m_Lock);
-								pState->m_ClientMessageBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+								pState->m_ClientMessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 
 								while (pState->m_ClientMessageBuffer.f_FindChar('\n') >= 0)
 									pState->m_Messages.f_Insert(fg_GetStrLineSep(pState->m_ClientMessageBuffer));
@@ -662,14 +662,14 @@ public:
 				co_await NConcurrency::fg_Timeout(0.1);
 
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
 							co_return {};
 
 						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 						if (pState->m_ServerBuffer == "Plain")
 						{
 							pState->m_bServerReceivedPlain = true;
@@ -823,14 +823,14 @@ public:
 		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 			{
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
 							co_return {};
 
 						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 						if (pState->m_ServerBuffer == "STAR")
 							pState->m_bServerReceivedPartial = true;
 
@@ -985,14 +985,14 @@ public:
 				co_await NConcurrency::fg_Timeout(0.1);
 
 				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
 							co_return {};
 
 						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 						if (pState->m_ServerBuffer == "BeforeClose")
 							pState->m_bServerReceived = true;
 
@@ -1333,7 +1333,7 @@ public:
 						co_return {};
 					}
 				;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -1344,7 +1344,7 @@ public:
 						bool bEncryptedMessage = false;
 						{
 							DMibLock(pState->m_Lock);
-							pState->m_ServerBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+							pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 							bStartTLS = pState->m_ServerBuffer == "STARTTLS";
 							bPlainMessage = pState->m_ServerBuffer == "Plain";
 							bEncryptedMessage = pState->m_ServerBuffer == "Encrypted";
@@ -1507,7 +1507,7 @@ public:
 				co_return {};
 			}
 		;
-		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
 			{
 				auto pState = pStateWeak.f_Lock();
 				if (!pState)
@@ -1518,7 +1518,7 @@ public:
 				bool bEncryptedResponse = false;
 				{
 					DMibLock(pState->m_Lock);
-					pState->m_ClientBuffer.f_AddStr((ch8 const *)_pData->f_GetArray(), _pData->f_GetLen());
+					pState->m_ClientBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
 					bUpgrade = pState->m_ClientBuffer == "S";
 					bPlainResponse = pState->m_ClientBuffer == "PlainResponse";
 					bEncryptedResponse = pState->m_ClientBuffer == "EncryptedResponse";
