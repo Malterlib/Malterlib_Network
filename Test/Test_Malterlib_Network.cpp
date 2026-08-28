@@ -208,9 +208,10 @@ public:
 			uint8 Incoming[nMessageBytes];
 			fg_MemClear(Incoming, nMessageBytes);
 			CTimeout Timeout(gc_Timeout);
+			bool bEndOfStream = false;
 			while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 			{
-				nBytes = Socket.f_Receive(Incoming + nReceived, nMessageBytes - nReceived);
+				nBytes = Socket.f_Receive(Incoming + nReceived, nMessageBytes - nReceived, bEndOfStream);
 
 				if (nBytes == -1)
 					break;
@@ -326,10 +327,11 @@ public:
 						uint8 Incoming[nMessageBytes];
 						fg_MemClear(Incoming, nMessageBytes);
 						CTimeout Timeout(gc_Timeout);
+						bool bEndOfStream = false;
 
 						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 						{
-							nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived);
+							nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived, bEndOfStream);
 
 							if (nBytes == -1)
 								break;
@@ -549,10 +551,11 @@ public:
 							uint8 Incoming[nMessageBytes];
 							fg_MemClear(Incoming, nMessageBytes);
 							CTimeout Timeout(gc_Timeout);
+							bool bEndOfStream = false;
 
 							while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
 							{
-								nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived);
+								nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived, bEndOfStream);
 
 								if (nBytes == -1)
 									break;

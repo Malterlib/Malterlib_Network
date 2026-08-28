@@ -376,7 +376,12 @@ namespace NMib::NSys::NNetwork
 
 	void fg_Close(void *_pSocket); // Closes the socket and connection
 
-	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen); // Returns bytes received
+	// Returns bytes received. A zero return means "nothing right now", which is either a transport
+	// that would block or a peer that closed its sending side; o_bEndOfStream separates the two for
+	// the layers that must tell them apart — TLS above all, where a stream that ends without its
+	// close notification is a protocol error, while a plain socket learns the same thing from the
+	// close event the loop is about to report
+	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen, bool &o_bEndOfStream);
 	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
 	// Returns total bytes sent across the spans in order; may stop mid span on partial progress
 	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
@@ -942,11 +947,11 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GetCloseReason(mp_pSocket);
 		}
 
-		umint f_Receive(void *_pData, umint _DataLen)
+		umint f_Receive(void *_pData, umint _DataLen, bool &o_bEndOfStream)
 		{
 			fp_CheckSocket();
 
-			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen);
+			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen, o_bEndOfStream);
 		}
 
 		umint f_Send(const void *_pData, umint _DataLen)

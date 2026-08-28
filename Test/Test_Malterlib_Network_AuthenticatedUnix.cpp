@@ -177,10 +177,13 @@ namespace
 		if (!Client.f_IsValid())
 			return;
 
+		// An end of stream on either side ends the relay: the sockets have no state reporter, so
+		// the receive is where a peer's close shows
+		bool bEndOfStream = false;
 		auto fForward = [&](CSocket &_From, CSocket &_To) -> bool
 			{
 				uint8 Buffer[4096];
-				umint nRead = _From.f_Receive(Buffer, sizeof(Buffer));
+				umint nRead = _From.f_Receive(Buffer, sizeof(Buffer), bEndOfStream);
 				umint nWritten = 0;
 				while (nWritten < nRead && !Timeout.f_TimedOut())
 				{
@@ -199,7 +202,7 @@ namespace
 			bool bActivity = fForward(Client, Server);
 			bActivity |= fForward(Server, Client);
 
-			if ((Client.f_GetState() | Server.f_GetState()) & (ENetTCPState_Closed | ENetTCPState_RemoteClosed))
+			if (bEndOfStream || ((Client.f_GetState() | Server.f_GetState()) & (ENetTCPState_Closed | ENetTCPState_RemoteClosed)))
 				break;
 
 			if (!bActivity)
@@ -537,6 +540,17 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 			LaunchParams.m_Environment["MalterlibTest_RelayServerPath"] = ServerPath;
 
 			NProcess::CProcessLaunch Relay(LaunchParams, NProcess::EProcessLaunchCloseFlag_TerminateProcess);
+
+			// The relay leaves once it sees an endpoint close, and the endpoints below are gone by
+			// the time this runs, so waiting here lets it exit cleanly and take its listen path
+			// with it; the terminate in the destruct flags is for a relay that hangs
+			auto WaitForRelay = g_OnScopeExit / [&]
+				{
+					CTimeout ExitTimeout(gc_Timeout);
+					while (Relay.f_IsRunning() && !ExitTimeout.f_TimedOut())
+						NSys::fg_Thread_Sleep(0.005f);
+				}
+			;
 
 			CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
 

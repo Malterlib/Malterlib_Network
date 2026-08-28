@@ -93,7 +93,8 @@ namespace
 																				try
 																				{
 																					uint8 Buffer[4096];
-																					while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096))
+																					bool bEndOfStream = false;
+																					while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096, bEndOfStream))
 																					{
 																						if (_LoopbackType == ELoopbackType_Echo)
 																						{
@@ -163,7 +164,8 @@ namespace
 																					try
 																					{
 																						uint8 Buffer[4096];
-																						while (umint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096))
+																						bool bEndOfStream = false;
+																						while (umint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096, bEndOfStream))
 																							pSendBufferMirror->f_Insert(Buffer, nBytes);
 																						if (*pSocketShared)
 																						{
