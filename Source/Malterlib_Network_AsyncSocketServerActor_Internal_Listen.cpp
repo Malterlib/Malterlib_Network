@@ -60,7 +60,10 @@ namespace NMib::NNetwork::NAsyncSocket
 				try
 				{
 					FAsyncSocketUpgradeCheck fEmptyCheckUpgrade;
-					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = NConcurrency::fg_ConstructActor<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade));
+
+					// The actor's own manager, so a server hosted off the global one gets its
+					// connections in its own pool
+					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade)));
 					NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
 					NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
 						(

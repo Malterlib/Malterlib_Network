@@ -106,14 +106,20 @@ namespace NMib::NNetwork
 				NNetwork::CNetAddress &Address = _AddressesToListenTo[i];
 
 				NConcurrency::TCActor<CListenActor> &ListenActor = Listen.m_ListenSockets[i];
-				ListenActor = NConcurrency::fg_ConstructActor<CListenActor>
+
+				// The actor's own manager, so a server hosted off the global one keeps its listen
+				// actors in its own pool
+				ListenActor = f_ConcurrencyManager().f_ConstructActor
 					(
-						fg_ThisActor(this)
-						, mp_pInternal->m_MaxMessageSize
-						, mp_pInternal->m_FragmentationSize
-						, mp_pInternal->m_Timeout
-						, mp_pInternal->m_pCheckUpgradeFactory
-						, ListenID
+						fg_Construct<CListenActor>
+						(
+							fg_ThisActor(this)
+							, mp_pInternal->m_MaxMessageSize
+							, mp_pInternal->m_FragmentationSize
+							, mp_pInternal->m_Timeout
+							, mp_pInternal->m_pCheckUpgradeFactory
+							, ListenID
+						)
 					)
 				;
 
