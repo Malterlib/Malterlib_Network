@@ -180,7 +180,8 @@ namespace
 		auto fForward = [&](CSocket &_From, CSocket &_To) -> bool
 			{
 				uint8 Buffer[4096];
-				umint nRead = _From.f_Receive(Buffer, sizeof(Buffer));
+				bool bEndOfStream = false;
+				umint nRead = _From.f_Receive(Buffer, sizeof(Buffer), bEndOfStream);
 				umint nWritten = 0;
 				while (nWritten < nRead && !Timeout.f_TimedOut())
 				{

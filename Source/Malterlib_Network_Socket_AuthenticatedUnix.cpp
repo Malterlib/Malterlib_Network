@@ -465,7 +465,10 @@ namespace NMib::NNetwork
 		if (!bHandshakeDone)
 			return Result;
 
-		Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen);
+		// End of stream is reported through the close event instead
+		bool bEndOfStream = false;
+
+		Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen, bEndOfStream);
 		if (Result.m_nBytes != 0)
 			Result.m_bReceivedNetwork = true;
 
@@ -671,9 +674,13 @@ namespace NMib::NNetwork
 	{
 		auto &Handshake = *mp_pHandshake;
 
+		// A peer closing mid handshake surfaces through the close event, so end of stream is
+		// treated the same as no data here
+		bool bEndOfStream = false;
+
 		while (Handshake.m_nFrameLengthReceived < sizeof(Handshake.m_FrameLength))
 		{
-			umint nRead = mp_Socket.f_Receive(Handshake.m_FrameLength + Handshake.m_nFrameLengthReceived, sizeof(Handshake.m_FrameLength) - Handshake.m_nFrameLengthReceived);
+			umint nRead = mp_Socket.f_Receive(Handshake.m_FrameLength + Handshake.m_nFrameLengthReceived, sizeof(Handshake.m_FrameLength) - Handshake.m_nFrameLengthReceived, bEndOfStream);
 			if (!nRead)
 				return false;
 
@@ -696,7 +703,7 @@ namespace NMib::NNetwork
 
 		while (Handshake.m_nIncomingFrameReceived < Length)
 		{
-			umint nRead = mp_Socket.f_Receive(Handshake.m_IncomingFrame.f_GetArray() + Handshake.m_nIncomingFrameReceived, Length - Handshake.m_nIncomingFrameReceived);
+			umint nRead = mp_Socket.f_Receive(Handshake.m_IncomingFrame.f_GetArray() + Handshake.m_nIncomingFrameReceived, Length - Handshake.m_nIncomingFrameReceived, bEndOfStream);
 			if (!nRead)
 				return false;
 
