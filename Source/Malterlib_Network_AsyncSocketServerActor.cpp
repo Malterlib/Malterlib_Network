@@ -107,8 +107,8 @@ namespace NMib::NNetwork
 
 				NConcurrency::TCActor<CListenActor> &ListenActor = Listen.m_ListenSockets[i];
 
-				// The actor's own manager, so a server hosted off the global one keeps its listen
-				// actors in its own pool
+				// The actor's own manager, so the listen actor's accept-path picks resolve to
+				// the same manager's loops
 				ListenActor = f_ConcurrencyManager().f_ConstructActor
 					(
 						fg_Construct<CListenActor>
@@ -123,10 +123,18 @@ namespace NMib::NNetwork
 					)
 				;
 
+				// The listen socket registers with a pool thread's event loop, so connection
+				// arrivals are reported there and the accept call stays on the local queue;
+				// the initial queue seed makes even the first accept run on that thread
+				auto Binding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+				if (Binding.m_pLoop)
+					ListenActor->f_SetInitialQueue(Binding.m_iQueue);
+
 				NConcurrency::TCWeakActor<CListenActor> WeakListenActor = ListenActor;
 
 				NStorage::TCUniquePointer<NNetwork::ICSocket> pListenSocket = SocketFactory("");
 				NException::CDisableExceptionTraceScope DisableExceptionTrace;
+				NConcurrency::CIoLoopCreateScope IoLoopScope(Binding);
 				pListenSocket->f_Listen
 					(
 						Address

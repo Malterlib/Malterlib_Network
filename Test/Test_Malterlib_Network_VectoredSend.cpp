@@ -64,6 +64,10 @@ namespace
 		{
 		}
 
+		virtual void f_SetAbortOnClose() override
+		{
+		}
+
 		virtual void f_Connect(CNetAddress const &, NFunction::TCFunctionMovable<void (ENetTCPState)> &&, CNetAddress const &) override
 		{
 		}
