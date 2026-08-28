@@ -59,7 +59,7 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CIOByteVector const> _pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NContainer::CSharedByteVector _Message)> m_fOnReceiveData;
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
@@ -129,6 +129,14 @@ namespace NMib::NNetwork
 		void fp_ProcessState(NNetwork::ENetTCPState _StateAdded);
 		void fp_ProcessStateNow(NNetwork::ENetTCPState _StateAdded);
 		void fp_UpdateSend();
+		void fp_TryActivateCompletionIo();
+		void fp_StartReceiveStream();
+		void fp_SubmitSendOp(bool _bContinue = false, umint _iInheritedReservation = ~umint(0));
+		void fp_DrainSocketOutput();
+		void fp_ReceiveSegment(NSys::CIoStreamSegment _Segment);
+		void fp_ReceiveWindowResume();
+		void fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation);
+		void fp_SendBufferReleased(umint _iTransfer);
 		void fp_Shutdown();
 		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks);
 		void fp_CheckHandshake(CInternal &_Internal);
@@ -201,6 +209,10 @@ namespace NMib::NNetwork
 	class CAsyncSocketClientActor : public NConcurrency::CActor
 	{
 	public:
+		// Runs in the same priority class as the connection actors it creates, so the
+		// setup path keeps pace with established connections and its socket callbacks
+		// stay in the pool whose loops carry the sockets
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority;
 
 		CAsyncSocketClientActor();
 		~CAsyncSocketClientActor();
@@ -241,6 +253,7 @@ namespace NMib::NNetwork
 			~CPendingConnection();
 
 			NStorage::TCUniquePointer<NNetwork::ICSocket> m_pSocket;
+			NConcurrency::CIoLoopBinding m_IoBinding;
 			NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>> m_pDeleted = fg_Construct(false);
 		};
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
@@ -261,6 +274,10 @@ namespace NMib::NNetwork
 	{
 		friend class NAsyncSocket::CListenActor;
 	public:
+		// Runs in the same priority class as the connection actors it creates, so the
+		// setup path keeps pace with established connections and its socket callbacks
+		// stay in the pool whose loops carry the sockets
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority;
 
 		CAsyncSocketServerActor();
 		~CAsyncSocketServerActor();
@@ -291,10 +308,7 @@ namespace NMib::NNetwork
 		;
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
-		// Also sizes the receive buffer: the steady state receive path lands bytes straight in the
-		// buffer that is handed to the callback, so one of these is allocated per connection as
-		// soon as it becomes readable. That is what keeps the path copy free, so it is up to the
-		// caller to keep this proportional to the number of connections it expects
+		// Also sizes the per-connection receive buffer; see CAsyncSocketClientActor
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);

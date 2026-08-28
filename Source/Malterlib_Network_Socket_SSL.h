@@ -16,7 +16,7 @@ namespace NMib::NNetwork
 		NContainer::TCVector<NContainer::CByteVector> m_CertificateChain;
 	};
 
-	class CSocket_SSL final : public ICSocket
+	class CSocket_SSL final : public ICSocket, public ICSocketCompletionIo
 	{
 		CSocket_SSL(CSocket_SSL const &) = delete;
 		CSocket_SSL &operator = (CSocket_SSL const &) = delete;
@@ -73,6 +73,29 @@ namespace NMib::NNetwork
 		virtual NStr::CStr f_GetCloseReason() override;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override;
 		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override;
+		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
+		virtual void f_SetTransferSizeHint(umint _nBytes) override;
+		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
+		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
+
+		virtual bool f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased) override;
+		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink) override;
+		virtual void f_ResumeReceiveStream() override;
+		virtual bool f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;
+		virtual bool f_ResolveHeld(void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;
+		virtual bool f_ResolveSend(NMib::NSys::CIoCompletion &_Result) override;
+		virtual void f_ResolveSendRelease(umint _iTransfer) override;
+		virtual void f_OnCompletionActivated() override;
+		virtual umint f_GetSendDepth() const override;
+		virtual bool f_SupportsCompletionSend() const override;
+		virtual bool f_CanSubmitSend() const override;
+		virtual bool f_SupportsSendStaging() const override;
+		virtual bool f_HasSendOperationInFlight() const override;
+		virtual bool f_SupportsCompletionReceive() const override;
+		virtual umint f_GetReceiveBufferBytes() const override;
+		virtual bool f_HasPendingOutput() const override;
+
+	public:
 		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) override;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
@@ -101,13 +124,46 @@ namespace NMib::NNetwork
 			, EState_Disconnected
 		};
 
+		// One caller transfer: the plaintext one f_SubmitSendVectored call handed over, the
+		// generation its seal landed in, and — for a transfer staged while an operation was in
+		// flight — the caller's functors, fired on the caller's thread when that generation's
+		// ciphertext has fully left. The transfer whose call submitted the operation carries no
+		// functors here: its own ride the operation and report through the ordinary completion
+		struct CSendOperation
+		{
+			umint m_iBuffer = 0;
+			umint m_nPlaintext = 0;
+			NSys::FIoCompletion m_fOnComplete;
+			FSocketSendReleased m_fOnReleased;
+			bool m_bHasFunctors = false;
+			bool m_bInUse = false;
+			bool m_bResolved = false;
+			bool m_bReleased = false;
+		};
+
 		bool fp_HandleHandshake();
 		void fp_HandleHandshakeDone();
 		void fp_CheckBrokenState();
 		void fp_AddTCPState(ENetTCPState _ToAdd);
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> fp_SharedOnStateChange();
 
-		NAtomic::TCAtomic<uint32> mp_ExtraState;
+		auto fp_AllocateSendOperation() -> smint;
+		void fp_TryFreeSendOperation(umint _iOperation);
+		bool fp_HasFreeSendOperation() const;
+		bool fp_SubmitPinnedSend(void const *_pData, umint _nBytes, umint _iBuffer, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased);
+		// Fires the stored functors of every staged transfer whose seals the generation
+		// carried; the operation's own transfer reports through the completion instead
+		void fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext);
+		// Fires the releases likewise, freeing each transfer that has heard both halves
+		void fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer);
+		void fp_FailAllSendOperations();
+
+		// What one TLS record carries at most; gathered sends stage up to this per seal
+		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024;
+		static constexpr umint mcp_nMaxSendOperations = 8;
+
+		CSendOperation mp_SendOperations[mcp_nMaxSendOperations];
+		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
 		CSocket mp_Socket;
@@ -117,7 +173,27 @@ namespace NMib::NNetwork
 
 		CSSLConnection mp_SSLConnection;
 
+		// Plaintext of the operation chain's own transfers that has not been reported yet:
+		// continuations carry nothing of their own, so the chain reports once
+		umint mp_nSendPlaintextHeld = 0;
+
+		// Sends with the kernel right now; the loop completes them in submission order, and
+		// the transport's pinned-generation depth bounds the count
+		umint mp_nSendOpsInFlight = 0;
+
+		NAtomic::TCAtomic<uint32> mp_ExtraState;
 		EState mp_State = EState_None;
+
+		// Set by the first send that failed; the connection is over and later completions only
+		// clear their records
+		bool mp_bSendFailed = false;
+
+		// Set when the caller says it is driving this socket's sends with submitted operations;
+		// the synchronous send entry point refuses from then on. Which directions are submitted
+		// comes from f_SupportsCompletionSend / Receive, so a connection can submit one way and
+		// stay synchronous the other
+		bool mp_bCompletionActive = false;
+
 		bool mp_bBrokenStateReported = false;
 	};
 }

@@ -82,6 +82,7 @@
 #endif
 
 #include <Mib/Core/Platform>
+#include <Mib/Core/IoStream>
 #include "Malterlib_Network_Exception.h"
 
 namespace NMib::NNetwork
@@ -262,6 +263,11 @@ namespace NMib::NNetwork
 
 	class CNetAddress;
 
+	// The released half of a send: the kernel is done with the operation's buffers. Carries the
+	// transfer name the submitting socket stamped on the completion, or mc_iTransferNone when it
+	// stamped none
+	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
+
 	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
 }
@@ -333,6 +339,11 @@ namespace NMib::NStream
 	};
 }
 
+namespace NMib::NSys
+{
+	struct ICIoLoop;
+}
+
 namespace NMib::NSys::NNetwork
 {
 // Addresses
@@ -359,11 +370,18 @@ namespace NMib::NSys::NNetwork
 
 	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, NMib::NNetwork::ENetAddressStringFlag _Flags);
 
-// Connection Operations
+	// Connection Operations
 
 	// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 	void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
 	void fg_StartSocket(void *_pSocket); // Starts the event loop
+
+	// Socket event loops
+	//
+	// Sockets are serviced by one shared loop on its own thread unless a thread claims them through
+	// the general io loop machinery (NSys::ICIoLoop in Mib/Core/IoLoop, hosted by
+	// the concurrency manager): a socket created while NSys::fg_GetThreadIoLoop() is set registers
+	// with that loop instead of the shared one
 
 	// Report to the supplied event when a new connection has arrived
 	void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
@@ -385,6 +403,31 @@ namespace NMib::NSys::NNetwork
 	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
 	// Returns total bytes sent across the spans in order; may stop mid span on partial progress
 	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
+
+	// Completion transfers
+	//
+	// Where the socket's event loop can complete transfers in the kernel (the io_uring backend), a
+	// receive or send is submitted once and reported through its completion functor instead of being
+	// driven by readiness events plus syscalls. The functor runs on the loop's thread exactly once per
+	// submitted operation. The caller owns the buffers and must keep them untouched and alive until
+	// that functor has run; closing the socket cancels outstanding operations, and each cancelled
+	// operation still reports through its functor. At most one receive and one send may be in flight
+	// per socket: the kernel does not order independent operations, so a second concurrent send could
+	// reorder the stream
+
+	// The created loop the socket registered with, null when it is serviced by the shared poller.
+	// Constant for the lifetime of a started socket. What an upgrade uses to keep the connection
+	// on its loop: the new transport re-registers the raw handle through the ambient binding
+	NMib::NSys::ICIoLoop *fg_GetOwningIoLoop(void *_pSocket);
+
+	// Constant for the lifetime of a started socket, so callers can decide their transfer mode once
+	bool fg_SupportsCompletionIo(void *_pSocket);
+	// False when the submission was refused (unsupported socket, or the socket is closing), in
+	// which case the completion functor never runs
+	bool fg_SupportsReceiveStream(void *_pSocket);
+	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink);
+	void fg_ResumeReceiveStream(void *_pSocket);
+	bool fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
 
@@ -396,8 +439,22 @@ namespace NMib::NSys::NNetwork
 	NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 	NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
 
+	// Requests the next readiness report for the given directions, forwarded to the socket's
+	// loop. Only meaningful directly after a would-block observation; the platform transfer
+	// functions request for themselves, so this exists for layers whose would-block observation
+	// happens outside them — TLS, whose reads and writes go through its own transport
+	void fg_RequestReadiness(void *_pSocket, bool _bRead, bool _bWrite);
+
 	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	// Synchronous handoff: legal only where blocking on the loop's acknowledgement is — the
+	// shared poller. Sockets on created loops use the asynchronous form
 	void *fg_GiveUpForInherit(void *_pSocket);
+	// Acknowledge-first handoff: consumes the platform socket, and the continuation receives the
+	// raw handle once the loop holds no reference to the file — on the loop's thread for a
+	// created loop, inline on the calling thread otherwise
+	void fg_GiveUpForInheritAsync(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle);
+	// Closes a raw handle produced by a handoff that no transport ever adopted
+	void fg_CloseSocketHandle(void *_pSocketHandle);
 	void *fg_GetOSSocket(void *_pSocket);
 
 	CAddress fg_GetPeerAddress(void *_pSocket);
@@ -911,6 +968,18 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GiveUpForInherit(mp_pSocket);
 		}
 
+		// Acknowledge-first handoff: consumes the platform socket at initiation — this wrapper is
+		// empty when the call returns — and the continuation receives the raw handle on the
+		// loop's thread once nothing loop-side references the file
+		void f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle)
+		{
+			fp_CheckSocket();
+
+			void *pSocket = mp_pSocket;
+			mp_pSocket = nullptr;
+			NMib::NSys::NNetwork::fg_GiveUpForInheritAsync(pSocket, fg_Move(_fOnHandle));
+		}
+
 		void *f_GetOSSocket()
 		{
 			return NMib::NSys::NNetwork::fg_GetOSSocket(mp_pSocket);
@@ -966,6 +1035,49 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_SendVectored(mp_pSocket, _pSpans, _nSpans);
+		}
+
+		void f_RequestReadiness(bool _bRead, bool _bWrite)
+		{
+			fp_CheckSocket();
+
+			NMib::NSys::NNetwork::fg_RequestReadiness(mp_pSocket, _bRead, _bWrite);
+		}
+
+		bool f_SupportsCompletionIo() const
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsCompletionIo(mp_pSocket);
+		}
+
+		NMib::NSys::ICIoLoop *f_GetOwningIoLoop() const
+		{
+			return mp_pSocket ? NMib::NSys::NNetwork::fg_GetOwningIoLoop(mp_pSocket) : nullptr;
+		}
+
+		bool f_SupportsReceiveStream() const
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsReceiveStream(mp_pSocket);
+		}
+
+		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+		{
+			fp_CheckSocket();
+
+			return NMib::NSys::NNetwork::fg_StartReceiveStream(mp_pSocket, _nBufferBytes, fg_Move(_pBackpressure), fg_Move(_fSink));
+		}
+
+		void f_ResumeReceiveStream()
+		{
+			fp_CheckSocket();
+
+			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
+		}
+
+		bool f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NMib::NSys::FIoBufferReleased &&_fOnBufferReleased)
+		{
+			fp_CheckSocket();
+
+			return NMib::NSys::NNetwork::fg_SubmitSendVectored(mp_pSocket, _pSpans, _nSpans, fg_Move(_fOnComplete), fg_Move(_fOnBufferReleased));
 		}
 
 		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)

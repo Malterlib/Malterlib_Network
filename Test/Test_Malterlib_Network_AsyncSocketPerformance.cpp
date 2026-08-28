@@ -176,7 +176,7 @@ namespace
 				CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
 
 				CAsyncSocketCallbacks Callbacks;
-				Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+				Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -190,11 +190,11 @@ namespace
 						{
 							// The received buffer is forwarded by reference; the zero copy send
 							// queue keeps it alive until it is back on the wire
-							pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, CSharedByteVector(fg_Move(_pData)), 0).f_DiscardResult();
+							pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, fg_Move(_Data), 0).f_DiscardResult();
 							co_return {};
 						}
 
-						pState->m_nServerReceivedBytes += _pData->f_GetLen();
+						pState->m_nServerReceivedBytes += _Data.f_GetLen();
 						if (pState->m_nServerReceivedBytes >= pState->m_AckTargetBytes && pState->m_ServerConnection)
 						{
 							pState->m_nServerReceivedBytes -= pState->m_AckTargetBytes;
@@ -258,10 +258,10 @@ namespace
 		;
 
 		CAsyncSocketCallbacks ClientCallbacks;
-		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](TCSharedPointer<CIOByteVector const> _pData) -> TCFuture<void>
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
 			{
 				if (auto pState = pStateWeak.f_Lock())
-					pState->f_ClientReceived(_pData->f_GetLen());
+					pState->f_ClientReceived(_Data.f_GetLen());
 				co_return {};
 			}
 		;
