@@ -198,15 +198,17 @@ namespace NMib::NNetwork
 									fCheckUpgrade = mp_fCheckUpgradeFactory();
 
 								NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor
-									= NConcurrency::fg_ConstructActor<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fCheckUpgrade))
+									= f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fCheckUpgrade)))
 								;
 
-								auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise]() mutable
+								auto *pManager = &f_ConcurrencyManager();
+
+								auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise, pManager]() mutable
 									{
 										ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket)).f_DiscardResult();
 
 										(
-											NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor())
+											NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
 											/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 											{
 												auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
