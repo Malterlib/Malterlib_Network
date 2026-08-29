@@ -54,6 +54,9 @@ namespace NMib::NNetwork
 		NAtomic::TCAtomic<uint64> m_nRecvReadinessBytes = 0;
 		NAtomic::TCAtomic<uint64> m_nSendSubmits = 0;
 		NAtomic::TCAtomic<uint64> m_nSendBlocked = 0;
+		// The most completion sends any one socket had handed to its loop at once, including the
+		// one being submitted: how much of the send depth a workload actually reaches
+		NAtomic::TCAtomic<uint64> m_nSendMaxOutstanding = 0;
 		NAtomic::TCAtomic<uint64> m_nSendSyncParked = 0;
 		NAtomic::TCAtomic<uint64> m_nSendContinuations = 0;
 		NAtomic::TCAtomic<uint64> m_nRecvSharedDeliveries = 0;

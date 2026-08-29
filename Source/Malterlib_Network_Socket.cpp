@@ -41,11 +41,12 @@ namespace NMib::NNetwork
 				(
 					NStr::fg_Format<NStr::CStrNonTracked>
 						(
-							"[net stats] send: readiness={} readinessBytes={} submits={} blocked={} syncParked={} continuations={}\n"
+							"[net stats] send: readiness={} readinessBytes={} submits={} blocked={} maxOutstanding={} syncParked={} continuations={}\n"
 							, fLoad(g_NetIoStats.m_nSendReadinessCalls)
 							, fLoad(g_NetIoStats.m_nSendReadinessBytes)
 							, fLoad(g_NetIoStats.m_nSendSubmits)
 							, fLoad(g_NetIoStats.m_nSendBlocked)
+							, fLoad(g_NetIoStats.m_nSendMaxOutstanding)
 							, fLoad(g_NetIoStats.m_nSendSyncParked)
 							, fLoad(g_NetIoStats.m_nSendContinuations)
 						)

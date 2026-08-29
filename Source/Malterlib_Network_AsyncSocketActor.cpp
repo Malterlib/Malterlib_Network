@@ -1238,18 +1238,26 @@ namespace NMib::NNetwork
 		// spoken for the batch waits; the completion that frees one re-drives this
 		if (!_bContinue)
 		{
-			bool bHasFreeReservation = false;
+			umint nInUse = 0;
 			for (umint iSlot = 0; iSlot < Internal.mc_nMaxSendReservations; ++iSlot)
 			{
-				if (!Internal.m_SendReservations[iSlot].m_bInUse)
-				{
-					bHasFreeReservation = true;
-					break;
-				}
+				if (Internal.m_SendReservations[iSlot].m_bInUse)
+					++nInUse;
 			}
 
-			if (!bHasFreeReservation)
+			if (nInUse == Internal.mc_nMaxSendReservations)
 				return;
+
+#if DMibConfig_IoDebug_Enable
+			if (NNetwork::fg_NetIoStatsEnabled())
+			{
+				uint64 nOutstanding = nInUse + 1;
+				uint64 nMax = NNetwork::g_NetIoStats.m_nSendMaxOutstanding.f_Load(NAtomic::gc_MemoryOrder_Relaxed);
+				while (nMax < nOutstanding && !NNetwork::g_NetIoStats.m_nSendMaxOutstanding.f_CompareExchangeWeak(nMax, nOutstanding, NAtomic::gc_MemoryOrder_Relaxed))
+				{
+				}
+			}
+#endif
 		}
 
 		// A continuation offers nothing: the queue still holds the plaintext of the transfer the
