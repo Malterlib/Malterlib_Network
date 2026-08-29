@@ -269,6 +269,12 @@ namespace NMib::NNetwork
 	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
 
 	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address);
+
+	// Whether an address, or the host part of a URL, names this machine's loopback interface:
+	// 127/8, ::1, or the IPv4-mapped form of 127/8; "localhost" for the string form. Transports
+	// treat loopback like a unix socket where the difference is the wire, not the peer
+	bool fg_IsLoopbackAddress(CNetAddress const &_Address);
+	bool fg_IsLoopbackHostString(NStr::CStr const &_Host);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
 }
 
