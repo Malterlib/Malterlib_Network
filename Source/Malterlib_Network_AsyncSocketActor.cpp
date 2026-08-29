@@ -269,6 +269,11 @@ namespace NMib::NNetwork
 	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
 		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout, fg_Move(_fCheckUpgrade)))
 	{
+#if DMibConfig_IoDebug_Enable
+		// The exit report registers on the first ask; asking here makes every run report
+		NNetwork::fg_NetIoStatsEnabled();
+#endif
+
 		auto &Internal = *mp_pInternal;
 		Internal.f_SetupTimeout();
 	}
@@ -986,6 +991,13 @@ namespace NMib::NNetwork
 				bDidSend = true;
 				NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_SendVectored(Spans, nSpans);
 				DMibLog(DebugVerbose3, " ++++ {} Sending {} resulted in {} sent", !Internal.m_bClient, nGatheredBytes, Result.m_nBytes);
+#if DMibConfig_IoDebug_Enable
+				if (NNetwork::fg_NetIoStatsEnabled())
+				{
+					NNetwork::g_NetIoStats.m_nSendReadinessCalls.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+					NNetwork::g_NetIoStats.m_nSendReadinessBytes.f_FetchAdd(Result.m_nBytes, NAtomic::gc_MemoryOrder_Relaxed);
+				}
+#endif
 
 				CombinedResults += Result;
 
@@ -2045,6 +2057,13 @@ namespace NMib::NNetwork
 
 						umint Size = Internal.m_fCheckUpgrade ? 1 : 4096;
 						NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive(Data, Size);
+#if DMibConfig_IoDebug_Enable
+						if (NNetwork::fg_NetIoStatsEnabled())
+						{
+							NNetwork::g_NetIoStats.m_nRecvReadinessCalls.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+							NNetwork::g_NetIoStats.m_nRecvReadinessBytes.f_FetchAdd(Result.m_nBytes, NAtomic::gc_MemoryOrder_Relaxed);
+						}
+#endif
 						if (Internal.m_State == EState_None)
 							fp_CheckHandshake(Internal);
 						CombinedResults += Result;

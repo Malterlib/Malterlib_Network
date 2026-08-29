@@ -42,12 +42,16 @@ namespace NMib::NNetwork
 
 	// Cumulative socket-level io statistics, reported at process exit when MalterlibIoStats=1;
 	// what the loop-level numbers cannot see — where the actor's send pipeline stalled, how the
-	// deliveries reached the consumer, and how often the record layer made no progress.
-	// Everything here and every recording site exists only in builds carrying the io debugging
-	// overrides
+	// deliveries reached the consumer on both transfer paths, and how often the record layer
+	// made no progress. Everything here and every recording site exists only in builds carrying
+	// the io debugging overrides
 #if DMibConfig_IoDebug_Enable
 	struct CNetIoStats
 	{
+		NAtomic::TCAtomic<uint64> m_nSendReadinessCalls = 0;
+		NAtomic::TCAtomic<uint64> m_nSendReadinessBytes = 0;
+		NAtomic::TCAtomic<uint64> m_nRecvReadinessCalls = 0;
+		NAtomic::TCAtomic<uint64> m_nRecvReadinessBytes = 0;
 		NAtomic::TCAtomic<uint64> m_nSendSubmits = 0;
 		NAtomic::TCAtomic<uint64> m_nSendBlocked = 0;
 		NAtomic::TCAtomic<uint64> m_nSendSyncParked = 0;
@@ -71,6 +75,9 @@ namespace NMib::NNetwork
 	};
 
 	extern CNetIoStats g_NetIoStats;
+
+	// Registers the exit report the first time it answers true. The socket actors ask at
+	// construction, so a run whose transfers never reached a counted site still reports its zeros
 	bool fg_NetIoStatsEnabled();
 #endif
 
