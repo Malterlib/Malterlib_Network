@@ -77,6 +77,57 @@ namespace NMib::NNetwork
 		return _Address.f_StartsWith("UNIX:") || _Address.f_StartsWith("UNIX(");
 	}
 
+	bool fg_IsLoopbackAddress(CNetAddress const &_Address)
+	{
+		CNetAddressTCPv4 TCPv4;
+		if (_Address.f_Get(TCPv4))
+			return TCPv4.m_IP[0] == 127;
+
+		CNetAddressTCPv6 TCPv6;
+		if (_Address.f_Get(TCPv6))
+		{
+			bool bMappedPrefix = true;
+			for (umint i = 0; i < 10; ++i)
+			{
+				if (TCPv6.m_IP[i] != 0)
+					bMappedPrefix = false;
+			}
+
+			if (bMappedPrefix && TCPv6.m_IP[10] == 0xff && TCPv6.m_IP[11] == 0xff)
+				return TCPv6.m_IP[12] == 127;
+
+			if (bMappedPrefix && TCPv6.m_IP[10] == 0 && TCPv6.m_IP[11] == 0)
+				return TCPv6.m_IP[12] == 0 && TCPv6.m_IP[13] == 0 && TCPv6.m_IP[14] == 0 && TCPv6.m_IP[15] == 1;
+		}
+
+		return false;
+	}
+
+	bool fg_IsLoopbackHostString(NStr::CStr const &_Host)
+	{
+		// Case-insensitively, as host names are
+		if (_Host.f_CmpNoCase(NStr::gc_Str<"localhost">.m_Str) == 0)
+			return true;
+
+		if (_Host == "::1" || _Host == "[::1]")
+			return true;
+
+		// The whole loopback net, as a literal only: a host name that begins the same way
+		// resolves wherever its records say
+		if (!_Host.f_StartsWith("127."))
+			return false;
+
+		ch8 const *pParse = _Host.f_GetStr() + 4;
+		while (*pParse)
+		{
+			if (!NStr::fg_CharIsNumber(*pParse) && *pParse != '.')
+				return false;
+			++pParse;
+		}
+
+		return true;
+	}
+
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath)
 	{
 		using namespace NStr;
