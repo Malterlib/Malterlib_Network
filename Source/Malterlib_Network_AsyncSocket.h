@@ -133,7 +133,7 @@ namespace NMib::NNetwork
 		void fp_StartReceiveStream();
 		void fp_SubmitSendOp(bool _bContinue = false, umint _iInheritedReservation = ~umint(0));
 		void fp_DrainSocketOutput();
-		void fp_ReceiveSegment(NSys::CIoStreamSegment _Segment);
+		void fp_ReceiveSegment(NSys::CIoStreamSegment &&_Segment);
 		void fp_ReceiveWindowResume();
 		void fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation);
 		void fp_SendBufferReleased(umint _iTransfer);
