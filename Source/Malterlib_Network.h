@@ -411,9 +411,10 @@ namespace NMib::NSys::NNetwork
 	// driven by readiness events plus syscalls. The functor runs on the loop's thread exactly once per
 	// submitted operation. The caller owns the buffers and must keep them untouched and alive until
 	// that functor has run; closing the socket cancels outstanding operations, and each cancelled
-	// operation still reports through its functor. At most one receive and one send may be in flight
-	// per socket: the kernel does not order independent operations, so a second concurrent send could
-	// reorder the stream
+	// operation still reports through its functor. Sends may be submitted while earlier ones are
+	// outstanding; the loop reports their completions one at a time, in submission order, which is
+	// the invariant the caller's byte accounting rests on — how many it actually keeps with the
+	// kernel at once is the loop's own business
 
 	// The created loop the socket registered with, null when it is serviced by the shared poller.
 	// Constant for the lifetime of a started socket. What an upgrade uses to keep the connection
@@ -422,6 +423,10 @@ namespace NMib::NSys::NNetwork
 
 	// Constant for the lifetime of a started socket, so callers can decide their transfer mode once
 	bool fg_SupportsCompletionIo(void *_pSocket);
+	// Whether an accepted send's buffers are released directly after its completion is reported,
+	// so nothing the caller recycles at the completion is still with the kernel. False while a
+	// zero copy send is possible on the socket
+	bool fg_SendReleaseIsPrompt(void *_pSocket);
 	// False when the submission was refused (unsupported socket, or the socket is closing), in
 	// which case the completion functor never runs
 	bool fg_SupportsReceiveStream(void *_pSocket);
@@ -1069,6 +1074,11 @@ namespace NMib::NNetwork
 		bool f_SupportsCompletionIo() const
 		{
 			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsCompletionIo(mp_pSocket);
+		}
+
+		bool f_SendReleaseIsPrompt() const
+		{
+			return !mp_pSocket || NMib::NSys::NNetwork::fg_SendReleaseIsPrompt(mp_pSocket);
 		}
 
 		NMib::NSys::ICIoLoop *f_GetOwningIoLoop() const

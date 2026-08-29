@@ -91,10 +91,10 @@ namespace NMib::NNetwork
 	// one transfer and one buffer instead of spilling a tiny tail into the next
 	inline constexpr umint gc_SocketFramingMargin = 1024;
 
-	// Completion transfers. Sends follow the NSys completion entry points: one send in flight at
-	// most, its completion functor run exactly once, its buffers untouched until the released
-	// functor says the kernel is done with them, and closing the socket cancels what is
-	// outstanding. Receives are a stream: one standing kernel receive delivers loop-owned
+	// Completion transfers. Sends follow the NSys completion entry points: several may be
+	// submitted ahead of their completions, which are reported one at a time in submission order,
+	// each completion functor run exactly once, the buffers untouched until the released functor
+	// says the kernel is done with them, and closing the socket cancels what is outstanding. Receives are a stream: one standing kernel receive delivers loop-owned
 	// segments in order, and the caller resolves each on its own thread.
 	//
 	// A socket whose payload path is a pure kernel pass-through runs its functors on the loop's
@@ -207,6 +207,12 @@ namespace NMib::NNetwork
 		// Not an operation concurrency: one send is in flight regardless, and the next is
 		// submitted on its completion while the released buffers catch up
 		virtual umint f_GetSendDepth() const;
+
+		// Whether an accepted send's released functor runs directly after its completion, so
+		// storage the caller recycles as soon as the transfer is reported is never still with
+		// the kernel. A transport that copies or seals the caller's bytes at submit answers
+		// true regardless of the socket beneath it
+		virtual bool f_SendReleaseIsPrompt() const;
 
 		// Whether a send operation submitted now could carry any bytes. False means everything
 		// pending is blocked behind buffer-released notifications: the caller goes quiescent and

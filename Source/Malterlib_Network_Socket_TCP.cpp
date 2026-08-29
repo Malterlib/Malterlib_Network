@@ -188,6 +188,12 @@ namespace NMib::NNetwork
 		return pLoop ? pLoop->f_GetCompletionSendDepth() : 1;
 	}
 
+	// The spans go to the loop untouched, so the loop's own release timing is the answer
+	bool CSocket_TCP::f_SendReleaseIsPrompt() const
+	{
+		return mp_Socket.f_SendReleaseIsPrompt();
+	}
+
 	ICSocketCompletionIo *CSocket_TCP::f_GetCompletionIo()
 	{
 		return mp_Socket.f_SupportsCompletionIo() ? this : nullptr;

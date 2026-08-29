@@ -256,6 +256,11 @@ namespace NMib::NNetwork
 		return 1;
 	}
 
+	bool ICSocketCompletionIo::f_SendReleaseIsPrompt() const
+	{
+		return true;
+	}
+
 	bool ICSocketCompletionIo::f_CanSubmitSend() const
 	{
 		return true;
