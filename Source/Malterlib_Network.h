@@ -262,6 +262,8 @@ namespace NMib::NNetwork
 
 	class CNetAddress;
 
+	bool fg_IsLoopbackAddress(CNetAddress const &_Address);
+	bool fg_IsLoopbackHostString(NStr::CStr const &_Host);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
 }
 
