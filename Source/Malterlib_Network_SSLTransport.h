@@ -23,19 +23,20 @@ namespace NMib::NNetwork
 			, mc_Failed
 		};
 
-		// One generation of outbound ciphertext. The buffer is allocated on first use
+		// One generation of outbound ciphertext, laid out without padding. The buffer is
+		// allocated on first use. Pinned while an operation reads it, which is while its
+		// pinned bytes are nonzero: only unsent bytes are ever pinned
 		struct COut
 		{
 			NStorage::TCSharedPointer<NContainer::CByteVector> m_pData;
 			umint m_nFill = 0;
 			umint m_iSent = 0;
-
-			// Whether an operation is reading this entry, and the bytes it holds while it is
-			bool m_bPinned = false;
 			umint m_nPinnedBytes = 0;
 
-			// The next generation with unsent bytes, in the order they were sealed; -1 ends the list
-			smint m_iNextUnsent = -1;
+			// The next generation with unsent bytes, in the order they were sealed, or the next
+			// free one; -1 ends either list
+			int32 m_iNextUnsent = -1;
+			int32 m_iNextFree = -1;
 		};
 
 		// One piece of the inbound ciphertext stream. m_pOwner / m_pOwned is what keeps the
@@ -148,11 +149,11 @@ namespace NMib::NNetwork
 		CSocket *mp_pSocket = nullptr;
 
 		// The generations: a pool that grows by one only when a seal finds every entry pinned,
-		// so a connection holds what its window has actually needed. Freed entries are reused
-		// newest first, so the memory the kernel just let go of is what the next records land in
-		// while it is still in cache
+		// so a connection holds what its window has actually needed. Freed entries are a list
+		// through the entries, newest first, so the memory the kernel just let go of is what the
+		// next records land in while it is still in cache
 		NContainer::TCVector<COut> mp_Out;
-		NContainer::TCVector<umint> mp_FreeOut;
+		int32 mp_iFreeHead = -1;
 
 		// The buffer a still-outstanding zero copy send displaced from the fill, kept so it
 		// can go back in once that send's notification releases it
@@ -177,8 +178,8 @@ namespace NMib::NNetwork
 		// The generations with unsent bytes that no operation carries, oldest first: what the
 		// flush drains and a begin pins, in the order the records were sealed. The fill is its
 		// tail whenever it holds anything
-		smint mp_iUnsentHead = -1;
-		smint mp_iUnsentTail = -1;
+		int32 mp_iUnsentHead = -1;
+		int32 mp_iUnsentTail = -1;
 
 		umint mp_nPinned = 0;
 		umint mp_nPinnedBytes = 0;

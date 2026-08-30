@@ -241,7 +241,10 @@ namespace NMib::NNetwork
 			Buffer.m_iSent = 0;
 			Buffer.m_nFill = 0;
 			if (iBuffer != mp_iOutFill)
-				mp_FreeOut.f_InsertLast(iBuffer);
+			{
+				mp_Out[iBuffer].m_iNextFree = mp_iFreeHead;
+				mp_iFreeHead = int32(iBuffer);
+			}
 		}
 
 		return ETransferResult::mc_Data;
@@ -263,7 +266,6 @@ namespace NMib::NNetwork
 		o_nBytes = Buffer.m_nFill - Buffer.m_iSent;
 		o_iBuffer = iBuffer;
 
-		Buffer.m_bPinned = true;
 		Buffer.m_nPinnedBytes = o_nBytes;
 		++mp_nPinned;
 		mp_nPinnedBytes += o_nBytes;
@@ -703,10 +705,9 @@ namespace NMib::NNetwork
 	void CSSLTransport::fp_ReleasePin(umint _iBuffer)
 	{
 		COut &Buffer = mp_Out[_iBuffer];
-		if (!Buffer.m_bPinned)
+		if (!Buffer.m_nPinnedBytes)
 			return;
 
-		Buffer.m_bPinned = false;
 		--mp_nPinned;
 		mp_nPinnedBytes -= Buffer.m_nPinnedBytes;
 		Buffer.m_nPinnedBytes = 0;
@@ -721,7 +722,8 @@ namespace NMib::NNetwork
 
 		Buffer.m_iSent = 0;
 		Buffer.m_nFill = 0;
-		mp_FreeOut.f_InsertLast(_iBuffer);
+		mp_Out[_iBuffer].m_iNextFree = mp_iFreeHead;
+		mp_iFreeHead = int32(_iBuffer);
 	}
 
 	// Whether another generation may be pinned: within the depth for a socket that releases
@@ -738,18 +740,18 @@ namespace NMib::NNetwork
 	{
 		mp_Out[_iBuffer].m_iNextUnsent = -1;
 		if (mp_iUnsentTail >= 0)
-			mp_Out[umint(mp_iUnsentTail)].m_iNextUnsent = smint(_iBuffer);
+			mp_Out[umint(mp_iUnsentTail)].m_iNextUnsent = int32(_iBuffer);
 		else
-			mp_iUnsentHead = smint(_iBuffer);
-		mp_iUnsentTail = smint(_iBuffer);
+			mp_iUnsentHead = int32(_iBuffer);
+		mp_iUnsentTail = int32(_iBuffer);
 	}
 
 	void CSSLTransport::fp_PushUnsentFront(umint _iBuffer)
 	{
 		mp_Out[_iBuffer].m_iNextUnsent = mp_iUnsentHead;
-		mp_iUnsentHead = smint(_iBuffer);
+		mp_iUnsentHead = int32(_iBuffer);
 		if (mp_iUnsentTail < 0)
-			mp_iUnsentTail = smint(_iBuffer);
+			mp_iUnsentTail = int32(_iBuffer);
 	}
 
 	umint CSSLTransport::fp_DequeueUnsentHead()
@@ -769,10 +771,11 @@ namespace NMib::NNetwork
 	// is with the kernel: the pool only ever grows to what the window has needed
 	umint CSSLTransport::fp_TakeFreeEntry()
 	{
-		if (mp_FreeOut.f_GetLen())
+		if (mp_iFreeHead >= 0)
 		{
-			umint iBuffer = mp_FreeOut.f_GetLast();
-			mp_FreeOut.f_SetLen(mp_FreeOut.f_GetLen() - 1);
+			umint iBuffer = umint(mp_iFreeHead);
+			mp_iFreeHead = mp_Out[iBuffer].m_iNextFree;
+			mp_Out[iBuffer].m_iNextFree = -1;
 
 			return iBuffer;
 		}
@@ -797,11 +800,10 @@ namespace NMib::NNetwork
 			fp_EnqueueUnsent(mp_iOutFill);
 	}
 
-	// Whether an operation is still reading this buffer. A flag on the entry rather than a search
-	// of the pin list: the ring scans ask per entry, and a wide send window pins hundreds
+	// Whether an operation is still reading this buffer
 	bool CSSLTransport::fp_IsPinned(umint _iBuffer) const
 	{
-		return mp_Out[_iBuffer].m_bPinned;
+		return mp_Out[_iBuffer].m_nPinnedBytes != 0;
 	}
 
 	// Moves the fill to a generation no operation is reading

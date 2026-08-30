@@ -460,7 +460,7 @@ namespace NMib::NNetwork
 		}
 
 		Operation.m_iNextForBuffer = mp_iBufferOperationHead[Operation.m_iBuffer];
-		mp_iBufferOperationHead[Operation.m_iBuffer] = smint(_iOperation);
+		mp_iBufferOperationHead[Operation.m_iBuffer] = int32(_iOperation);
 		Operation.m_bLinked = true;
 	}
 
@@ -471,7 +471,7 @@ namespace NMib::NNetwork
 
 		if (Operation.m_bLinked)
 		{
-			smint *piLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+			int32 *piLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
 			while (*piLink >= 0 && umint(*piLink) != _iOperation)
 				piLink = &mp_SendOperations[umint(*piLink)].m_iNextForBuffer;
 
@@ -480,7 +480,8 @@ namespace NMib::NNetwork
 		}
 
 		Operation = CSendOperation{};
-		mp_FreeSendOperations.f_InsertLast(_iOperation);
+		Operation.m_iNextFree = mp_iFreeOperationHead;
+		mp_iFreeOperationHead = int32(_iOperation);
 	}
 
 	bool CSocket_SSL::f_SupportsCompletionReceive() const
@@ -540,7 +541,7 @@ namespace NMib::NNetwork
 			// numbers, so the ciphertext cannot be produced again and the caller must not be
 			// told to re-send it. The transfer resolves through the generation its seal landed in
 			nCallPlaintext = Sealed.m_nBytes;
-			mp_SendOperations[iOperation].m_iBuffer = mp_SSLConnection.f_GetFillBuffer();
+			mp_SendOperations[iOperation].m_iBuffer = uint32(mp_SSLConnection.f_GetFillBuffer());
 			mp_SendOperations[iOperation].m_nPlaintext = nCallPlaintext;
 			fp_LinkSendOperation(umint(iOperation));
 
@@ -611,10 +612,10 @@ namespace NMib::NNetwork
 	auto CSocket_SSL::fp_AllocateSendOperation() -> smint
 	{
 		umint iOperation;
-		if (mp_FreeSendOperations.f_GetLen())
+		if (mp_iFreeOperationHead >= 0)
 		{
-			iOperation = mp_FreeSendOperations.f_GetLast();
-			mp_FreeSendOperations.f_SetLen(mp_FreeSendOperations.f_GetLen() - 1);
+			iOperation = umint(mp_iFreeOperationHead);
+			mp_iFreeOperationHead = mp_SendOperations[iOperation].m_iNextFree;
 		}
 		else
 		{
@@ -757,11 +758,11 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext)
 	{
-		smint iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		int32 iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
 		while (iOperation >= 0)
 		{
 			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
-			smint iNext = Operation.m_iNextForBuffer;
+			int32 iNext = Operation.m_iNextForBuffer;
 
 			if (!Operation.m_bResolved)
 			{
@@ -793,11 +794,11 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer)
 	{
-		smint iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		int32 iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
 		while (iOperation >= 0)
 		{
 			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
-			smint iNext = Operation.m_iNextForBuffer;
+			int32 iNext = Operation.m_iNextForBuffer;
 
 			if (!Operation.m_bReleased)
 			{

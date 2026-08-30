@@ -131,20 +131,23 @@ namespace NMib::NNetwork
 		// flight — the caller's functors, fired on the caller's thread when that generation's
 		// ciphertext has fully left. The transfer whose call submitted the operation carries no
 		// functors here: its own ride the operation and report through the ordinary completion
+		// One transfer in progress, laid out without padding
 		struct CSendOperation
 		{
-			umint m_iBuffer = 0;
-			umint m_nPlaintext = 0;
 			NSys::FIoCompletion m_fOnComplete;
 			FSocketSendReleased m_fOnReleased;
+			umint m_nPlaintext = 0;
+
+			// The generation the seal landed in, the operations carrying the same generation as a
+			// list per generation, and the free operations as a list; -1 ends either list
+			uint32 m_iBuffer = 0;
+			int32 m_iNextForBuffer = -1;
+			int32 m_iNextFree = -1;
 			bool m_bHasFunctors = false;
 			bool m_bInUse = false;
 			bool m_bResolved = false;
 			bool m_bReleased = false;
-
-			// The operations carrying the same generation, a list per generation
 			bool m_bLinked = false;
-			smint m_iNextForBuffer = -1;
 		};
 
 		bool fp_HandleHandshake();
@@ -167,11 +170,11 @@ namespace NMib::NNetwork
 
 		// What one TLS record carries at most; gathered sends stage up to this per seal
 		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024;
-		// The transfers in progress, as many as the window has needed at once, reused newest
-		// first; found from their generation through a list per generation
+		// The transfers in progress, as many as the window has needed at once; the free ones a
+		// list through them, newest first, and the ones carrying a generation a list per generation
 		NContainer::TCVector<CSendOperation> mp_SendOperations;
-		NContainer::TCVector<umint> mp_FreeSendOperations;
-		NContainer::TCVector<smint> mp_iBufferOperationHead;
+		int32 mp_iFreeOperationHead = -1;
+		NContainer::TCVector<int32> mp_iBufferOperationHead;
 		umint mp_nSendWindowBytes = 0;
 		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
