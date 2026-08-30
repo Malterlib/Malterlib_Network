@@ -78,6 +78,10 @@ namespace NMib::NNetwork
 		// The most generations, and bytes, one SSL connection had pinned by sends awaiting release
 		NAtomic::TCAtomic<uint64> m_nSslMaxPinned = 0;
 		NAtomic::TCAtomic<uint64> m_nSslMaxPinnedBytes = 0;
+		// The widest cap an SSL connection grew to, the last bandwidth-delay product read, and how often the path was asked
+		NAtomic::TCAtomic<uint64> m_nSslWindowMax = 0;
+		NAtomic::TCAtomic<uint64> m_nSslWindowBandwidthDelay = 0;
+		NAtomic::TCAtomic<uint64> m_nSslWindowQueries = 0;
 	};
 
 	extern CNetIoStats g_NetIoStats;
@@ -316,6 +320,10 @@ namespace NMib::NNetwork
 		// is started, and a listen socket passes it on to the connections it accepts. _bConfigured is
 		// false for the transport's own default, which leaves buffers the platform sizes well enough alone
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured);
+
+		// The bytes the path can hold in flight, from what the kernel knows of the connection;
+		// false until it knows enough, or where it cannot be asked
+		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited);
 
 		// Null for platforms or loops without kernel-completed transfers. May flip from null to
 		// non-null while a handshake is pending, so callers decide their mode once their protocol

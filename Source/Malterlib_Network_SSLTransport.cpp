@@ -256,8 +256,16 @@ namespace NMib::NNetwork
 	// what may await release at once
 	bool CSSLTransport::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
 	{
-		if (fp_SendWindowFull() || mp_TransportError || mp_iUnsentHead < 0)
+		if (mp_TransportError || mp_iUnsentHead < 0)
 			return false;
+
+		// Every buffer pinned while more wants to go out is the moment to ask the path
+		if (fp_SendWindowFull())
+		{
+			fp_ConsiderSendWindowGrowth();
+			if (fp_SendWindowFull())
+				return false;
+		}
 
 		umint iBuffer = fp_DequeueUnsentHead();
 		COut &Buffer = mp_Out[iBuffer];
@@ -737,13 +745,86 @@ namespace NMib::NNetwork
 	}
 
 	// Whether another generation may be pinned: within the depth for a socket that releases
-	// its sends promptly, otherwise within the window in bytes
+	// its sends promptly, otherwise within the cap
 	bool CSSLTransport::fp_SendWindowFull() const
 	{
 		if (!mp_nSendWindowBytes)
 			return mp_nPinned >= f_GetSendDepth();
 
-		return mp_nPinnedBytes >= mp_nSendWindowBytes;
+		return mp_nPinnedBytes >= fp_GetEffectiveSendWindow();
+	}
+
+	umint CSSLTransport::fp_GetEffectiveSendWindow() const
+	{
+		umint nFloor = fg_Min(mp_nSendWindowBytes, umint(mc_nMaxSendDepth) * mp_nOutboundCap);
+		if (!mp_nWindowEffective)
+			return nFloor;
+
+		return fg_Clamp(mp_nWindowEffective, nFloor, mp_nSendWindowBytes);
+	}
+
+	uint64 CSSLTransport::fsp_NowNs()
+	{
+		static uint64 const s_Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
+		uint64 Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
+
+		return Ticks / s_Frequency * 1000000000 + Ticks % s_Frequency * 1000000000 / s_Frequency;
+	}
+
+	// The cap is binding and more wants out. The kernel's bandwidth-delay product for the path,
+	// plus a quarter and two frames of margin, is what the cap grows toward — by no more than a
+	// doubling per query, so one odd reading cannot open it wide. A product at or under the cap
+	// leaves it where it is: the pipeline then keeps running dry, which is what lets the release
+	// notifications through. A product under three quarters of the cap for a whole second brings
+	// the cap down to it, and nothing is moved for that: pins above it are simply not replaced as
+	// their releases arrive. A rate the kernel says the sender held back never shrinks anything —
+	// a small cap would then read as a small path
+	void CSSLTransport::fp_ConsiderSendWindowGrowth()
+	{
+		if (!mp_pSocket)
+			return;
+
+		uint64 NowNs = fsp_NowNs();
+		if (mp_WindowQueryStampNs && NowNs - mp_WindowQueryStampNs < mc_WindowQueryIntervalNs)
+			return;
+		mp_WindowQueryStampNs = NowNs;
+
+		umint nBandwidthDelay = 0;
+		bool bAppLimited = false;
+		if (!mp_pSocket->f_QueryPathBandwidthDelay(nBandwidthDelay, bAppLimited))
+			return;
+
+		umint nCap = fp_GetEffectiveSendWindow();
+		umint nTarget = fg_Min(nBandwidthDelay + nBandwidthDelay / 4 + 2 * mp_nOutboundCap, mp_nSendWindowBytes);
+		if (nTarget > nCap)
+		{
+			mp_nWindowEffective = fg_Min(nTarget, nCap * 2);
+			mp_WindowShrinkSinceNs = 0;
+		}
+		else if (bAppLimited || nTarget >= nCap - nCap / 4)
+			mp_WindowShrinkSinceNs = 0;
+		else
+		{
+			if (!mp_WindowShrinkSinceNs)
+				mp_WindowShrinkSinceNs = NowNs;
+			mp_nWindowShrinkTarget = nTarget;
+			if (NowNs - mp_WindowShrinkSinceNs >= mc_WindowShrinkAfterNs)
+			{
+				mp_nWindowEffective = mp_nWindowShrinkTarget;
+				mp_WindowShrinkSinceNs = 0;
+			}
+		}
+
+	#if DMibConfig_IoDebug_Enable
+		if (fg_NetIoStatsEnabled())
+		{
+			umint nNow = fp_GetEffectiveSendWindow();
+			if (nNow > g_NetIoStats.m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				g_NetIoStats.m_nSslWindowMax.f_Store(nNow, NAtomic::gc_MemoryOrder_Relaxed);
+			g_NetIoStats.m_nSslWindowBandwidthDelay.f_Store(nBandwidthDelay, NAtomic::gc_MemoryOrder_Relaxed);
+			g_NetIoStats.m_nSslWindowQueries.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+		}
+	#endif
 	}
 
 	void CSSLTransport::fp_EnqueueUnsent(umint _iBuffer)

@@ -71,6 +71,7 @@ namespace NMib::NNetwork
 
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual umint f_GetSendDepth() const override;
 		virtual bool f_SendReleaseIsPrompt() const override;

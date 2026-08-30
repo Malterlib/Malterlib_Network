@@ -108,9 +108,12 @@ namespace NMib::NNetwork
 				(
 					NStr::fg_Format<NStr::CStrNonTracked>
 						(
-							"[net stats] ssl pins: max={} maxBytes={}\n"
+							"[net stats] ssl pins: max={} maxBytes={} cap: max={} bdp={} queries={}\n"
 							, fLoad(g_NetIoStats.m_nSslMaxPinned)
 							, fLoad(g_NetIoStats.m_nSslMaxPinnedBytes)
+							, fLoad(g_NetIoStats.m_nSslWindowMax)
+							, fLoad(g_NetIoStats.m_nSslWindowBandwidthDelay)
+							, fLoad(g_NetIoStats.m_nSslWindowQueries)
 						)
 				)
 			;
@@ -288,6 +291,11 @@ namespace NMib::NNetwork
 
 	void ICSocket::f_SetSendWindow(umint, bool)
 	{
+	}
+
+	bool ICSocket::f_QueryPathBandwidthDelay(umint &, bool &)
+	{
+		return false;
 	}
 
 	ICSocketCompletionIo *ICSocket::f_GetCompletionIo()

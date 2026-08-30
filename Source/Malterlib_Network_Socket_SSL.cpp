@@ -1017,6 +1017,11 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	bool CSocket_SSL::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	{
+		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+	}
+
 	CSocketOperationResult CSocket_SSL::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
 	{
 		CSocketOperationResult Result;

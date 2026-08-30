@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Malterlib_Network_Socket.h"
+#include <Mib/Time/Stopwatch>
 
 typedef struct crypto_ivec_st CRYPTO_IVEC;
 
@@ -135,6 +136,9 @@ namespace NMib::NNetwork
 		void fp_ReleasePin(umint _iBuffer);
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
+		umint fp_GetEffectiveSendWindow() const;
+		void fp_ConsiderSendWindowGrowth();
+		static uint64 fsp_NowNs();
 		void fp_EnqueueUnsent(umint _iBuffer);
 		void fp_PushUnsentFront(umint _iBuffer);
 		umint fp_DequeueUnsentHead();
@@ -188,6 +192,20 @@ namespace NMib::NNetwork
 		// change so asking costs nothing whatever the pool holds
 		umint mp_nPendingWrite = 0;
 		umint mp_nPendingWriteUnpinned = 0;
+
+		// The cap on pinned bytes within the configured window: eight frames to begin with, which
+		// a local path never outgrows, and grown toward the bandwidth-delay product the kernel
+		// reports for the connection — asked only when every buffer is pinned and more wants to go
+		// out, at most every ten milliseconds. A cap the path does not need stays small, so the
+		// pipeline runs dry now and then and the release notifications keep coming promptly. It
+		// shrinks slowly: only once the product has stayed under it for a second, and then by no
+		// longer letting pins above the new cap be replaced as their releases come
+		static constexpr uint64 mc_WindowQueryIntervalNs = 10000000;
+		static constexpr uint64 mc_WindowShrinkAfterNs = 1000000000;
+		umint mp_nWindowEffective = 0;
+		umint mp_nWindowShrinkTarget = 0;
+		uint64 mp_WindowQueryStampNs = 0;
+		uint64 mp_WindowShrinkSinceNs = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;

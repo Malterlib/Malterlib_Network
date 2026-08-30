@@ -442,6 +442,11 @@ namespace NMib::NSys::NNetwork
 	// and bounds the unreleased bytes of zero copy sends to it. A listen socket passes the buffers on
 	// to the connections it accepts
 	void fg_SetSendWindow(void *_pSocket, umint _nBytes, bool _bConfigured);
+	// The bytes the path can hold in flight — TCP's delivery rate times its least round trip —
+	// from what the kernel knows of the connection. False until it knows enough, or where it
+	// cannot be asked. o_bAppLimited says the rate was limited by what the sender offered, so it
+	// understates the path and must not shrink anything
+	bool fg_QueryPathBandwidthDelay(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
 	bool fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
@@ -1129,6 +1134,11 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
+		}
+
+		bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathBandwidthDelay(mp_pSocket, o_nBytes, o_bAppLimited);
 		}
 
 		void f_SetSendWindow(umint _nBytes, bool _bConfigured)

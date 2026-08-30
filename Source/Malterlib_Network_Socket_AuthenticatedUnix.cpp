@@ -555,6 +555,11 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	bool CSocket_AuthenticatedUnix::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	{
+		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+	}
+
 	bool CSocket_AuthenticatedUnix::f_SupportsCompletionReceive() const
 	{
 		return mp_Socket.f_SupportsReceiveStream();

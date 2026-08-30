@@ -77,6 +77,7 @@ namespace NMib::NNetwork
 		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited) override;
 		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 

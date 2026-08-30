@@ -209,6 +209,11 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	bool CSocket_TCP::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	{
+		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+	}
+
 	// Receives are only carried by the stream; a loop that cannot provide one leaves this
 	// direction on readiness
 	bool CSocket_TCP::f_SupportsCompletionReceive() const
