@@ -116,6 +116,8 @@ namespace NMib::NNetwork
 		// buffered in this layer when it finishes
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		virtual void f_SetInheritable() override;
+		virtual void f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;

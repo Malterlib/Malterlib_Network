@@ -293,6 +293,21 @@ namespace NMib::NNetwork
 	{
 	}
 
+	void ICSocket::f_SetInheritable()
+	{
+	}
+
+	CSocket ICSocket::f_GiveUpSocket()
+	{
+		DMibErrorNet("This transport cannot hand its socket over");
+		return CSocket();
+	}
+
+	void ICSocket::f_AdoptSocket(CSocket &&, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&)
+	{
+		DMibErrorNet("This transport cannot take over a socket");
+	}
+
 	bool ICSocket::f_QueryPathBandwidthDelay(umint &, bool &)
 	{
 		return false;

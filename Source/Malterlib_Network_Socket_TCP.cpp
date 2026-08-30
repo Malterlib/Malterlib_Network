@@ -209,6 +209,21 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	void CSocket_TCP::f_SetInheritable()
+	{
+		mp_Socket.f_SetInheritable();
+	}
+
+	CSocket CSocket_TCP::f_GiveUpSocket()
+	{
+		return fg_Move(mp_Socket);
+	}
+
+	void CSocket_TCP::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		mp_Socket.f_Adopt(fg_Move(_Socket), fg_Move(_fOnStateChange));
+	}
+
 	bool CSocket_TCP::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
 	{
 		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);

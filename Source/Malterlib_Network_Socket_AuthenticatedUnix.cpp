@@ -555,6 +555,33 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	void CSocket_AuthenticatedUnix::f_SetInheritable()
+	{
+		mp_Socket.f_SetInheritable();
+	}
+
+	// The upgrade form of f_InheritHandle: the connected socket arrives whole, registration and all
+	void CSocket_AuthenticatedUnix::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		mp_Socket.f_Close();
+		uint32 Generation;
+		{
+			DMibLock(mp_fOnStateChangeLock);
+			Generation = ++mp_ConnectionGeneration;
+			mp_fOnStateChange = fg_Move(_fOnStateChange);
+			mp_bHandshakePumpOnWrite = true;
+		}
+		fp_ResetConnectionState();
+		mp_Socket.f_Adopt(fg_Move(_Socket), fp_SharedOnStateChange(Generation));
+		if (!mp_Socket.f_IsValid())
+			return;
+
+		mp_bTransportConnected.f_Store(true);
+		mp_State = EState::mc_Handshake;
+		fp_StartHandshake();
+		fp_HandleHandshake();
+	}
+
 	bool CSocket_AuthenticatedUnix::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
 	{
 		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);

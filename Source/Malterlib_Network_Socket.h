@@ -292,6 +292,14 @@ namespace NMib::NNetwork
 		// to destroy. The default wraps the synchronous form, which is acknowledge-first on
 		// return for transports without created loops
 		virtual void f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (CInheritedSocketHandle &&_SocketHandle)> &&_fOnHandle);
+
+		// Hands the platform socket over to another transport for an upgrade that keeps the
+		// connection as the loop and the kernel know it: nothing is deregistered, rebound or given
+		// up, so it needs no inheritable socket. Only a transport with no state of its own on the
+		// wire can do this; the default refuses
+		virtual CSocket f_GiveUpSocket();
+		// The other side of that handoff: the transport starts on a connected socket it did not open
+		virtual void f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange);
 		virtual void *f_GetOSSocket() = 0;
 		virtual void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
 		virtual ENetTCPState f_GetState() = 0;
@@ -320,6 +328,14 @@ namespace NMib::NNetwork
 		// is started, and a listen socket passes it on to the connections it accepts. _bConfigured is
 		// false for the transport's own default, which leaves buffers the platform sizes well enough alone
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured);
+
+		// Marks the socket as one that will be given up, through f_GiveUpForInherit, to an owner that
+		// cannot rebind a handle — a backend without a completion port, or a system without the
+		// native replace. Before connect, listen or accept; a listen socket passes it to what it
+		// accepts. Where a platform binds a socket to its loop for the handle's lifetime the socket
+		// then forgoes that binding and runs on readiness alone, so any owner can bind it. Our own
+		// loops take over bound handles as well, so a socket given up to one of them needs no mark
+		virtual void f_SetInheritable();
 
 		// The bytes the path can hold in flight, from what the kernel knows of the connection;
 		// false until it knows enough, or where it cannot be asked

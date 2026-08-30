@@ -212,6 +212,8 @@ namespace NMib::NNetwork
 			}
 		;
 
+		fp_ApplyInheritable();
+		fp_ApplySendWindow();
 		NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 
 		NTime::CStopwatch Stopwatch(true);

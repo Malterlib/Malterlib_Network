@@ -245,7 +245,6 @@ namespace NMib::NNetwork
 
 		// The acknowledge-first handoff suspends f_UpgradeSocket between consuming the old
 		// transport and adopting the handle; close and further upgrades reject while it is set
-		bool m_bUpgradeHandoffInProgress = false;
 
 		// The standing receive: started once, ended by exactly one terminal segment. While
 		// active and unended, close-class poll states wait for it — it still holds the bytes
@@ -543,7 +542,7 @@ namespace NMib::NNetwork
 			co_return DMibErrorInstance("Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return EAsyncSocketUpgradeCheckResult_Upgrade");
 		if (!Internal.m_IncomingData.f_IsEmpty() || !Internal.m_UpgradeCheckData.f_IsEmpty() || Internal.f_HasBufferedReceive() || Internal.m_nOutgoingQueuedBytes || !Internal.m_PendingMessages.f_IsEmpty() || !Internal.m_OutgoingDataPromises.empty())
 			co_return DMibErrorInstance("Socket upgrade requires empty incoming and outgoing buffers");
-		if (Internal.m_UpgradeSocketPromise || Internal.m_bUpgradeHandoffInProgress)
+		if (Internal.m_UpgradeSocketPromise)
 			co_return DMibErrorInstance("Socket upgrade already in progress");
 
 		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _SocketFactory(_Hostname);
@@ -551,63 +550,29 @@ namespace NMib::NNetwork
 		auto DeferredTCPState = Internal.m_DeferredTCPState;
 		Internal.m_DeferredTCPState = NNetwork::ENetTCPState_None;
 
-		// Completion transfers never activate while an upgrade is still possible, so the raw fd
-		// handover below cannot race an in-flight operation
+		// Completion transfers never activate while an upgrade is still possible, so the socket
+		// changes hands with nothing in flight
 		DMibFastCheck(!Internal.m_bCompletionIo && !Internal.m_bReceiveStreamActive && !Internal.m_nSendOpsInFlight);
 
-		// The new transport re-registers the raw handle wherever the ambient loop binding points,
-		// and this actor's thread has none open — captured from the old socket so an upgraded
-		// connection stays on the loop it was created on instead of silently falling back to the
-		// shared poller. Null (shared poller, platforms without loops) makes the scope a no-op
-		NConcurrency::CIoLoopBinding UpgradeBinding;
-		UpgradeBinding.m_pLoop = Internal.m_pSocket->f_GetOwningIoLoop();
-
-		// The handoff is acknowledge-first: the old transport is consumed here and the handle
-		// arrives only once its loop holds no reference to the file, so the new transport can
-		// adopt the number with nothing stale to collide with. The actor keeps running other
-		// jobs while this is suspended — the flag makes close and further upgrades reject
-		// instead of racing the handoff, and the handle closes itself if the await never
-		// resumes (actor teardown)
-		Internal.m_bUpgradeHandoffInProgress = true;
-		auto HandoffGuard = g_OnScopeExit / [&Internal]
-			{
-				Internal.m_bUpgradeHandoffInProgress = false;
-			}
-		;
-
-		NConcurrency::TCPromise<NNetwork::CInheritedSocketHandle> HandlePromise;
-		auto HandleFuture = HandlePromise.f_Future();
-		Internal.m_pSocket->f_GiveUpForInheritAsync
+		// The platform socket itself moves to the new transport: its registration, its loop and what
+		// the kernel knows of the connection all stay as they are, only the state callback changes
+		// hands. Nothing is given up or inherited, so the socket needs no inheritable handle. The old
+		// transport is consumed by the move
+		NConcurrency::TCActor<CAsyncSocketActor> ThisActor = fg_ThisActor(this);
+		NNetwork::CSocket Socket = Internal.m_pSocket->f_GiveUpSocket();
+		Internal.m_pSocket.f_Clear();
+		pNewSocket->f_AdoptSocket
 			(
-				[HandlePromise](NNetwork::CInheritedSocketHandle &&_SocketHandle) mutable
+				fg_Move(Socket)
+				, [WeakThis = ThisActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
 				{
-					HandlePromise.f_SetResult(fg_Move(_SocketHandle));
+					auto This = WeakThis.f_Lock();
+					if (!This)
+						return;
+					This.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
 				}
 			)
 		;
-		Internal.m_pSocket.f_Clear();
-
-		NNetwork::CInheritedSocketHandle SocketHandle = co_await fg_Move(HandleFuture);
-
-		if (f_IsDestroyed())
-			co_return DMibErrorInstance("Destroying socket");
-
-		NConcurrency::TCActor<CAsyncSocketActor> ThisActor = fg_ThisActor(this);
-		{
-			NConcurrency::CIoLoopCreateScope LoopScope(UpgradeBinding);
-			pNewSocket->f_InheritHandle
-				(
-					SocketHandle.f_Detach()
-					, [WeakThis = ThisActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
-					{
-						auto This = WeakThis.f_Lock();
-						if (!This)
-							return;
-						This.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
-					}
-				)
-			;
-		}
 
 		Internal.m_pSocket = fg_Move(pNewSocket);
 
@@ -635,8 +600,6 @@ namespace NMib::NNetwork
 		auto &Internal = *mp_pInternal;
 		if (Internal.m_ClosePromise)
 			co_return DMibErrorInstance("Socket close already initiated");
-		if (Internal.m_bUpgradeHandoffInProgress)
-			co_return DMibErrorInstance("Socket upgrade in progress");
 
 		if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
 		{

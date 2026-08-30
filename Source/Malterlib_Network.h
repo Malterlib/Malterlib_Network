@@ -438,6 +438,12 @@ namespace NMib::NSys::NNetwork
 	bool fg_SupportsReceiveStream(void *_pSocket);
 	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink);
 	void fg_ResumeReceiveStream(void *_pSocket);
+	// Marks a socket that will be given up to an owner that cannot rebind a handle — a backend
+	// without a completion port, or a system without the native replace — before it is started:
+	// on a platform whose loop binding is for the handle's lifetime the socket is then driven by
+	// readiness alone, never bound. A listen socket passes it to the connections it accepts. Our
+	// own loops take over bound handles too, so the flag is only for such receivers
+	void fg_SetInheritable(void *_pSocket);
 	// Sizes the socket's kernel buffers to the window where the platform does not autotune them,
 	// and bounds the unreleased bytes of zero copy sends to it. A listen socket passes the buffers on
 	// to the connections it accepts
@@ -455,6 +461,10 @@ namespace NMib::NSys::NNetwork
 
 	// Report to the supplied event when new data is received or when we are ready to send new data
 	void fg_SetOnStateChange(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	// Moves the platform socket to a new owner without touching its registration or the kernel's
+	// state of the connection: the state callback changes hands and the new owner gets the same
+	// kickstart an inherited handle gets. For transport upgrades that keep the connection
+	void fg_ReownSocket(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
 	NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 	NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
@@ -465,6 +475,9 @@ namespace NMib::NSys::NNetwork
 	// happens outside them — TLS, whose reads and writes go through its own transport
 	void fg_RequestReadiness(void *_pSocket, bool _bRead, bool _bWrite);
 
+	// Adopts a handle another owner gave up, rebinding it to the owning loop where a previous
+	// owner had bound it. Refuses, with an exception, a handle bound to a completion port the
+	// system will not replace: such an owner must create the socket inheritable
 	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 	// Synchronous handoff: legal only where blocking on the loop's acknowledgement is — the
 	// shared poller. Sockets on created loops use the asynchronous form
@@ -838,6 +851,14 @@ namespace NMib::NNetwork
 		// Applied once the platform socket exists, so it can be set before the connect or listen
 		umint mp_nSendWindowBytes = 0;
 		bool mp_bSendWindowConfigured = false;
+		bool mp_bInheritable = false;
+
+		// Applied to every platform socket this wrapper creates, before it starts
+		void fp_ApplyInheritable()
+		{
+			if (mp_pSocket && mp_bInheritable)
+				NMib::NSys::NNetwork::fg_SetInheritable(mp_pSocket);
+		}
 
 		void fp_ApplySendWindow()
 		{
@@ -936,6 +957,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -950,6 +972,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -959,6 +982,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -968,6 +992,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -990,6 +1015,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
@@ -1000,6 +1026,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fg_Move(_fOnStateChange));
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
@@ -1019,6 +1046,18 @@ namespace NMib::NNetwork
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fg_Move(_fOnStateChange));
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
+		}
+
+		// Takes over another wrapper's platform socket for an upgrade that keeps the connection:
+		// the registration and the loop stay as they are, only the state callback changes hands
+		void f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+		{
+			f_Close();
+
+			mp_pSocket = _Socket.mp_pSocket;
+			_Socket.mp_pSocket = nullptr;
+			if (mp_pSocket)
+				NMib::NSys::NNetwork::fg_ReownSocket(mp_pSocket, fg_Move(_fOnStateChange));
 		}
 
 		void *f_GiveUpForInherit()
@@ -1141,10 +1180,20 @@ namespace NMib::NNetwork
 			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathBandwidthDelay(mp_pSocket, o_nBytes, o_bAppLimited);
 		}
 
+		// Marks the socket as one that will be given up to an owner that cannot rebind a handle (see
+		// fg_SetInheritable). Before connect, listen or accept; a listen socket passes it to what it
+		// accepts
+		void f_SetInheritable()
+		{
+			mp_bInheritable = true;
+			fp_ApplyInheritable();
+		}
+
 		void f_SetSendWindow(umint _nBytes, bool _bConfigured)
 		{
 			mp_nSendWindowBytes = _nBytes;
 			mp_bSendWindowConfigured = _bConfigured;
+			fp_ApplyInheritable();
 			fp_ApplySendWindow();
 		}
 

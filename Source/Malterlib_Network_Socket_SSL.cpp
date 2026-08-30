@@ -1017,6 +1017,30 @@ namespace NMib::NNetwork
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 
+	void CSocket_SSL::f_SetInheritable()
+	{
+		mp_Socket.f_SetInheritable();
+	}
+
+	// The upgrade form of f_InheritHandle: the connected socket arrives whole, registration and all
+	void CSocket_SSL::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		mp_fOnStateChange = fg_Move(_fOnStateChange);
+		mp_Socket.f_Adopt(fg_Move(_Socket), fp_SharedOnStateChange());
+		if (!mp_Socket.f_IsValid())
+			return;
+
+		if (mp_pSSLContext->f_IsClientContext())
+			mp_State = EState_Connected;
+		else if (mp_pSSLContext->f_IsServerContext())
+			mp_State = EState_Accept;
+		else
+			DMibErrorNet("SSL context is neither client nor server context when adopting socket");
+
+		mp_SSLConnection.f_GiveSocket(&mp_Socket);
+		fp_HandleHandshake();
+	}
+
 	bool CSocket_SSL::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
 	{
 		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
