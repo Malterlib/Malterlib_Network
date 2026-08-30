@@ -267,8 +267,6 @@ namespace NMib::NNetwork
 		o_iBuffer = iBuffer;
 
 		Buffer.m_nPinnedBytes = o_nBytes;
-		if (mp_nSendWindowBytes)
-			Buffer.m_PinStampNs = (fsp_NowNs() & ~uint64(1)) | (mp_nPinned ? 0 : 1);
 		++mp_nPinned;
 		mp_nPinnedBytes += o_nBytes;
 		mp_nPendingWriteUnpinned -= o_nBytes;
@@ -720,9 +718,6 @@ namespace NMib::NNetwork
 		if (!Buffer.m_nPinnedBytes)
 			return;
 
-		if (mp_nSendWindowBytes)
-			fp_NoteRelease(Buffer, fsp_NowNs());
-
 		--mp_nPinned;
 		mp_nPinnedBytes -= Buffer.m_nPinnedBytes;
 		Buffer.m_nPinnedBytes = 0;
@@ -742,134 +737,13 @@ namespace NMib::NNetwork
 	}
 
 	// Whether another generation may be pinned: within the depth for a socket that releases
-	// its sends promptly, otherwise within the window the path needs
+	// its sends promptly, otherwise within the window in bytes
 	bool CSSLTransport::fp_SendWindowFull() const
 	{
 		if (!mp_nSendWindowBytes)
 			return mp_nPinned >= f_GetSendDepth();
 
-		if (mp_nPinnedBytes < fp_GetEffectiveSendWindow())
-			return false;
-
-		mp_bWindowBound = true;
-
-		return true;
-	}
-
-	// The configured window is a cap; the floor is the eight frames a connection without a
-	// window gets, and between them the probe decides
-	umint CSSLTransport::fp_GetEffectiveSendWindow() const
-	{
-		umint nFloor = fg_Min(mp_nSendWindowBytes, umint(mc_nMaxSendDepth) * mp_nOutboundCap);
-		if (!mp_nWindowEffective)
-			return nFloor;
-
-		return fg_Clamp(mp_nWindowEffective, nFloor, mp_nSendWindowBytes);
-	}
-
-	uint64 CSSLTransport::fsp_NowNs()
-	{
-		static uint64 const s_Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
-		uint64 Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
-
-		return Ticks / s_Frequency * 1000000000 + Ticks % s_Frequency * 1000000000 / s_Frequency;
-	}
-
-	// A release is one sample for the probe. The least release latency of a zero copy sized
-	// generation — smaller ones the kernel copies and releases at once — sizes the interval the
-	// rate is judged over: several round trips and at least twenty milliseconds, since releases
-	// arrive in bursts and a shorter interval measures the burst rather than the throughput; a
-	// generation pinned into an empty pipeline always replaces it, so a path that got slower is
-	// followed. At the end of an interval the window bounded, the rate goes into the step's
-	// best; four such intervals settle the baseline and two decide a probe: at the baseline the
-	// window doubles, while probing a rate a quarter above the baseline keeps the doubling going
-	// and anything less falls back to the width before it and holds; after the hold the probe
-	// starts over from what it has. The cap ends the climb
-	void CSSLTransport::fp_NoteRelease(COut const &_Buffer, uint64 _NowNs)
-	{
-		if (!_Buffer.m_PinStampNs)
-			return;
-
-		uint64 LatencyNs = fg_Max(_NowNs - (_Buffer.m_PinStampNs & ~uint64(1)), uint64(1));
-		if (_Buffer.m_nPinnedBytes >= mc_nWindowLatencySampleBytes && ((_Buffer.m_PinStampNs & 1) || !mp_WindowLatencyNs || LatencyNs < mp_WindowLatencyNs))
-			mp_WindowLatencyNs = LatencyNs;
-
-		// The first second is a warm up: the pipeline is still filling and a rate measured then
-		// would make the first doubling look like a gain
-		if (!mp_WindowIntervalStartNs)
-		{
-			mp_WindowIntervalStartNs = _NowNs;
-			mp_WindowHoldUntilNs = _NowNs + 1000000000;
-			mp_WindowProbe = EWindowProbe::mc_Hold;
-		}
-		mp_nWindowIntervalBytes += _Buffer.m_nPinnedBytes;
-
-		uint64 IntervalNs = fg_Max(mp_WindowLatencyNs * 8, uint64(20000000));
-		uint64 ElapsedNs = _NowNs - mp_WindowIntervalStartNs;
-		if (ElapsedNs < IntervalNs)
-			return;
-
-		umint nRate = umint(uint64(mp_nWindowIntervalBytes) * 1000000000 / ElapsedNs);
-		bool bBound = mp_bWindowBound;
-		mp_WindowIntervalStartNs = _NowNs;
-		mp_nWindowIntervalBytes = 0;
-		mp_bWindowBound = false;
-
-		if (!bBound)
-			return;
-
-		umint nWindow = fp_GetEffectiveSendWindow();
-		mp_nWindowStepBestRate = fg_Max(mp_nWindowStepBestRate, nRate);
-		if (++mp_nWindowStepIntervals < (mp_WindowProbe == EWindowProbe::mc_Measure ? 4 : 2))
-			return;
-
-		auto fStep = [&](umint _nNext)
-			{
-				mp_nWindowPrevious = nWindow;
-				mp_nWindowEffective = fg_Min(_nNext, mp_nSendWindowBytes);
-				mp_WindowProbe = mp_nWindowEffective > nWindow ? EWindowProbe::mc_Probing : EWindowProbe::mc_Hold;
-				mp_WindowHoldUntilNs = _NowNs + mc_WindowHoldNs;
-			}
-		;
-
-		switch (mp_WindowProbe)
-		{
-		case EWindowProbe::mc_Measure:
-			mp_nWindowBaselineRate = mp_nWindowStepBestRate;
-			fStep(nWindow * 2);
-			break;
-		case EWindowProbe::mc_Probing:
-			if (mp_nWindowStepBestRate > mp_nWindowBaselineRate + mp_nWindowBaselineRate / 4)
-			{
-				mp_nWindowBaselineRate = mp_nWindowStepBestRate;
-				fStep(nWindow * 2);
-			}
-			else
-			{
-				mp_nWindowEffective = mp_nWindowPrevious;
-				mp_WindowProbe = EWindowProbe::mc_Hold;
-				mp_WindowHoldUntilNs = _NowNs + mc_WindowHoldNs;
-			}
-			break;
-		case EWindowProbe::mc_Hold:
-			if (_NowNs >= mp_WindowHoldUntilNs)
-				mp_WindowProbe = EWindowProbe::mc_Measure;
-			break;
-		}
-
-		mp_nWindowStepBestRate = 0;
-		mp_nWindowStepIntervals = 0;
-
-	#if DMibConfig_IoDebug_Enable
-		if (fg_NetIoStatsEnabled())
-		{
-			umint nNow = fp_GetEffectiveSendWindow();
-			if (nNow > g_NetIoStats.m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
-				g_NetIoStats.m_nSslWindowMax.f_Store(nNow, NAtomic::gc_MemoryOrder_Relaxed);
-			g_NetIoStats.m_nSslWindowLatencyNs.f_Store(mp_WindowLatencyNs, NAtomic::gc_MemoryOrder_Relaxed);
-			g_NetIoStats.m_nSslWindowRate.f_Store(mp_nWindowBaselineRate, NAtomic::gc_MemoryOrder_Relaxed);
-		}
-	#endif
+		return mp_nPinnedBytes >= mp_nSendWindowBytes;
 	}
 
 	void CSSLTransport::fp_EnqueueUnsent(umint _iBuffer)

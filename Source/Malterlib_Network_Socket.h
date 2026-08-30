@@ -78,10 +78,6 @@ namespace NMib::NNetwork
 		// The most generations, and bytes, one SSL connection had pinned by sends awaiting release
 		NAtomic::TCAtomic<uint64> m_nSslMaxPinned = 0;
 		NAtomic::TCAtomic<uint64> m_nSslMaxPinnedBytes = 0;
-		// The widest adaptive send window an SSL connection reached, and the latest estimate behind it
-		NAtomic::TCAtomic<uint64> m_nSslWindowMax = 0;
-		NAtomic::TCAtomic<uint64> m_nSslWindowLatencyNs = 0;
-		NAtomic::TCAtomic<uint64> m_nSslWindowRate = 0;
 	};
 
 	extern CNetIoStats g_NetIoStats;

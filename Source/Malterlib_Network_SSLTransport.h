@@ -4,7 +4,6 @@
 #pragma once
 
 #include "Malterlib_Network_Socket.h"
-#include <Mib/Time/Stopwatch>
 
 typedef struct crypto_ivec_st CRYPTO_IVEC;
 
@@ -33,10 +32,6 @@ namespace NMib::NNetwork
 			umint m_nFill = 0;
 			umint m_iSent = 0;
 			umint m_nPinnedBytes = 0;
-
-			// When the generation was pinned, for the window estimate; the low bit set says it was
-			// pinned into an empty pipeline, so its release latency carries no queueing
-			uint64 m_PinStampNs = 0;
 
 			// The next generation with unsent bytes, in the order they were sealed, or the next
 			// free one; -1 ends either list
@@ -140,9 +135,6 @@ namespace NMib::NNetwork
 		void fp_ReleasePin(umint _iBuffer);
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
-		umint fp_GetEffectiveSendWindow() const;
-		void fp_NoteRelease(COut const &_Buffer, uint64 _NowNs);
-		static uint64 fsp_NowNs();
 		void fp_EnqueueUnsent(umint _iBuffer);
 		void fp_PushUnsentFront(umint _iBuffer);
 		umint fp_DequeueUnsentHead();
@@ -196,32 +188,6 @@ namespace NMib::NNetwork
 		// change so asking costs nothing whatever the pool holds
 		umint mp_nPendingWrite = 0;
 		umint mp_nPendingWriteUnpinned = 0;
-
-		// The window the path actually needs, found within the configured one by trying: from
-		// the floor of eight frames, the window doubles as long as it is what bounds the rate and
-		// the rate keeps rising with it, falls back to the last width that gained when it stops,
-		// and probes again after a hold. A rate is only judged over intervals the window bounded;
-		// an application that sends less says nothing about the path
-		enum class EWindowProbe : uint8
-		{
-			mc_Measure
-			, mc_Probing
-			, mc_Hold
-		};
-
-		static constexpr umint mc_nWindowLatencySampleBytes = 16 * 1024;
-		static constexpr uint64 mc_WindowHoldNs = 5000000000;
-		uint64 mp_WindowLatencyNs = 0;
-		uint64 mp_WindowIntervalStartNs = 0;
-		uint64 mp_WindowHoldUntilNs = 0;
-		umint mp_nWindowIntervalBytes = 0;
-		umint mp_nWindowEffective = 0;
-		umint mp_nWindowPrevious = 0;
-		umint mp_nWindowBaselineRate = 0;
-		umint mp_nWindowStepBestRate = 0;
-		umint mp_nWindowStepIntervals = 0;
-		EWindowProbe mp_WindowProbe = EWindowProbe::mc_Measure;
-		mutable bool mp_bWindowBound = false;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;
