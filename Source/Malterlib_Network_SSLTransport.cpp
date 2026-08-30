@@ -764,10 +764,10 @@ namespace NMib::NNetwork
 
 	uint64 CSSLTransport::fsp_NowNs()
 	{
-		int64 Ticks = NTime::CSystem_Time::fs_GetTimerValue();
-		int64 Frequency = NTime::CSystem_Time::fs_TimerFrequency();
+		static uint64 const s_Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
+		uint64 Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
 
-		return uint64(Ticks / Frequency) * 1000000000 + uint64((Ticks % Frequency) * 1000000000 / Frequency);
+		return Ticks / s_Frequency * 1000000000 + Ticks % s_Frequency * 1000000000 / s_Frequency;
 	}
 
 	// A release is one sample for the estimate. Its latency stands in for the path's round trip

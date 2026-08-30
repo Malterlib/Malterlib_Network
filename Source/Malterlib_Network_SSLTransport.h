@@ -4,7 +4,7 @@
 #pragma once
 
 #include "Malterlib_Network_Socket.h"
-#include <Mib/Time/System>
+#include <Mib/Time/Stopwatch>
 
 typedef struct crypto_ivec_st CRYPTO_IVEC;
 
