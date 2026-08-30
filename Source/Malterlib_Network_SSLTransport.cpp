@@ -763,12 +763,23 @@ namespace NMib::NNetwork
 		return fg_Clamp(mp_nWindowEffective, nFloor, mp_nSendWindowBytes);
 	}
 
-	uint64 CSSLTransport::fsp_NowNs()
+	uint64 CSSLTransport::fsp_NowTicks()
 	{
-		static uint64 const s_Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
-		uint64 Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
+		return uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
+	}
 
-		return Ticks / s_Frequency * 1000000000 + Ticks % s_Frequency * 1000000000 / s_Frequency;
+	// The path is asked at most every 10 ms
+	uint64 CSSLTransport::fsp_QueryIntervalTicks()
+	{
+		static uint64 const s_Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency()) / 100;
+		return s_Ticks;
+	}
+
+	// The cap shrinks only once the target has stayed low for a second
+	uint64 CSSLTransport::fsp_ShrinkAfterTicks()
+	{
+		static uint64 const s_Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
+		return s_Ticks;
 	}
 
 	// The cap is binding and more wants out. The kernel's bandwidth-delay product for the path,
@@ -784,10 +795,10 @@ namespace NMib::NNetwork
 		if (!mp_pSocket)
 			return;
 
-		uint64 NowNs = fsp_NowNs();
-		if (mp_WindowQueryStampNs && NowNs - mp_WindowQueryStampNs < mc_WindowQueryIntervalNs)
+		uint64 Now = fsp_NowTicks();
+		if (mp_WindowQueryStamp && Now - mp_WindowQueryStamp < fsp_QueryIntervalTicks())
 			return;
-		mp_WindowQueryStampNs = NowNs;
+		mp_WindowQueryStamp = Now;
 
 		umint nBandwidthDelay = 0;
 		bool bAppLimited = false;
@@ -799,19 +810,19 @@ namespace NMib::NNetwork
 		if (nTarget > nCap)
 		{
 			mp_nWindowEffective = fg_Min(nTarget, nCap * 2);
-			mp_WindowShrinkSinceNs = 0;
+			mp_WindowShrinkSince = 0;
 		}
 		else if (bAppLimited || nTarget >= nCap - nCap / 4)
-			mp_WindowShrinkSinceNs = 0;
+			mp_WindowShrinkSince = 0;
 		else
 		{
-			if (!mp_WindowShrinkSinceNs)
-				mp_WindowShrinkSinceNs = NowNs;
+			if (!mp_WindowShrinkSince)
+				mp_WindowShrinkSince = Now;
 			mp_nWindowShrinkTarget = nTarget;
-			if (NowNs - mp_WindowShrinkSinceNs >= mc_WindowShrinkAfterNs)
+			if (Now - mp_WindowShrinkSince >= fsp_ShrinkAfterTicks())
 			{
 				mp_nWindowEffective = mp_nWindowShrinkTarget;
-				mp_WindowShrinkSinceNs = 0;
+				mp_WindowShrinkSince = 0;
 			}
 		}
 

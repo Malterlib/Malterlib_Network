@@ -138,7 +138,10 @@ namespace NMib::NNetwork
 		bool fp_SendWindowFull() const;
 		umint fp_GetEffectiveSendWindow() const;
 		void fp_ConsiderSendWindowGrowth();
-		static uint64 fsp_NowNs();
+		static uint64 fsp_NowTicks();
+		// The pacing intervals in raw timer ticks, each computed once from the timer frequency
+		static uint64 fsp_QueryIntervalTicks();
+		static uint64 fsp_ShrinkAfterTicks();
 		void fp_EnqueueUnsent(umint _iBuffer);
 		void fp_PushUnsentFront(umint _iBuffer);
 		umint fp_DequeueUnsentHead();
@@ -200,12 +203,10 @@ namespace NMib::NNetwork
 		// pipeline runs dry now and then and the release notifications keep coming promptly. It
 		// shrinks slowly: only once the product has stayed under it for a second, and then by no
 		// longer letting pins above the new cap be replaced as their releases come
-		static constexpr uint64 mc_WindowQueryIntervalNs = 10000000;
-		static constexpr uint64 mc_WindowShrinkAfterNs = 1000000000;
 		umint mp_nWindowEffective = 0;
 		umint mp_nWindowShrinkTarget = 0;
-		uint64 mp_WindowQueryStampNs = 0;
-		uint64 mp_WindowShrinkSinceNs = 0;
+		uint64 mp_WindowQueryStamp = 0;
+		uint64 mp_WindowShrinkSince = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;
