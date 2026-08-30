@@ -9,6 +9,12 @@ namespace NMib::NNetwork
 {
 	// Loop buffers still queued go home when the connection dies mid-stream: their pool
 	// waits for every hold, and nothing would consume them anymore
+	CSSLTransport::CSSLTransport()
+	{
+		mp_Out.f_SetLen(mc_nOutBuffers);
+		mp_PinnedOrder.f_SetLen(mc_nOutBuffers);
+	}
+
 	CSSLTransport::~CSSLTransport()
 	{
 		f_ClearCipherQueue();
@@ -37,6 +43,30 @@ namespace NMib::NNetwork
 	umint CSSLTransport::f_GetSendDepth() const
 	{
 		return mp_nSendDepth;
+	}
+
+	// The bytes a socket that releases its sends only at the peer's acknowledgement lets this
+	// connection keep pinned, and the ring grown to hold them: a generation per outbound cap of
+	// the window, plus the one the fill needs while every other is with the kernel. The new
+	// entries are empty, so the ring's oldest-first order is what it was; set once, before the
+	// first operation pins anything
+	void CSSLTransport::f_SetSendWindow(umint _nBytes)
+	{
+		DMibFastCheck(!mp_nPinned);
+
+		mp_nSendWindowBytes = _nBytes;
+
+		umint nBuffers = fg_Clamp((_nBytes + mp_nOutboundCap - 1) / mp_nOutboundCap + 1, mc_nOutBuffers, umint(4096));
+		if (nBuffers > mp_Out.f_GetLen())
+		{
+			mp_Out.f_SetLen(nBuffers);
+			mp_PinnedOrder.f_SetLen(nBuffers);
+		}
+	}
+
+	umint CSSLTransport::f_GetSendGenerations() const
+	{
+		return mp_Out.f_GetLen();
 	}
 
 	void CSSLTransport::f_SetSocket(CSocket *_pSocket)
@@ -85,7 +115,7 @@ namespace NMib::NNetwork
 	umint CSSLTransport::f_GetPendingWriteUnpinned() const
 	{
 		umint nPending = 0;
-		for (umint iBuffer = 0; iBuffer < mc_nOutBuffers; ++iBuffer)
+		for (umint iBuffer = 0; iBuffer < mp_Out.f_GetLen(); ++iBuffer)
 		{
 			if (fp_IsPinned(iBuffer))
 				continue;
@@ -200,9 +230,9 @@ namespace NMib::NNetwork
 
 		// Oldest first, so records leave in the order they were sealed. The buffer being
 		// filled is the newest, so the one after it is the oldest
-		for (umint iRound = 0; iRound < mc_nOutBuffers; ++iRound)
+		for (umint iRound = 0; iRound < mp_Out.f_GetLen(); ++iRound)
 		{
-			umint iBuffer = (mp_iOutFill + 1 + iRound) % mc_nOutBuffers;
+			umint iBuffer = (mp_iOutFill + 1 + iRound) % mp_Out.f_GetLen();
 
 			COut &Buffer = mp_Out[iBuffer];
 
@@ -245,13 +275,13 @@ namespace NMib::NNetwork
 	// operation carrying it — and the depth caps how many may await release at once
 	bool CSSLTransport::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
 	{
-		if (mp_nPinned >= f_GetSendDepth() || mp_TransportError)
+		if (fp_SendWindowFull() || mp_TransportError)
 			return false;
 
 		// Oldest first, for the same reason the flush drains in that order
-		for (umint iRound = 0; iRound < mc_nOutBuffers; ++iRound)
+		for (umint iRound = 0; iRound < mp_Out.f_GetLen(); ++iRound)
 		{
-			umint iBuffer = (mp_iOutFill + 1 + iRound) % mc_nOutBuffers;
+			umint iBuffer = (mp_iOutFill + 1 + iRound) % mp_Out.f_GetLen();
 			COut &Buffer = mp_Out[iBuffer];
 
 			if (fp_IsPinned(iBuffer) || Buffer.m_iSent >= Buffer.m_nFill)
@@ -262,6 +292,8 @@ namespace NMib::NNetwork
 			o_iBuffer = iBuffer;
 
 			mp_PinnedOrder[mp_nPinned++] = iBuffer;
+			Buffer.m_nPinnedBytes = o_nBytes;
+			mp_nPinnedBytes += o_nBytes;
 
 			// Sealing may not land in what the kernel is reading, so the fill moves to a
 			// buffer nothing holds. There is always one: the ring has an entry more than
@@ -331,12 +363,12 @@ namespace NMib::NNetwork
 	// generation ahead of it must leave first, under its own operation
 	smint CSSLTransport::f_NextBeginSend() const
 	{
-		if (mp_TransportError || mp_nPinned >= f_GetSendDepth())
+		if (mp_TransportError || fp_SendWindowFull())
 			return -1;
 
-		for (umint iRound = 0; iRound < mc_nOutBuffers; ++iRound)
+		for (umint iRound = 0; iRound < mp_Out.f_GetLen(); ++iRound)
 		{
-			umint iBuffer = (mp_iOutFill + 1 + iRound) % mc_nOutBuffers;
+			umint iBuffer = (mp_iOutFill + 1 + iRound) % mp_Out.f_GetLen();
 			COut const &Buffer = mp_Out[iBuffer];
 
 			// A pinned generation's unsent bytes belong to the operation already
@@ -354,8 +386,8 @@ namespace NMib::NNetwork
 	bool CSSLTransport::f_CanBeginSend() const
 	{
 		// Only an unpinned generation can be begun — a pinned one's bytes are already
-		// with their operation — so the depth is the whole answer
-		return !mp_TransportError && mp_nPinned < f_GetSendDepth();
+		// with their operation — so the window is the whole answer
+		return !mp_TransportError && !fp_SendWindowFull();
 	}
 
 	// What the kernel is reading, as something that keeps it alive on its own. The socket
@@ -716,9 +748,23 @@ namespace NMib::NNetwork
 		if (iSlot >= mp_nPinned)
 			return;
 
+		mp_nPinnedBytes -= mp_Out[_iBuffer].m_nPinnedBytes;
+		mp_Out[_iBuffer].m_nPinnedBytes = 0;
+
 		--mp_nPinned;
 		for (; iSlot < mp_nPinned; ++iSlot)
 			mp_PinnedOrder[iSlot] = mp_PinnedOrder[iSlot + 1];
+	}
+
+	// Whether another generation may be pinned: within the depth for a socket that releases
+	// its sends promptly, otherwise within the window in bytes and short of the ring's last
+	// free entry, which the fill needs
+	bool CSSLTransport::fp_SendWindowFull() const
+	{
+		if (!mp_nSendWindowBytes)
+			return mp_nPinned >= f_GetSendDepth();
+
+		return mp_nPinned + 1 >= mp_Out.f_GetLen() || mp_nPinnedBytes >= mp_nSendWindowBytes;
 	}
 
 	// Whether an operation is still reading this buffer
@@ -737,9 +783,9 @@ namespace NMib::NNetwork
 	// ring holds one entry more than the most that can be pinned at once
 	void CSSLTransport::fp_AdvanceFill()
 	{
-		for (umint iRound = 1; iRound <= mc_nOutBuffers; ++iRound)
+		for (umint iRound = 1; iRound <= mp_Out.f_GetLen(); ++iRound)
 		{
-			umint iBuffer = (mp_iOutFill + iRound) % mc_nOutBuffers;
+			umint iBuffer = (mp_iOutFill + iRound) % mp_Out.f_GetLen();
 			if (fp_IsPinned(iBuffer))
 				continue;
 

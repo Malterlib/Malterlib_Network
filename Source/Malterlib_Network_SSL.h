@@ -295,6 +295,9 @@ namespace NMib::NNetwork
 		bool f_SupportsZeroCopy() const;
 		umint f_GetSendDepth() const;
 		void f_SetSendDepth(umint _nDepth);
+		// The bytes a socket that releases its sends late lets the connection keep pinned; grows the ring of generations to hold them
+		void f_SetSendWindow(umint _nBytes);
+		umint f_GetSendGenerations() const;
 		bool f_SupportsCompletionIoSend() const;
 		bool f_SupportsCompletionIoReceive() const;
 		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);

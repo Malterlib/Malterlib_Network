@@ -29,6 +29,9 @@ namespace NMib::NNetwork
 			NStorage::TCSharedPointer<NContainer::CByteVector> m_pData = fg_Construct();
 			umint m_nFill = 0;
 			umint m_iSent = 0;
+
+			// The bytes the operation pinning this entry holds, while it is pinned
+			umint m_nPinnedBytes = 0;
 		};
 
 		// One piece of the inbound ciphertext stream. m_pOwner / m_pOwned is what keeps the
@@ -42,12 +45,15 @@ namespace NMib::NNetwork
 			NStorage::TCSharedPointer<NContainer::CByteVector> m_pOwned;
 		};
 
+		CSSLTransport();
 		~CSSLTransport();
 
 		void f_SetCompletionSend(bool _bCompletionSend);
 		void f_SetCompletionReceive(bool _bCompletionReceive);
 		void f_SetSendDepth(umint _nDepth);
 		umint f_GetSendDepth() const;
+		void f_SetSendWindow(umint _nBytes);
+		umint f_GetSendGenerations() const;
 		void f_SetSocket(CSocket *_pSocket);
 		void f_SetDeferFlush(bool _bDefer);
 
@@ -125,6 +131,7 @@ namespace NMib::NNetwork
 		ETransferResult fp_Receive(void *_pData, umint _nBytes, umint &o_nRead);
 		void fp_ReleasePin(umint _iBuffer);
 		bool fp_IsPinned(umint _iBuffer) const;
+		bool fp_SendWindowFull() const;
 		void fp_AdvanceFill();
 		void fp_EnsureFillWritable();
 		void fp_Compact();
@@ -134,8 +141,9 @@ namespace NMib::NNetwork
 		CSocket *mp_pSocket = nullptr;
 
 		// One more entry than the most sends that can be pinned at once, so there is always a
-		// buffer left to seal into while the rest are with the kernel
-		COut mp_Out[mc_nOutBuffers];
+		// buffer left to seal into while the rest are with the kernel. mc_nOutBuffers entries, or
+		// what the send window needs once one is set
+		NContainer::TCVector<COut> mp_Out;
 
 		// The buffer a still-outstanding zero copy send displaced from the ring, kept so it
 		// can go back in once that send's notification releases it
@@ -160,9 +168,11 @@ namespace NMib::NNetwork
 		// One entry per operation whose buffer-released notification is still owed, oldest
 		// first; a short send's continuation adds a second entry for the same buffer. Sized
 		// one past the generation cap for exactly that continuation
-		umint mp_PinnedOrder[mc_nOutBuffers] = {};
+		NContainer::TCVector<umint> mp_PinnedOrder;
 
 		umint mp_nPinned = 0;
+		umint mp_nPinnedBytes = 0;
+		umint mp_nSendWindowBytes = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;

@@ -17,6 +17,8 @@ namespace NMib::NNetwork
 		, mp_UserTrustDecisionCallback(_UserTrustDecisionCallback)
 		, mp_SSLConnection(_pContext, fg_TempCopy(_AuthenticationResultCallback), fg_TempCopy(_UserTrustDecisionCallback), _Hostname)
 	{
+		mp_SendOperations.f_SetLen(mcp_nMaxSendOperations);
+
 	}
 
 	CSocket_SSL::~CSocket_SSL()
@@ -332,6 +334,17 @@ namespace NMib::NNetwork
 		auto *pLoop = mp_Socket.f_GetOwningIoLoop();
 		mp_SSLConnection.f_SetSendDepth(pLoop ? pLoop->f_GetCompletionSendDepth() : 1);
 
+		// A socket that releases its sends only at the peer's acknowledgement holds the window in
+		// pinned generations, so the transport's ring, and the operations that carry them, are
+		// sized to it once here, before the first operation
+		if (mp_nSendWindowBytes && !mp_Socket.f_SendReleaseIsPrompt())
+		{
+			DMibFastCheck(!mp_nSendOpsInFlight);
+			mp_SSLConnection.f_SetSendWindow(mp_nSendWindowBytes);
+			if (mp_SSLConnection.f_GetSendGenerations() > mp_SendOperations.f_GetLen())
+				mp_SendOperations.f_SetLen(mp_SSLConnection.f_GetSendGenerations());
+		}
+
 		// From here the receive stream is the connection's only reader; the synchronous fill
 		// refusing is what keeps the shutdown and handshake paths off the descriptor too
 		if (f_SupportsCompletionReceive())
@@ -446,7 +459,7 @@ namespace NMib::NNetwork
 
 	bool CSocket_SSL::fp_HasFreeSendOperation() const
 	{
-		for (umint iOperation = 0; iOperation < mcp_nMaxSendOperations; ++iOperation)
+		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
 		{
 			if (!mp_SendOperations[iOperation].m_bInUse)
 				return true;
@@ -581,7 +594,7 @@ namespace NMib::NNetwork
 
 	auto CSocket_SSL::fp_AllocateSendOperation() -> smint
 	{
-		for (umint iOperation = 0; iOperation < mcp_nMaxSendOperations; ++iOperation)
+		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
 		{
 			if (mp_SendOperations[iOperation].m_bInUse)
 				continue;
@@ -724,7 +737,7 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext)
 	{
-		for (umint iOperation = 0; iOperation < mcp_nMaxSendOperations; ++iOperation)
+		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
 		{
 			CSendOperation &Operation = mp_SendOperations[iOperation];
 			if (!Operation.m_bInUse || Operation.m_bResolved || Operation.m_iBuffer != _iBuffer)
@@ -755,7 +768,7 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer)
 	{
-		for (umint iOperation = 0; iOperation < mcp_nMaxSendOperations; ++iOperation)
+		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
 		{
 			CSendOperation &Operation = mp_SendOperations[iOperation];
 			if (!Operation.m_bInUse || Operation.m_bReleased || Operation.m_iBuffer != _iBuffer)
@@ -779,7 +792,7 @@ namespace NMib::NNetwork
 		Failed.m_Status = NSys::EIoCompletionStatus::mc_Error;
 		Failed.m_iTransfer = NMib::NSys::CIoCompletion::mc_iTransferNone;
 
-		for (umint iOperation = 0; iOperation < mcp_nMaxSendOperations; ++iOperation)
+		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
 		{
 			CSendOperation &Operation = mp_SendOperations[iOperation];
 			if (!Operation.m_bInUse)
@@ -969,6 +982,7 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::f_SetSendWindow(umint _nBytes, bool _bConfigured)
 	{
+		mp_nSendWindowBytes = _nBytes;
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
 	}
 

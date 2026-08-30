@@ -164,7 +164,9 @@ namespace NMib::NNetwork
 		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024;
 		static constexpr umint mcp_nMaxSendOperations = 8;
 
-		CSendOperation mp_SendOperations[mcp_nMaxSendOperations];
+		// mcp_nMaxSendOperations of them, or one per generation once the send window sizes the ring
+		NContainer::TCVector<CSendOperation> mp_SendOperations;
+		umint mp_nSendWindowBytes = 0;
 		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
