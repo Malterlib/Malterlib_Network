@@ -292,6 +292,7 @@ namespace NMib::NNetwork
 			o_iBuffer = iBuffer;
 
 			mp_PinnedOrder[mp_nPinned++] = iBuffer;
+			Buffer.m_bPinned = true;
 			Buffer.m_nPinnedBytes = o_nBytes;
 			mp_nPinnedBytes += o_nBytes;
 
@@ -750,6 +751,7 @@ namespace NMib::NNetwork
 
 		mp_nPinnedBytes -= mp_Out[_iBuffer].m_nPinnedBytes;
 		mp_Out[_iBuffer].m_nPinnedBytes = 0;
+		mp_Out[_iBuffer].m_bPinned = false;
 
 		--mp_nPinned;
 		for (; iSlot < mp_nPinned; ++iSlot)
@@ -767,16 +769,11 @@ namespace NMib::NNetwork
 		return mp_nPinned + 1 >= mp_Out.f_GetLen() || mp_nPinnedBytes >= mp_nSendWindowBytes;
 	}
 
-	// Whether an operation is still reading this buffer
+	// Whether an operation is still reading this buffer. A flag on the entry rather than a search
+	// of the pin list: the ring scans ask per entry, and a wide send window pins hundreds
 	bool CSSLTransport::fp_IsPinned(umint _iBuffer) const
 	{
-		for (umint iSlot = 0; iSlot < mp_nPinned; ++iSlot)
-		{
-			if (mp_PinnedOrder[iSlot] == _iBuffer)
-				return true;
-		}
-
-		return false;
+		return mp_Out[_iBuffer].m_bPinned;
 	}
 
 	// Moves the fill to a buffer no operation is reading. One always exists, because the

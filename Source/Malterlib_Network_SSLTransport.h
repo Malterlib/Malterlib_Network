@@ -30,7 +30,8 @@ namespace NMib::NNetwork
 			umint m_nFill = 0;
 			umint m_iSent = 0;
 
-			// The bytes the operation pinning this entry holds, while it is pinned
+			// Whether an operation is reading this entry, and the bytes it holds while it is
+			bool m_bPinned = false;
 			umint m_nPinnedBytes = 0;
 		};
 
