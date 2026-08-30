@@ -139,9 +139,6 @@ namespace NMib::NNetwork
 		umint fp_GetEffectiveSendWindow() const;
 		void fp_ConsiderSendWindowGrowth();
 		static uint64 fsp_NowTicks();
-		// The pacing intervals in raw timer ticks, each computed once from the timer frequency
-		static uint64 fsp_QueryIntervalTicks();
-		static uint64 fsp_ShrinkAfterTicks();
 		void fp_EnqueueUnsent(umint _iBuffer);
 		void fp_PushUnsentFront(umint _iBuffer);
 		umint fp_DequeueUnsentHead();
@@ -205,6 +202,10 @@ namespace NMib::NNetwork
 		// longer letting pins above the new cap be replaced as their releases come
 		umint mp_nWindowEffective = 0;
 		umint mp_nWindowShrinkTarget = 0;
+		// The pacing intervals in raw timer ticks, computed from the timer frequency at the first
+		// query; the transport runs on its connection alone, so plain members need no guard
+		uint64 mp_WindowQueryIntervalTicks = 0;
+		uint64 mp_WindowShrinkAfterTicks = 0;
 		uint64 mp_WindowQueryStamp = 0;
 		uint64 mp_WindowShrinkSince = 0;
 		umint mp_nSendDepth = 1;

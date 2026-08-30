@@ -768,20 +768,6 @@ namespace NMib::NNetwork
 		return uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
 	}
 
-	// The path is asked at most every 10 ms
-	uint64 CSSLTransport::fsp_QueryIntervalTicks()
-	{
-		static uint64 const s_Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency()) / 100;
-		return s_Ticks;
-	}
-
-	// The cap shrinks only once the target has stayed low for a second
-	uint64 CSSLTransport::fsp_ShrinkAfterTicks()
-	{
-		static uint64 const s_Ticks = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
-		return s_Ticks;
-	}
-
 	// The cap is binding and more wants out. The kernel's bandwidth-delay product for the path,
 	// plus a quarter and two frames of margin, is what the cap grows toward — by no more than a
 	// doubling per query, so one odd reading cannot open it wide. A product at or under the cap
@@ -795,8 +781,17 @@ namespace NMib::NNetwork
 		if (!mp_pSocket)
 			return;
 
+		// The path is asked at most every 10 ms, and the cap shrinks only once the target has
+		// stayed low for a second
+		if (!mp_WindowQueryIntervalTicks)
+		{
+			uint64 Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
+			mp_WindowQueryIntervalTicks = Frequency / 100;
+			mp_WindowShrinkAfterTicks = Frequency;
+		}
+
 		uint64 Now = fsp_NowTicks();
-		if (mp_WindowQueryStamp && Now - mp_WindowQueryStamp < fsp_QueryIntervalTicks())
+		if (mp_WindowQueryStamp && Now - mp_WindowQueryStamp < mp_WindowQueryIntervalTicks)
 			return;
 		mp_WindowQueryStamp = Now;
 
@@ -819,7 +814,7 @@ namespace NMib::NNetwork
 			if (!mp_WindowShrinkSince)
 				mp_WindowShrinkSince = Now;
 			mp_nWindowShrinkTarget = nTarget;
-			if (Now - mp_WindowShrinkSince >= fsp_ShrinkAfterTicks())
+			if (Now - mp_WindowShrinkSince >= mp_WindowShrinkAfterTicks)
 			{
 				mp_nWindowEffective = mp_nWindowShrinkTarget;
 				mp_WindowShrinkSince = 0;
