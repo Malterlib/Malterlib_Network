@@ -267,6 +267,8 @@ namespace NMib::NNetwork
 		o_iBuffer = iBuffer;
 
 		Buffer.m_nPinnedBytes = o_nBytes;
+		if (mp_nSendWindowBytes)
+			Buffer.m_PinStampNs = (fsp_NowNs() & ~uint64(1)) | (mp_nPinned ? 0 : 1);
 		++mp_nPinned;
 		mp_nPinnedBytes += o_nBytes;
 		mp_nPendingWriteUnpinned -= o_nBytes;
@@ -718,6 +720,9 @@ namespace NMib::NNetwork
 		if (!Buffer.m_nPinnedBytes)
 			return;
 
+		if (mp_nSendWindowBytes)
+			fp_NoteRelease(Buffer, fsp_NowNs());
+
 		--mp_nPinned;
 		mp_nPinnedBytes -= Buffer.m_nPinnedBytes;
 		Buffer.m_nPinnedBytes = 0;
@@ -737,13 +742,81 @@ namespace NMib::NNetwork
 	}
 
 	// Whether another generation may be pinned: within the depth for a socket that releases
-	// its sends promptly, otherwise within the window in bytes
+	// its sends promptly, otherwise within the window the path needs
 	bool CSSLTransport::fp_SendWindowFull() const
 	{
 		if (!mp_nSendWindowBytes)
 			return mp_nPinned >= f_GetSendDepth();
 
-		return mp_nPinnedBytes >= mp_nSendWindowBytes;
+		return mp_nPinnedBytes >= fp_GetEffectiveSendWindow();
+	}
+
+	// The configured window is a cap; the floor is the eight frames a connection without a
+	// window gets, and between them the estimate rules once it exists
+	umint CSSLTransport::fp_GetEffectiveSendWindow() const
+	{
+		umint nFloor = fg_Min(mp_nSendWindowBytes, umint(mc_nMaxSendDepth) * mp_nOutboundCap);
+		if (!mp_nWindowEffective)
+			return nFloor;
+
+		return fg_Clamp(mp_nWindowEffective, nFloor, mp_nSendWindowBytes);
+	}
+
+	uint64 CSSLTransport::fsp_NowNs()
+	{
+		int64 Ticks = NTime::CSystem_Time::fs_GetTimerValue();
+		int64 Frequency = NTime::CSystem_Time::fs_TimerFrequency();
+
+		return uint64(Ticks / Frequency) * 1000000000 + uint64((Ticks % Frequency) * 1000000000 / Frequency);
+	}
+
+	// A release is one sample for the estimate. Its latency stands in for the path's round trip
+	// only when the generation went into an empty pipeline — behind other generations it also
+	// waited its turn, which is the queueing the window must not grow on — and such a sample
+	// always replaces the least, so a path that got slower is followed; a queued sample only
+	// lowers it. Bytes released are the delivery rate, taken per interval of a couple of round
+	// trips and kept for the last few intervals, so a short lull does not shrink the window
+	void CSSLTransport::fp_NoteRelease(COut const &_Buffer, uint64 _NowNs)
+	{
+		if (!_Buffer.m_PinStampNs)
+			return;
+
+		uint64 LatencyNs = _NowNs - (_Buffer.m_PinStampNs & ~uint64(1));
+		if (!LatencyNs)
+			LatencyNs = 1;
+		if ((_Buffer.m_PinStampNs & 1) || !mp_WindowMinLatencyNs || LatencyNs < mp_WindowMinLatencyNs)
+			mp_WindowMinLatencyNs = LatencyNs;
+
+		if (!mp_WindowIntervalStartNs)
+			mp_WindowIntervalStartNs = _NowNs;
+		mp_nWindowIntervalBytes += _Buffer.m_nPinnedBytes;
+
+		uint64 IntervalNs = fg_Max(mp_WindowMinLatencyNs * 2, uint64(1000000));
+		uint64 ElapsedNs = _NowNs - mp_WindowIntervalStartNs;
+		if (ElapsedNs < IntervalNs)
+			return;
+
+		mp_WindowRates[mp_iWindowRate] = umint(uint64(mp_nWindowIntervalBytes) * 1000000000 / ElapsedNs);
+		mp_iWindowRate = (mp_iWindowRate + 1) % mc_nWindowRateIntervals;
+		mp_WindowIntervalStartNs = _NowNs;
+		mp_nWindowIntervalBytes = 0;
+
+		umint nMaxRate = 0;
+		for (umint nRate : mp_WindowRates)
+			nMaxRate = fg_Max(nMaxRate, nRate);
+
+		mp_nWindowEffective = umint(uint64(nMaxRate) * mp_WindowMinLatencyNs / 1000000000 * 2);
+
+	#if DMibConfig_IoDebug_Enable
+		if (fg_NetIoStatsEnabled())
+		{
+			umint nWindow = fp_GetEffectiveSendWindow();
+			if (nWindow > g_NetIoStats.m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				g_NetIoStats.m_nSslWindowMax.f_Store(nWindow, NAtomic::gc_MemoryOrder_Relaxed);
+			g_NetIoStats.m_nSslWindowLatencyNs.f_Store(mp_WindowMinLatencyNs, NAtomic::gc_MemoryOrder_Relaxed);
+			g_NetIoStats.m_nSslWindowRate.f_Store(nMaxRate, NAtomic::gc_MemoryOrder_Relaxed);
+		}
+	#endif
 	}
 
 	void CSSLTransport::fp_EnqueueUnsent(umint _iBuffer)

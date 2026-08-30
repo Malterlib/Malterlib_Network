@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Malterlib_Network_Socket.h"
+#include <Mib/Time/System>
 
 typedef struct crypto_ivec_st CRYPTO_IVEC;
 
@@ -32,6 +33,10 @@ namespace NMib::NNetwork
 			umint m_nFill = 0;
 			umint m_iSent = 0;
 			umint m_nPinnedBytes = 0;
+
+			// When the generation was pinned, for the window estimate; the low bit set says it was
+			// pinned into an empty pipeline, so its release latency carries no queueing
+			uint64 m_PinStampNs = 0;
 
 			// The next generation with unsent bytes, in the order they were sealed, or the next
 			// free one; -1 ends either list
@@ -135,6 +140,9 @@ namespace NMib::NNetwork
 		void fp_ReleasePin(umint _iBuffer);
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
+		umint fp_GetEffectiveSendWindow() const;
+		void fp_NoteRelease(COut const &_Buffer, uint64 _NowNs);
+		static uint64 fsp_NowNs();
 		void fp_EnqueueUnsent(umint _iBuffer);
 		void fp_PushUnsentFront(umint _iBuffer);
 		umint fp_DequeueUnsentHead();
@@ -188,6 +196,18 @@ namespace NMib::NNetwork
 		// change so asking costs nothing whatever the pool holds
 		umint mp_nPendingWrite = 0;
 		umint mp_nPendingWriteUnpinned = 0;
+
+		// The window the path actually needs, found within the configured one: twice the
+		// bandwidth-delay product from the least release latency of a generation pinned into
+		// an empty pipeline and the most bytes released per interval lately. Starts at the
+		// floor of eight frames and doubles per interval while that is what bounds the rate
+		static constexpr umint mc_nWindowRateIntervals = 8;
+		uint64 mp_WindowMinLatencyNs = 0;
+		uint64 mp_WindowIntervalStartNs = 0;
+		umint mp_nWindowIntervalBytes = 0;
+		umint mp_WindowRates[mc_nWindowRateIntervals] = {};
+		umint mp_iWindowRate = 0;
+		umint mp_nWindowEffective = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;

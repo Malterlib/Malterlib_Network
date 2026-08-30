@@ -108,9 +108,12 @@ namespace NMib::NNetwork
 				(
 					NStr::fg_Format<NStr::CStrNonTracked>
 						(
-							"[net stats] ssl pins: max={} maxBytes={}\n"
+							"[net stats] ssl pins: max={} maxBytes={} window: max={} latencyUs={} rateMBs={}\n"
 							, fLoad(g_NetIoStats.m_nSslMaxPinned)
 							, fLoad(g_NetIoStats.m_nSslMaxPinnedBytes)
+							, fLoad(g_NetIoStats.m_nSslWindowMax)
+							, fLoad(g_NetIoStats.m_nSslWindowLatencyNs) / 1000
+							, fLoad(g_NetIoStats.m_nSslWindowRate) / 1000000
 						)
 				)
 			;
