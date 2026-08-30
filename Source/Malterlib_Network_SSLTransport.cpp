@@ -280,12 +280,12 @@ namespace NMib::NNetwork
 		mp_nPendingWriteUnpinned -= o_nBytes;
 
 #if DMibConfig_IoDebug_Enable
-		if (fg_NetIoStatsEnabled())
+		if (auto *pStats = fg_NetIoStats())
 		{
-			if (mp_nPinned > g_NetIoStats.m_nSslMaxPinned.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
-				g_NetIoStats.m_nSslMaxPinned.f_Store(mp_nPinned, NAtomic::gc_MemoryOrder_Relaxed);
-			if (mp_nPinnedBytes > g_NetIoStats.m_nSslMaxPinnedBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
-				g_NetIoStats.m_nSslMaxPinnedBytes.f_Store(mp_nPinnedBytes, NAtomic::gc_MemoryOrder_Relaxed);
+			if (mp_nPinned > pStats->m_nSslMaxPinned.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				pStats->m_nSslMaxPinned.f_Store(mp_nPinned, NAtomic::gc_MemoryOrder_Relaxed);
+			if (mp_nPinnedBytes > pStats->m_nSslMaxPinnedBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				pStats->m_nSslMaxPinnedBytes.f_Store(mp_nPinnedBytes, NAtomic::gc_MemoryOrder_Relaxed);
 		}
 #endif
 
@@ -580,8 +580,8 @@ namespace NMib::NNetwork
 			return;
 
 #if DMibConfig_IoDebug_Enable
-		if (NNetwork::fg_NetIoStatsEnabled())
-			NNetwork::g_NetIoStats.m_nSslCompacts.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+		if (auto *pStats = NNetwork::fg_NetIoStats())
+			pStats->m_nSslCompacts.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 #endif
 
 		umint nTotal = f_GetCipherPending();
@@ -822,13 +822,13 @@ namespace NMib::NNetwork
 		}
 
 	#if DMibConfig_IoDebug_Enable
-		if (fg_NetIoStatsEnabled())
+		if (auto *pStats = fg_NetIoStats())
 		{
 			umint nNow = fp_GetEffectiveSendWindow();
-			if (nNow > g_NetIoStats.m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
-				g_NetIoStats.m_nSslWindowMax.f_Store(nNow, NAtomic::gc_MemoryOrder_Relaxed);
-			g_NetIoStats.m_nSslWindowBandwidthDelay.f_Store(nBandwidthDelay, NAtomic::gc_MemoryOrder_Relaxed);
-			g_NetIoStats.m_nSslWindowQueries.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+			if (nNow > pStats->m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				pStats->m_nSslWindowMax.f_Store(nNow, NAtomic::gc_MemoryOrder_Relaxed);
+			pStats->m_nSslWindowBandwidthDelay.f_Store(nBandwidthDelay, NAtomic::gc_MemoryOrder_Relaxed);
+			pStats->m_nSslWindowQueries.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 		}
 	#endif
 	}

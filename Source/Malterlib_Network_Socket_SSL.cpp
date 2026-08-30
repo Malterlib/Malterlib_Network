@@ -365,12 +365,12 @@ namespace NMib::NNetwork
 	// Debug kill switch for staging: with MalterlibSSLSealAhead=0 the chain accepts one
 	// transfer at a time, which is the single operation behavior the staging replaced
 #if DMibConfig_IoDebug_Enable
-	static bool fsg_SealAheadEnabled()
+	static bool fsg_SealAheadEnabled(NMib::NSys::CIoSubSystem *_pIo)
 	{
-		return NMib::NSys::fg_ResolveIoKnob(NMib::NSys::fg_IoSubSystem().f_SslSealAhead(), true);
+		return NMib::NSys::fg_ResolveIoKnob(_pIo->f_SslSealAhead(), true);
 	}
 #else
-	static constexpr bool fsg_SealAheadEnabled()
+	static constexpr bool fsg_SealAheadEnabled(NMib::NSys::CIoSubSystem *)
 	{
 		return true;
 	}
@@ -385,8 +385,8 @@ namespace NMib::NNetwork
 		auto fLatchRefusal = [](uint64 _Reason)
 			{
 #if DMibConfig_IoDebug_Enable
-				if (fg_NetIoStatsEnabled())
-					g_NetIoStats.m_LastPumpCanBegin.f_Store(_Reason, NAtomic::gc_MemoryOrder_Relaxed);
+				if (auto *pStats = fg_NetIoStats())
+					pStats->m_LastPumpCanBegin.f_Store(_Reason, NAtomic::gc_MemoryOrder_Relaxed);
 #endif
 			}
 		;
@@ -398,7 +398,7 @@ namespace NMib::NNetwork
 			return false;
 		}
 
-		if (mp_nSendOpsInFlight && !fsg_SealAheadEnabled())
+		if (mp_nSendOpsInFlight && !fsg_SealAheadEnabled(mp_pIo))
 		{
 			fLatchRefusal(2);
 
@@ -586,8 +586,8 @@ namespace NMib::NNetwork
 		_fOnComplete(Result);
 
 #if DMibConfig_IoDebug_Enable
-		if (fg_NetIoStatsEnabled())
-			g_NetIoStats.m_nSendSyncParked.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+		if (auto *pStats = fg_NetIoStats())
+			pStats->m_nSendSyncParked.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 #endif
 
 		// No operation, so no kernel reference and nothing to wait for: the release runs inline
@@ -888,8 +888,8 @@ namespace NMib::NNetwork
 		if (_Segment.m_Status == NSys::EIoCompletionStatus::mc_Done && _Segment.m_nBytes)
 		{
 #if DMibConfig_IoDebug_Enable
-			if (fg_NetIoStatsEnabled())
-				g_NetIoStats.m_nSslSegments.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+			if (auto *pStats = fg_NetIoStats())
+				pStats->m_nSslSegments.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 #endif
 
 			// The queue carries the buffer's reference from here; dropping it when the piece is
@@ -961,8 +961,8 @@ namespace NMib::NNetwork
 		if (!Opened.m_nBytes)
 		{
 #if DMibConfig_IoDebug_Enable
-			if (fg_NetIoStatsEnabled())
-				g_NetIoStats.m_nSslNoProgress.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+			if (auto *pStats = fg_NetIoStats())
+				pStats->m_nSslNoProgress.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 #endif
 
 			mp_SSLConnection.f_CompactCipherIfStalled();

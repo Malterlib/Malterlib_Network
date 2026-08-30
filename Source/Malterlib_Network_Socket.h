@@ -5,6 +5,8 @@
 
 #include "Malterlib_Network.h"
 
+#include <Mib/Core/IoSubSystem>
+
 namespace NMib::NNetwork
 {
 	struct ICSocketConnectionInfo
@@ -40,61 +42,15 @@ namespace NMib::NNetwork
 		bool mp_bOwned = false;
 	};
 
-	// Cumulative socket-level io statistics, reported at process exit when MalterlibIoStats=1;
-	// what the loop-level numbers cannot see — where the actor's send pipeline stalled, how the
-	// deliveries reached the consumer on both transfer paths, and how often the record layer
-	// made no progress. Everything here and every recording site exists only in builds carrying
-	// the io debugging overrides
 #if DMibConfig_IoDebug_Enable
-	struct CNetIoStats
-	{
-		NAtomic::TCAtomic<uint64> m_nSendReadinessCalls = 0;
-		NAtomic::TCAtomic<uint64> m_nSendReadinessBytes = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvReadinessCalls = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvReadinessBytes = 0;
-		NAtomic::TCAtomic<uint64> m_nSendSubmits = 0;
-		NAtomic::TCAtomic<uint64> m_nSendBlocked = 0;
-		// The most completion sends any one socket had handed to its loop at once, including the
-		// one being submitted: how much of the send depth a workload actually reaches
-		NAtomic::TCAtomic<uint64> m_nSendMaxOutstanding = 0;
-		NAtomic::TCAtomic<uint64> m_nSendSyncParked = 0;
-		NAtomic::TCAtomic<uint64> m_nSendContinuations = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvSharedDeliveries = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvSharedBytes = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvCopyDeliveries = 0;
-		NAtomic::TCAtomic<uint64> m_nRecvCopyBytes = 0;
-		NAtomic::TCAtomic<uint64> m_nSslSegments = 0;
-		NAtomic::TCAtomic<uint64> m_nSslNoProgress = 0;
-		NAtomic::TCAtomic<uint64> m_nSslCompacts = 0;
-		NAtomic::TCAtomic<uint64> m_nPumpSubmits = 0;
-		NAtomic::TCAtomic<uint64> m_nPumpInFlight = 0;
-		NAtomic::TCAtomic<uint64> m_nPumpBeginRefused = 0;
-		NAtomic::TCAtomic<uint64> m_nPumpKernelRefused = 0;
-		NAtomic::TCAtomic<uint64> m_LastPumpPending = 0;
-		NAtomic::TCAtomic<uint64> m_LastPumpPinned = 0;
-		NAtomic::TCAtomic<uint64> m_LastPumpCanBegin = 0;
-		NAtomic::TCAtomic<uint64> m_LastPumpOpsInUse = 0;
-		NAtomic::TCAtomic<uint64> m_LastPumpOpsUnresolved = 0;
-		// The most generations, and bytes, one SSL connection had pinned by sends awaiting release
-		NAtomic::TCAtomic<uint64> m_nSslMaxPinned = 0;
-		NAtomic::TCAtomic<uint64> m_nSslMaxPinnedBytes = 0;
-		// The widest cap an SSL connection grew to, the last bandwidth-delay product read, and how often the path was asked
-		NAtomic::TCAtomic<uint64> m_nSslWindowMax = 0;
-		NAtomic::TCAtomic<uint64> m_nSslWindowBandwidthDelay = 0;
-		NAtomic::TCAtomic<uint64> m_nSslWindowQueries = 0;
-	};
-
-	extern CNetIoStats g_NetIoStats;
-
-	// Registers the exit report the first time it answers true. The socket actors ask at
-	// construction, so a run whose transfers never reached a counted site still reports its zeros
-	bool fg_NetIoStatsEnabled();
+	// Null when the statistics are off; the counters live on the io subsystem (m_NetIoStats)
+	NSys::CNetIoStats *fg_NetIoStats();
 #endif
 
 	// The receive stream's flow-control window: how much buffer capacity may be outstanding
 	// across the pipeline before the kernel side parks. Sized from the connection's buffer size;
 	// MalterlibReceiveWindow (bytes) overrides it in io-debug builds
-	umint fg_GetReceiveWindowBytes(umint _nBufferBytes);
+	umint fg_GetReceiveWindowBytes(NMib::NSys::CIoSubSystem &_Io, umint _nBufferBytes);
 
 	// The allowance a framing layer adds on top of what it is asked to carry, so a full
 	// fragment plus this layer's own headers and an interleaved control message still fit in

@@ -182,6 +182,9 @@ namespace NMib::NNetwork
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
 		NThread::CMutual mp_fOnStateChangeLock;
 		CSocket mp_Socket;
+		// The io subsystem, cached since each access through the getter is an atomic operation
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		NStorage::TCSharedPointer<CSSLContext> mp_pSSLContext;
 		CSSLConnection::FAuthenticationResultCallback mp_AuthenticationResultCallback;
 		CSSLConnection::FUserTrustDecisionCallback mp_UserTrustDecisionCallback;

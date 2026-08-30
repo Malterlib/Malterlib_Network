@@ -26,119 +26,20 @@ namespace NMib::NNetwork
 	}
 
 #if DMibConfig_IoDebug_Enable
-	CNetIoStats g_NetIoStats;
-
-	namespace
+	// Null when the statistics are off, so a recording site asks and finds the counters in one read
+	NSys::CNetIoStats *fg_NetIoStats()
 	{
-		void fg_DumpNetIoStats(NMib::NSys::CIoSubSystem &)
-		{
-			auto fLoad = [](NAtomic::TCAtomic<uint64> const &_Value) -> uint64
-				{
-					return _Value.f_Load(NAtomic::gc_MemoryOrder_Relaxed);
-				}
-			;
+		auto &Io = NMib::NSys::fg_IoSubSystem();
+		if (!Io.f_StatsEnabled())
+			return nullptr;
 
-			NSys::fg_ConsoleErrorOutput
-				(
-					NStr::fg_Format<NStr::CStrNonTracked>
-						(
-							"[net stats] send: readiness={} readinessBytes={} submits={} blocked={} maxOutstanding={} syncParked={} continuations={}\n"
-							, fLoad(g_NetIoStats.m_nSendReadinessCalls)
-							, fLoad(g_NetIoStats.m_nSendReadinessBytes)
-							, fLoad(g_NetIoStats.m_nSendSubmits)
-							, fLoad(g_NetIoStats.m_nSendBlocked)
-							, fLoad(g_NetIoStats.m_nSendMaxOutstanding)
-							, fLoad(g_NetIoStats.m_nSendSyncParked)
-							, fLoad(g_NetIoStats.m_nSendContinuations)
-						)
-				)
-			;
-
-			uint64 nShared = fLoad(g_NetIoStats.m_nRecvSharedDeliveries);
-			uint64 nCopy = fLoad(g_NetIoStats.m_nRecvCopyDeliveries);
-
-			NSys::fg_ConsoleErrorOutput
-				(
-					NStr::fg_Format<NStr::CStrNonTracked>
-						(
-							"[net stats] recv: readiness={} readinessBytes={} shared={} sharedBytes={} copy={} copyBytes={} sslSegments={} sslNoProgress={} sslCompacts={}\n"
-							, fLoad(g_NetIoStats.m_nRecvReadinessCalls)
-							, fLoad(g_NetIoStats.m_nRecvReadinessBytes)
-							, nShared
-							, fLoad(g_NetIoStats.m_nRecvSharedBytes)
-							, nCopy
-							, fLoad(g_NetIoStats.m_nRecvCopyBytes)
-							, fLoad(g_NetIoStats.m_nSslSegments)
-							, fLoad(g_NetIoStats.m_nSslNoProgress)
-							, fLoad(g_NetIoStats.m_nSslCompacts)
-						)
-				)
-			;
-
-			NSys::fg_ConsoleErrorOutput
-				(
-					NStr::fg_Format<NStr::CStrNonTracked>
-						(
-							"[net stats] storage copies: range={} feed={} feedConst={} consume={}\n"
-							, NStream::g_BinaryStorageRangeCopyBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed)
-							, NStream::g_BinaryStorageFeedCopyBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed)
-							, NStream::g_BinaryStorageFeedConstCopyBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed)
-							, NStream::g_BinaryStorageConsumeCopyBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed)
-						)
-				)
-			;
-
-			NSys::fg_ConsoleErrorOutput
-				(
-					NStr::fg_Format<NStr::CStrNonTracked>
-						(
-							"[net stats] ssl pump: submits={} inFlight={} beginRefused={} kernelRefused={} lastRefusal: pending={} pinned={} canBegin={} ops={}/{}\n"
-							, fLoad(g_NetIoStats.m_nPumpSubmits)
-							, fLoad(g_NetIoStats.m_nPumpInFlight)
-							, fLoad(g_NetIoStats.m_nPumpBeginRefused)
-							, fLoad(g_NetIoStats.m_nPumpKernelRefused)
-							, fLoad(g_NetIoStats.m_LastPumpPending)
-							, fLoad(g_NetIoStats.m_LastPumpPinned)
-							, fLoad(g_NetIoStats.m_LastPumpCanBegin)
-							, fLoad(g_NetIoStats.m_LastPumpOpsUnresolved)
-							, fLoad(g_NetIoStats.m_LastPumpOpsInUse)
-						)
-				)
-			;
-			NSys::fg_ConsoleErrorOutput
-				(
-					NStr::fg_Format<NStr::CStrNonTracked>
-						(
-							"[net stats] ssl pins: max={} maxBytes={} cap: max={} bdp={} queries={}\n"
-							, fLoad(g_NetIoStats.m_nSslMaxPinned)
-							, fLoad(g_NetIoStats.m_nSslMaxPinnedBytes)
-							, fLoad(g_NetIoStats.m_nSslWindowMax)
-							, fLoad(g_NetIoStats.m_nSslWindowBandwidthDelay)
-							, fLoad(g_NetIoStats.m_nSslWindowQueries)
-						)
-				)
-			;
-		}
-	}
-
-	// The subsystem read the knob once; the report registers itself the first time a run that
-	// collects asks, so a run that never touches the network prints nothing
-	bool fg_NetIoStatsEnabled()
-	{
-		if (!NMib::NSys::fg_IoSubSystem().f_StatsEnabled())
-			return false;
-
-		static NAtomic::TCAtomic<bool> s_bRegistered = false;
-		if (!s_bRegistered.f_Exchange(true))
-			NMib::NSys::fg_IoSubSystem().f_RegisterStatsDump(&fg_DumpNetIoStats);
-
-		return true;
+		return &Io.m_NetIoStats;
 	}
 #endif
 
-	umint fg_GetReceiveWindowBytes(umint _nBufferBytes)
+	umint fg_GetReceiveWindowBytes(NMib::NSys::CIoSubSystem &_Io, umint _nBufferBytes)
 	{
-		if (umint nWindow = NMib::NSys::fg_IoSubSystem().f_ReceiveWindowBytesOverride())
+		if (umint nWindow = _Io.f_ReceiveWindowBytesOverride())
 		{
 			// Floored at a few buffers whatever the override says: a window smaller than that
 			// can park the stream while a record that straddles buffers is still incomplete,

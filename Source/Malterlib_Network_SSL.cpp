@@ -35,46 +35,46 @@ namespace NMib::NNetwork
 		// knob is its compile time answer as a constexpr constant, so the branches consulting it
 		// fold away
 #if DMibConfig_IoDebug_Enable
-		bool fg_SendBatchingEnabled()
+		bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
-			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslSendBatching(), DMibConfig_SSLSendBatching != 0);
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslSendBatching(), DMibConfig_SSLSendBatching != 0);
 		}
 
 		// Same shape as the batching knob: a build carrying the io debugging overrides lets the
 		// environment answer, so both paths can be measured against each other in one binary
-		bool fg_ZeroCopyEnabled()
+		bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
-			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslZeroCopy(), DMibConfig_SSLZeroCopy != 0);
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslZeroCopy(), DMibConfig_SSLZeroCopy != 0);
 		}
 
 		// Each direction answers separately so one can be measured against the readiness path
 		// while the other is held fixed
-		bool fg_CompletionIoSendEnabled()
+		bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
-			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslCompletionIoSend(), DMibConfig_SSLCompletionIoSend != 0);
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslCompletionIoSend(), DMibConfig_SSLCompletionIoSend != 0);
 		}
 
-		bool fg_CompletionIoReceiveEnabled()
+		bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
-			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslCompletionIoReceive(), DMibConfig_SSLCompletionIoReceive != 0);
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslCompletionIoReceive(), DMibConfig_SSLCompletionIoReceive != 0);
 		}
 #else
-		constexpr bool fg_SendBatchingEnabled()
+		constexpr bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *)
 		{
 			return DMibConfig_SSLSendBatching != 0;
 		}
 
-		constexpr bool fg_ZeroCopyEnabled()
+		constexpr bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *)
 		{
 			return DMibConfig_SSLZeroCopy != 0;
 		}
 
-		constexpr bool fg_CompletionIoSendEnabled()
+		constexpr bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *)
 		{
 			return DMibConfig_SSLCompletionIoSend != 0;
 		}
 
-		constexpr bool fg_CompletionIoReceiveEnabled()
+		constexpr bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *)
 		{
 			return DMibConfig_SSLCompletionIoReceive != 0;
 		}
@@ -1010,6 +1010,9 @@ namespace NMib::NNetwork
 	{
 	public:
 
+		// The io subsystem, cached since each access through the getter is an atomic operation
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		CInternal
 			(
 				CSSLConnection *_pSSL
@@ -1094,7 +1097,7 @@ namespace NMib::NNetwork
 		// on the peer, and the library flushes for neither of them
 		void f_SetSendBatching(bool _bBatching)
 		{
-			mp_Transport.f_SetDeferFlush(_bBatching && fg_SendBatchingEnabled());
+			mp_Transport.f_SetDeferFlush(_bBatching && fg_SendBatchingEnabled(mp_pIo));
 		}
 
 		bool f_IsSendBufferFull() const
@@ -1315,7 +1318,7 @@ namespace NMib::NNetwork
 			DMibRequire(!mp_bHandshakeInProgress);
 			DMibRequire(mp_State == EState_None);
 
-			if (!fg_ZeroCopyEnabled())
+			if (!fg_ZeroCopyEnabled(mp_pIo))
 				return false;
 
 			// The spans as fragments. Zero length ones are dropped so they cannot spend a record's
@@ -1432,7 +1435,7 @@ namespace NMib::NNetwork
 			DMibRequire(!mp_bHandshakeInProgress);
 			DMibRequire(mp_State == EState_None);
 
-			if (!fg_ZeroCopyEnabled())
+			if (!fg_ZeroCopyEnabled(mp_pIo))
 				return false;
 
 			ERR_clear_error();
@@ -2067,7 +2070,7 @@ namespace NMib::NNetwork
 
 	bool CSSLConnection::f_SupportsZeroCopy() const
 	{
-		return fg_ZeroCopyEnabled();
+		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo);
 	}
 
 	umint CSSLConnection::f_GetSendDepth() const
@@ -2087,12 +2090,12 @@ namespace NMib::NNetwork
 
 	bool CSSLConnection::f_SupportsCompletionIoSend() const
 	{
-		return fg_ZeroCopyEnabled() && fg_CompletionIoSendEnabled();
+		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo) && fg_CompletionIoSendEnabled(mp_pInternal->mp_pIo);
 	}
 
 	bool CSSLConnection::f_SupportsCompletionIoReceive() const
 	{
-		return fg_ZeroCopyEnabled() && fg_CompletionIoReceiveEnabled();
+		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo) && fg_CompletionIoReceiveEnabled(mp_pInternal->mp_pIo);
 	}
 
 	bool CSSLConnection::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
