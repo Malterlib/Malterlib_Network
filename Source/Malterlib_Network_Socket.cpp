@@ -30,7 +30,7 @@ namespace NMib::NNetwork
 
 	namespace
 	{
-		void fg_DumpNetIoStats()
+		void fg_DumpNetIoStats(NMib::NSys::CIoSubSystem &)
 		{
 			auto fLoad = [](NAtomic::TCAtomic<uint64> const &_Value) -> uint64
 				{
