@@ -75,6 +75,9 @@ namespace NMib::NNetwork
 		NAtomic::TCAtomic<uint64> m_LastPumpCanBegin = 0;
 		NAtomic::TCAtomic<uint64> m_LastPumpOpsInUse = 0;
 		NAtomic::TCAtomic<uint64> m_LastPumpOpsUnresolved = 0;
+		// The most generations, and bytes, one SSL connection had pinned by sends awaiting release
+		NAtomic::TCAtomic<uint64> m_nSslMaxPinned = 0;
+		NAtomic::TCAtomic<uint64> m_nSslMaxPinnedBytes = 0;
 	};
 
 	extern CNetIoStats g_NetIoStats;

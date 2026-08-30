@@ -104,6 +104,16 @@ namespace NMib::NNetwork
 						)
 				)
 			;
+			NSys::fg_ConsoleErrorOutput
+				(
+					NStr::fg_Format<NStr::CStrNonTracked>
+						(
+							"[net stats] ssl pins: max={} maxBytes={}\n"
+							, fLoad(g_NetIoStats.m_nSslMaxPinned)
+							, fLoad(g_NetIoStats.m_nSslMaxPinnedBytes)
+						)
+				)
+			;
 		}
 	}
 

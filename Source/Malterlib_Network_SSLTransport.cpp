@@ -271,6 +271,16 @@ namespace NMib::NNetwork
 		mp_nPinnedBytes += o_nBytes;
 		mp_nPendingWriteUnpinned -= o_nBytes;
 
+#if DMibConfig_IoDebug_Enable
+		if (fg_NetIoStatsEnabled())
+		{
+			if (mp_nPinned > g_NetIoStats.m_nSslMaxPinned.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				g_NetIoStats.m_nSslMaxPinned.f_Store(mp_nPinned, NAtomic::gc_MemoryOrder_Relaxed);
+			if (mp_nPinnedBytes > g_NetIoStats.m_nSslMaxPinnedBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
+				g_NetIoStats.m_nSslMaxPinnedBytes.f_Store(mp_nPinnedBytes, NAtomic::gc_MemoryOrder_Relaxed);
+		}
+#endif
+
 		// Sealing may not land in what the kernel is reading. The pool may grow here, so
 		// nothing above is touched past this point
 		if (iBuffer == mp_iOutFill)
