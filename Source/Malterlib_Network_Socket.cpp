@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Network_Socket.h"
+#include <Mib/Core/IoSubSystem>
 
 #include <stdlib.h>
 
@@ -120,52 +121,30 @@ namespace NMib::NNetwork
 		}
 	}
 
+	// The subsystem read the knob once; the report registers itself the first time a run that
+	// collects asks, so a run that never touches the network prints nothing
 	bool fg_NetIoStatsEnabled()
 	{
-		static bool s_bEnabled =
-			(
-				[]() -> bool
-				{
-					auto Setting = NMib::NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::CStrNonTracked("MalterlibIoStats"));
-					if (Setting == "1")
-					{
-						atexit(&fg_DumpNetIoStats);
-						return true;
-					}
+		if (!NMib::NSys::fg_IoSubSystem().f_StatsEnabled())
+			return false;
 
-					return false;
-				}
-				()
-			)
-		;
+		static NAtomic::TCAtomic<bool> s_bRegistered = false;
+		if (!s_bRegistered.f_Exchange(true))
+			NMib::NSys::fg_IoSubSystem().f_RegisterStatsDump(&fg_DumpNetIoStats);
 
-		return s_bEnabled;
+		return true;
 	}
 #endif
 
 	umint fg_GetReceiveWindowBytes(umint _nBufferBytes)
 	{
-#if DMibConfig_IoDebug_Enable
-		static umint s_nWindow =
-			(
-				[]() -> umint
-				{
-					auto Setting = NMib::NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::CStrNonTracked("MalterlibReceiveWindow"));
-
-					return Setting.f_ToIntExact(umint(0));
-				}
-				()
-			)
-		;
-
-		if (s_nWindow)
+		if (umint nWindow = NMib::NSys::fg_IoSubSystem().f_ReceiveWindowBytesOverride())
 		{
 			// Floored at a few buffers whatever the override says: a window smaller than that
 			// can park the stream while a record that straddles buffers is still incomplete,
 			// and the bytes that would complete it then never arrive
-			return fg_Max(s_nWindow, 4 * _nBufferBytes);
+			return fg_Max(nWindow, 4 * _nBufferBytes);
 		}
-#endif
 
 		// Wide enough that a consumer legitimately holding a receive pipeline's worth of
 		// zero copy views does not park the stream: the views pin whole receive buffers, so

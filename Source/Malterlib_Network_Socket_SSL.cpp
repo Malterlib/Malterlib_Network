@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Network_Socket_SSL.h"
+#include <Mib/Core/IoSubSystem>
 
 namespace NMib::NNetwork
 {
@@ -366,21 +367,7 @@ namespace NMib::NNetwork
 #if DMibConfig_IoDebug_Enable
 	static bool fsg_SealAheadEnabled()
 	{
-		static bool s_bEnabled =
-			(
-				[]() -> bool
-				{
-					auto Setting = NMib::NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::CStrNonTracked("MalterlibSSLSealAhead"));
-					if (Setting == "0")
-						return false;
-
-					return true;
-				}
-				()
-			)
-		;
-
-		return s_bEnabled;
+		return NMib::NSys::fg_ResolveIoKnob(NMib::NSys::fg_IoSubSystem().f_SslSealAhead(), true);
 	}
 #else
 	static constexpr bool fsg_SealAheadEnabled()

@@ -4,6 +4,7 @@
 #include "Malterlib_Network_SSL.h"
 #include "Malterlib_Network_SSLTransport.h"
 #include "Malterlib_Network_Socket.h"
+#include <Mib/Core/IoSubSystem>
 
 #include <Mib/Cryptography/BoringSSL>
 #include <Mib/Encoding/Base64>
@@ -36,87 +37,26 @@ namespace NMib::NNetwork
 #if DMibConfig_IoDebug_Enable
 		bool fg_SendBatchingEnabled()
 		{
-			static bool s_bEnabled =
-				(
-					[]() -> bool
-					{
-						auto Setting = NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::gc_Str<"MalterlibSSLSendBatching">.m_Str);
-						if (Setting == "0")
-							return false;
-						if (Setting == "1")
-							return true;
-
-						return DMibConfig_SSLSendBatching != 0;
-					}
-					()
-				)
-			;
-
-			return s_bEnabled;
+			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslSendBatching(), DMibConfig_SSLSendBatching != 0);
 		}
 
 		// Same shape as the batching knob: a build carrying the io debugging overrides lets the
 		// environment answer, so both paths can be measured against each other in one binary
 		bool fg_ZeroCopyEnabled()
 		{
-			static bool s_bEnabled =
-				(
-					[]() -> bool
-					{
-						auto Setting = NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::gc_Str<"MalterlibSSLZeroCopy">.m_Str);
-						if (Setting == "0")
-							return false;
-						if (Setting == "1")
-							return true;
-
-						return DMibConfig_SSLZeroCopy != 0;
-					}
-					()
-				)
-			;
-
-			return s_bEnabled;
+			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslZeroCopy(), DMibConfig_SSLZeroCopy != 0);
 		}
 
 		// Each direction answers separately so one can be measured against the readiness path
-		// while the other is held fixed. The direction specific name wins over the shared one,
-		// which is there so a recipe that predates the split still sets both
-		bool fg_CompletionIoDirectionEnabled(NStr::CStr const &_DirectionName, bool _bCompiledDefault)
-		{
-			auto Setting = NSys::fg_Process_GetEnvironmentVariable_NonProtected(_DirectionName);
-			if (Setting.f_IsEmpty())
-				Setting = NSys::fg_Process_GetEnvironmentVariable_NonProtected(NStr::gc_Str<"MalterlibSSLCompletionIo">.m_Str);
-
-			if (Setting == "0")
-				return false;
-			if (Setting == "1")
-				return true;
-
-			return _bCompiledDefault;
-		}
-
+		// while the other is held fixed
 		bool fg_CompletionIoSendEnabled()
 		{
-			static bool s_bEnabled = fg_CompletionIoDirectionEnabled
-				(
-					NStr::gc_Str<"MalterlibSSLCompletionIoSend">.m_Str
-					, DMibConfig_SSLCompletionIoSend != 0
-				)
-			;
-
-			return s_bEnabled;
+			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslCompletionIoSend(), DMibConfig_SSLCompletionIoSend != 0);
 		}
 
 		bool fg_CompletionIoReceiveEnabled()
 		{
-			static bool s_bEnabled = fg_CompletionIoDirectionEnabled
-				(
-					NStr::gc_Str<"MalterlibSSLCompletionIoReceive">.m_Str
-					, DMibConfig_SSLCompletionIoReceive != 0
-				)
-			;
-
-			return s_bEnabled;
+			return NSys::fg_ResolveIoKnob(NSys::fg_IoSubSystem().f_SslCompletionIoReceive(), DMibConfig_SSLCompletionIoReceive != 0);
 		}
 #else
 		constexpr bool fg_SendBatchingEnabled()
