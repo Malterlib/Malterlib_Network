@@ -777,12 +777,14 @@ namespace NMib::NNetwork
 
 	// A release is one sample for the probe. The least release latency of a zero copy sized
 	// generation — smaller ones the kernel copies and releases at once — sizes the interval the
-	// rate is judged over, a few round trips; a generation pinned into an empty pipeline always
-	// replaces it, so a path that got slower is followed. At the end of an interval the window
-	// bounded, the rate goes into the step's best; two such intervals decide the step: at the
-	// baseline the window doubles, while probing a rate a tenth above the baseline keeps the
-	// doubling going and anything less falls back to the width before it and holds; after the
-	// hold the probe starts over from what it has. The cap ends the climb
+	// rate is judged over: several round trips and at least twenty milliseconds, since releases
+	// arrive in bursts and a shorter interval measures the burst rather than the throughput; a
+	// generation pinned into an empty pipeline always replaces it, so a path that got slower is
+	// followed. At the end of an interval the window bounded, the rate goes into the step's
+	// best; four such intervals settle the baseline and two decide a probe: at the baseline the
+	// window doubles, while probing a rate a quarter above the baseline keeps the doubling going
+	// and anything less falls back to the width before it and holds; after the hold the probe
+	// starts over from what it has. The cap ends the climb
 	void CSSLTransport::fp_NoteRelease(COut const &_Buffer, uint64 _NowNs)
 	{
 		if (!_Buffer.m_PinStampNs)
@@ -792,11 +794,17 @@ namespace NMib::NNetwork
 		if (_Buffer.m_nPinnedBytes >= mc_nWindowLatencySampleBytes && ((_Buffer.m_PinStampNs & 1) || !mp_WindowLatencyNs || LatencyNs < mp_WindowLatencyNs))
 			mp_WindowLatencyNs = LatencyNs;
 
+		// The first second is a warm up: the pipeline is still filling and a rate measured then
+		// would make the first doubling look like a gain
 		if (!mp_WindowIntervalStartNs)
+		{
 			mp_WindowIntervalStartNs = _NowNs;
+			mp_WindowHoldUntilNs = _NowNs + 1000000000;
+			mp_WindowProbe = EWindowProbe::mc_Hold;
+		}
 		mp_nWindowIntervalBytes += _Buffer.m_nPinnedBytes;
 
-		uint64 IntervalNs = fg_Max(mp_WindowLatencyNs * 4, uint64(2000000));
+		uint64 IntervalNs = fg_Max(mp_WindowLatencyNs * 8, uint64(20000000));
 		uint64 ElapsedNs = _NowNs - mp_WindowIntervalStartNs;
 		if (ElapsedNs < IntervalNs)
 			return;
@@ -812,7 +820,7 @@ namespace NMib::NNetwork
 
 		umint nWindow = fp_GetEffectiveSendWindow();
 		mp_nWindowStepBestRate = fg_Max(mp_nWindowStepBestRate, nRate);
-		if (++mp_nWindowStepIntervals < 2)
+		if (++mp_nWindowStepIntervals < (mp_WindowProbe == EWindowProbe::mc_Measure ? 4 : 2))
 			return;
 
 		auto fStep = [&](umint _nNext)
@@ -831,7 +839,7 @@ namespace NMib::NNetwork
 			fStep(nWindow * 2);
 			break;
 		case EWindowProbe::mc_Probing:
-			if (mp_nWindowStepBestRate > mp_nWindowBaselineRate + mp_nWindowBaselineRate / 10)
+			if (mp_nWindowStepBestRate > mp_nWindowBaselineRate + mp_nWindowBaselineRate / 4)
 			{
 				mp_nWindowBaselineRate = mp_nWindowStepBestRate;
 				fStep(nWindow * 2);

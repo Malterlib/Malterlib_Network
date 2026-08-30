@@ -210,7 +210,7 @@ namespace NMib::NNetwork
 		};
 
 		static constexpr umint mc_nWindowLatencySampleBytes = 16 * 1024;
-		static constexpr uint64 mc_WindowHoldNs = 2000000000;
+		static constexpr uint64 mc_WindowHoldNs = 5000000000;
 		uint64 mp_WindowLatencyNs = 0;
 		uint64 mp_WindowIntervalStartNs = 0;
 		uint64 mp_WindowHoldUntilNs = 0;
