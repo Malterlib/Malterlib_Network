@@ -550,6 +550,11 @@ namespace NMib::NNetwork
 		mp_nTransferSizeHint = _nBytes;
 	}
 
+	void CSocket_AuthenticatedUnix::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
 	bool CSocket_AuthenticatedUnix::f_SupportsCompletionReceive() const
 	{
 		return mp_Socket.f_SupportsReceiveStream();

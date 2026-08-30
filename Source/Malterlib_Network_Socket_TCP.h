@@ -70,6 +70,7 @@ namespace NMib::NNetwork
 		virtual NStorage::TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;
 
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
+		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual umint f_GetSendDepth() const override;
 		virtual bool f_SendReleaseIsPrompt() const override;

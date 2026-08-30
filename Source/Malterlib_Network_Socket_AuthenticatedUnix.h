@@ -115,6 +115,7 @@ namespace NMib::NNetwork
 		// reads during the handshake consume exactly their framed bytes, so no stream data is
 		// buffered in this layer when it finishes
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
+		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
 		virtual bool f_SupportsCompletionReceive() const override;

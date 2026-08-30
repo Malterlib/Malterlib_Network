@@ -276,6 +276,10 @@ namespace NMib::NNetwork
 	{
 	}
 
+	void ICSocket::f_SetSendWindow(umint, bool)
+	{
+	}
+
 	ICSocketCompletionIo *ICSocket::f_GetCompletionIo()
 	{
 		return nullptr;

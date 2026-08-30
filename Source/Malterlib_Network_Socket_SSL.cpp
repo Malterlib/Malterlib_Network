@@ -967,6 +967,11 @@ namespace NMib::NNetwork
 		mp_SSLConnection.f_SetTransferSizeHint(_nBytes);
 	}
 
+	void CSocket_SSL::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
 	CSocketOperationResult CSocket_SSL::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
 	{
 		CSocketOperationResult Result;

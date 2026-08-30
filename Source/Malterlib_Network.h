@@ -438,6 +438,10 @@ namespace NMib::NSys::NNetwork
 	bool fg_SupportsReceiveStream(void *_pSocket);
 	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink);
 	void fg_ResumeReceiveStream(void *_pSocket);
+	// Sizes the socket's kernel buffers to the window where the platform does not autotune them,
+	// and bounds the unreleased bytes of zero copy sends to it. A listen socket passes the buffers on
+	// to the connections it accepts
+	void fg_SetSendWindow(void *_pSocket, umint _nBytes, bool _bConfigured);
 	bool fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
@@ -826,6 +830,16 @@ namespace NMib::NNetwork
 	{
 		void *mp_pSocket;
 
+		// Applied once the platform socket exists, so it can be set before the connect or listen
+		umint mp_nSendWindowBytes = 0;
+		bool mp_bSendWindowConfigured = false;
+
+		void fp_ApplySendWindow()
+		{
+			if (mp_pSocket && mp_nSendWindowBytes)
+				NMib::NSys::NNetwork::fg_SetSendWindow(mp_pSocket, mp_nSendWindowBytes, mp_bSendWindowConfigured);
+		}
+
 		void fp_CheckSocket() const
 		{
 			if (!mp_pSocket)
@@ -917,6 +931,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -930,6 +945,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -938,6 +954,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -946,6 +963,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -967,6 +985,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
+			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -976,6 +995,7 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fg_Move(_fOnStateChange));
+			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -1109,6 +1129,13 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
+		}
+
+		void f_SetSendWindow(umint _nBytes, bool _bConfigured)
+		{
+			mp_nSendWindowBytes = _nBytes;
+			mp_bSendWindowConfigured = _bConfigured;
+			fp_ApplySendWindow();
 		}
 
 		bool f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NMib::NSys::FIoBufferReleased &&_fOnBufferReleased)

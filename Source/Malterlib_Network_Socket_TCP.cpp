@@ -204,6 +204,11 @@ namespace NMib::NNetwork
 		mp_nTransferSizeHint = _nBytes;
 	}
 
+	void CSocket_TCP::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
 	// Receives are only carried by the stream; a loop that cannot provide one leaves this
 	// direction on readiness
 	bool CSocket_TCP::f_SupportsCompletionReceive() const

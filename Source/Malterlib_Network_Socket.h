@@ -307,6 +307,13 @@ namespace NMib::NNetwork
 		// straight to the kernel have nothing to size and ignore it
 		virtual void f_SetTransferSizeHint(umint _nBytes);
 
+		// The bytes the connection may have in flight on its sends. For a copying socket the kernel
+		// buffers hold them and are sized to it where the platform does not autotune them; for a zero
+		// copy socket the unreleased bytes are bounded to it instead. Takes effect on the socket as it
+		// is started, and a listen socket passes it on to the connections it accepts. _bConfigured is
+		// false for the transport's own default, which leaves buffers the platform sizes well enough alone
+		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured);
+
 		// Null for platforms or loops without kernel-completed transfers. May flip from null to
 		// non-null while a handshake is pending, so callers decide their mode once their protocol
 		// is established, not at socket creation
