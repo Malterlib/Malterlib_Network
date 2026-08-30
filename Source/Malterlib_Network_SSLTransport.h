@@ -153,7 +153,6 @@ namespace NMib::NNetwork
 		// through the entries, newest first, so the memory the kernel just let go of is what the
 		// next records land in while it is still in cache
 		NContainer::TCVector<COut> mp_Out;
-		int32 mp_iFreeHead = -1;
 
 		// The buffer a still-outstanding zero copy send displaced from the fill, kept so it
 		// can go back in once that send's notification releases it
@@ -203,5 +202,6 @@ namespace NMib::NNetwork
 		bool mp_bCompletionReceive = false;
 		bool mp_bEndOfStream = false;
 		bool mp_bDeferFlush = false;
+		int32 mp_iFreeHead = -1;
 	};
 }

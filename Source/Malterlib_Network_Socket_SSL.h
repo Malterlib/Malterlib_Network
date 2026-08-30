@@ -143,11 +143,11 @@ namespace NMib::NNetwork
 			uint32 m_iBuffer = 0;
 			int32 m_iNextForBuffer = -1;
 			int32 m_iNextFree = -1;
-			bool m_bHasFunctors = false;
-			bool m_bInUse = false;
-			bool m_bResolved = false;
-			bool m_bReleased = false;
-			bool m_bLinked = false;
+			bool m_bHasFunctors : 1 = false;
+			bool m_bInUse : 1 = false;
+			bool m_bResolved : 1 = false;
+			bool m_bReleased : 1 = false;
+			bool m_bLinked : 1 = false;
 		};
 
 		bool fp_HandleHandshake();
@@ -173,7 +173,6 @@ namespace NMib::NNetwork
 		// The transfers in progress, as many as the window has needed at once; the free ones a
 		// list through them, newest first, and the ones carrying a generation a list per generation
 		NContainer::TCVector<CSendOperation> mp_SendOperations;
-		int32 mp_iFreeOperationHead = -1;
 		NContainer::TCVector<int32> mp_iBufferOperationHead;
 		umint mp_nSendWindowBytes = 0;
 		NContainer::CByteVector mp_SendStaging;
@@ -196,6 +195,7 @@ namespace NMib::NNetwork
 
 		NAtomic::TCAtomic<uint32> mp_ExtraState;
 		EState mp_State = EState_None;
+		int32 mp_iFreeOperationHead = -1;
 
 		// Set by the first send that failed; the connection is over and later completions only
 		// clear their records
