@@ -141,6 +141,10 @@ namespace NMib::NNetwork
 			bool m_bInUse = false;
 			bool m_bResolved = false;
 			bool m_bReleased = false;
+
+			// The operations carrying the same generation, a list per generation
+			bool m_bLinked = false;
+			smint m_iNextForBuffer = -1;
 		};
 
 		bool fp_HandleHandshake();
@@ -151,7 +155,8 @@ namespace NMib::NNetwork
 
 		auto fp_AllocateSendOperation() -> smint;
 		void fp_TryFreeSendOperation(umint _iOperation);
-		bool fp_HasFreeSendOperation() const;
+		void fp_LinkSendOperation(umint _iOperation);
+		void fp_FreeSendOperation(umint _iOperation);
 		bool fp_SubmitPinnedSend(void const *_pData, umint _nBytes, umint _iBuffer, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased);
 		// Fires the stored functors of every staged transfer whose seals the generation
 		// carried; the operation's own transfer reports through the completion instead
@@ -162,10 +167,11 @@ namespace NMib::NNetwork
 
 		// What one TLS record carries at most; gathered sends stage up to this per seal
 		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024;
-		static constexpr umint mcp_nMaxSendOperations = 8;
-
-		// mcp_nMaxSendOperations of them, or one per generation once the send window sizes the ring
+		// The transfers in progress, as many as the window has needed at once, reused newest
+		// first; found from their generation through a list per generation
 		NContainer::TCVector<CSendOperation> mp_SendOperations;
+		NContainer::TCVector<umint> mp_FreeSendOperations;
+		NContainer::TCVector<smint> mp_iBufferOperationHead;
 		umint mp_nSendWindowBytes = 0;
 		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;

@@ -23,16 +23,19 @@ namespace NMib::NNetwork
 			, mc_Failed
 		};
 
-		// One entry of the outbound ring
+		// One generation of outbound ciphertext. The buffer is allocated on first use
 		struct COut
 		{
-			NStorage::TCSharedPointer<NContainer::CByteVector> m_pData = fg_Construct();
+			NStorage::TCSharedPointer<NContainer::CByteVector> m_pData;
 			umint m_nFill = 0;
 			umint m_iSent = 0;
 
 			// Whether an operation is reading this entry, and the bytes it holds while it is
 			bool m_bPinned = false;
 			umint m_nPinnedBytes = 0;
+
+			// The next generation with unsent bytes, in the order they were sealed; -1 ends the list
+			smint m_iNextUnsent = -1;
 		};
 
 		// One piece of the inbound ciphertext stream. m_pOwner / m_pOwned is what keeps the
@@ -54,7 +57,6 @@ namespace NMib::NNetwork
 		void f_SetSendDepth(umint _nDepth);
 		umint f_GetSendDepth() const;
 		void f_SetSendWindow(umint _nBytes);
-		umint f_GetSendGenerations() const;
 		void f_SetSocket(CSocket *_pSocket);
 		void f_SetDeferFlush(bool _bDefer);
 
@@ -117,11 +119,10 @@ namespace NMib::NNetwork
 		// One record's plaintext, plus what TLS 1.3 writes past it before trimming
 		static constexpr umint mc_nPlainHoldSize = 17 * 1024;
 
-		// How many sends' buffers may await their zero copy release at once. Each un-released
-		// generation holds a ring entry, so this is what the ring is sized from
+		// How many sends' buffers may await their zero copy release at once on a socket that
+		// releases them promptly; a socket that holds them to the acknowledgement is bounded by
+		// the send window in bytes instead
 		static constexpr umint mc_nMaxSendDepth = 8;
-
-		static constexpr umint mc_nOutBuffers = mc_nMaxSendDepth + 1;
 
 		// The most ciphertext pieces one decrypt call is offered; a queue longer than this is
 		// compacted first, so a record can never sit undecryptable past the cap
@@ -133,6 +134,11 @@ namespace NMib::NNetwork
 		void fp_ReleasePin(umint _iBuffer);
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
+		void fp_EnqueueUnsent(umint _iBuffer);
+		void fp_PushUnsentFront(umint _iBuffer);
+		umint fp_DequeueUnsentHead();
+		umint fp_TakeFreeEntry();
+		void fp_NoteFillGained(umint _nBytes);
 		void fp_AdvanceFill();
 		void fp_EnsureFillWritable();
 		void fp_Compact();
@@ -141,12 +147,14 @@ namespace NMib::NNetwork
 
 		CSocket *mp_pSocket = nullptr;
 
-		// One more entry than the most sends that can be pinned at once, so there is always a
-		// buffer left to seal into while the rest are with the kernel. mc_nOutBuffers entries, or
-		// what the send window needs once one is set
+		// The generations: a pool that grows by one only when a seal finds every entry pinned,
+		// so a connection holds what its window has actually needed. Freed entries are reused
+		// newest first, so the memory the kernel just let go of is what the next records land in
+		// while it is still in cache
 		NContainer::TCVector<COut> mp_Out;
+		NContainer::TCVector<umint> mp_FreeOut;
 
-		// The buffer a still-outstanding zero copy send displaced from the ring, kept so it
+		// The buffer a still-outstanding zero copy send displaced from the fill, kept so it
 		// can go back in once that send's notification releases it
 		NStorage::TCSharedPointer<NContainer::CByteVector> mp_pOutRetired;
 
@@ -166,14 +174,20 @@ namespace NMib::NNetwork
 
 		umint mp_iOutFill = 0;
 
-		// One entry per operation whose buffer-released notification is still owed, oldest
-		// first; a short send's continuation adds a second entry for the same buffer. Sized
-		// one past the generation cap for exactly that continuation
-		NContainer::TCVector<umint> mp_PinnedOrder;
+		// The generations with unsent bytes that no operation carries, oldest first: what the
+		// flush drains and a begin pins, in the order the records were sealed. The fill is its
+		// tail whenever it holds anything
+		smint mp_iUnsentHead = -1;
+		smint mp_iUnsentTail = -1;
 
 		umint mp_nPinned = 0;
 		umint mp_nPinnedBytes = 0;
 		umint mp_nSendWindowBytes = 0;
+
+		// Unsent bytes over every generation, and over the unpinned ones alone; kept with every
+		// change so asking costs nothing whatever the pool holds
+		umint mp_nPendingWrite = 0;
+		umint mp_nPendingWriteUnpinned = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;

@@ -1299,11 +1299,6 @@ namespace NMib::NNetwork
 			mp_Transport.f_SetSendWindow(_nBytes);
 		}
 
-		umint f_GetSendGenerations() const
-		{
-			return mp_Transport.f_GetSendGenerations();
-		}
-
 		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const
 		{
 			return mp_Transport.f_GetPinnedKeepAlive(_iBuffer);
@@ -2148,11 +2143,6 @@ namespace NMib::NNetwork
 	void CSSLConnection::f_SetSendWindow(umint _nBytes)
 	{
 		mp_pInternal->f_SetSendWindow(_nBytes);
-	}
-
-	umint CSSLConnection::f_GetSendGenerations() const
-	{
-		return mp_pInternal->f_GetSendGenerations();
 	}
 
 	bool CSSLConnection::f_SupportsCompletionIoSend() const

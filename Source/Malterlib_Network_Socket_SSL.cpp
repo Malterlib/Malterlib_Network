@@ -17,8 +17,6 @@ namespace NMib::NNetwork
 		, mp_UserTrustDecisionCallback(_UserTrustDecisionCallback)
 		, mp_SSLConnection(_pContext, fg_TempCopy(_AuthenticationResultCallback), fg_TempCopy(_UserTrustDecisionCallback), _Hostname)
 	{
-		mp_SendOperations.f_SetLen(mcp_nMaxSendOperations);
-
 	}
 
 	CSocket_SSL::~CSocket_SSL()
@@ -335,14 +333,11 @@ namespace NMib::NNetwork
 		mp_SSLConnection.f_SetSendDepth(pLoop ? pLoop->f_GetCompletionSendDepth() : 1);
 
 		// A socket that releases its sends only at the peer's acknowledgement holds the window in
-		// pinned generations, so the transport's ring, and the operations that carry them, are
-		// sized to it once here, before the first operation
+		// pinned generations, so the transport bounds those by the window in bytes
 		if (mp_nSendWindowBytes && !mp_Socket.f_SendReleaseIsPrompt())
 		{
 			DMibFastCheck(!mp_nSendOpsInFlight);
 			mp_SSLConnection.f_SetSendWindow(mp_nSendWindowBytes);
-			if (mp_SSLConnection.f_GetSendGenerations() > mp_SendOperations.f_GetLen())
-				mp_SendOperations.f_SetLen(mp_SSLConnection.f_GetSendGenerations());
 		}
 
 		// From here the receive stream is the connection's only reader; the synchronous fill
@@ -430,13 +425,6 @@ namespace NMib::NNetwork
 			return false;
 		}
 
-		if (!fp_HasFreeSendOperation())
-		{
-			fLatchRefusal(3);
-
-			return false;
-		}
-
 		if (mp_SSLConnection.f_IsSendBufferFull())
 		{
 			fLatchRefusal(4);
@@ -457,15 +445,42 @@ namespace NMib::NNetwork
 		return mp_nSendOpsInFlight != 0;
 	}
 
-	bool CSocket_SSL::fp_HasFreeSendOperation() const
+	// Puts an operation on its generation's list, once the generation its seal landed in is known
+	void CSocket_SSL::fp_LinkSendOperation(umint _iOperation)
 	{
-		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
+		CSendOperation &Operation = mp_SendOperations[_iOperation];
+		DMibFastCheck(!Operation.m_bLinked);
+
+		umint nHeads = mp_iBufferOperationHead.f_GetLen();
+		if (Operation.m_iBuffer >= nHeads)
 		{
-			if (!mp_SendOperations[iOperation].m_bInUse)
-				return true;
+			mp_iBufferOperationHead.f_SetLen(Operation.m_iBuffer + 1);
+			for (umint iHead = nHeads; iHead <= Operation.m_iBuffer; ++iHead)
+				mp_iBufferOperationHead[iHead] = -1;
 		}
 
-		return false;
+		Operation.m_iNextForBuffer = mp_iBufferOperationHead[Operation.m_iBuffer];
+		mp_iBufferOperationHead[Operation.m_iBuffer] = smint(_iOperation);
+		Operation.m_bLinked = true;
+	}
+
+	// Takes an operation off its generation's list and hands it to the free ones, newest first
+	void CSocket_SSL::fp_FreeSendOperation(umint _iOperation)
+	{
+		CSendOperation &Operation = mp_SendOperations[_iOperation];
+
+		if (Operation.m_bLinked)
+		{
+			smint *piLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+			while (*piLink >= 0 && umint(*piLink) != _iOperation)
+				piLink = &mp_SendOperations[umint(*piLink)].m_iNextForBuffer;
+
+			DMibFastCheck(*piLink >= 0);
+			*piLink = Operation.m_iNextForBuffer;
+		}
+
+		Operation = CSendOperation{};
+		mp_FreeSendOperations.f_InsertLast(_iOperation);
 	}
 
 	bool CSocket_SSL::f_SupportsCompletionReceive() const
@@ -503,7 +518,7 @@ namespace NMib::NNetwork
 			CSocketOperationResult Sealed;
 			if (!mp_SSLConnection.f_TrySealVectored(_pSpans, _nSpans, Sealed))
 			{
-				mp_SendOperations[iOperation].m_bInUse = false;
+				fp_FreeSendOperation(umint(iOperation));
 				mp_SSLConnection.f_FailSend("Could not seal application data");
 				fp_CheckBrokenState();
 
@@ -514,7 +529,7 @@ namespace NMib::NNetwork
 			// on every pass, forever; it is the connection failing, not an empty transfer
 			if (!Sealed.m_nBytes)
 			{
-				mp_SendOperations[iOperation].m_bInUse = false;
+				fp_FreeSendOperation(umint(iOperation));
 				mp_SSLConnection.f_FailSend("Sealing produced no records");
 				fp_CheckBrokenState();
 
@@ -527,6 +542,7 @@ namespace NMib::NNetwork
 			nCallPlaintext = Sealed.m_nBytes;
 			mp_SendOperations[iOperation].m_iBuffer = mp_SSLConnection.f_GetFillBuffer();
 			mp_SendOperations[iOperation].m_nPlaintext = nCallPlaintext;
+			fp_LinkSendOperation(umint(iOperation));
 
 			// A transfer only rides an operation carrying its own generation: the functors an
 			// operation carries report to the reservation of the transfer that submitted it, so
@@ -594,18 +610,22 @@ namespace NMib::NNetwork
 
 	auto CSocket_SSL::fp_AllocateSendOperation() -> smint
 	{
-		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
+		umint iOperation;
+		if (mp_FreeSendOperations.f_GetLen())
 		{
-			if (mp_SendOperations[iOperation].m_bInUse)
-				continue;
-
-			mp_SendOperations[iOperation] = CSendOperation{};
-			mp_SendOperations[iOperation].m_bInUse = true;
-
-			return smint(iOperation);
+			iOperation = mp_FreeSendOperations.f_GetLast();
+			mp_FreeSendOperations.f_SetLen(mp_FreeSendOperations.f_GetLen() - 1);
+		}
+		else
+		{
+			iOperation = mp_SendOperations.f_GetLen();
+			mp_SendOperations.f_SetLen(iOperation + 1);
 		}
 
-		return -1;
+		mp_SendOperations[iOperation] = CSendOperation{};
+		mp_SendOperations[iOperation].m_bInUse = true;
+
+		return smint(iOperation);
 	}
 
 	bool CSocket_SSL::fp_SubmitPinnedSend(void const *_pData, umint _nBytes, umint _iBuffer, NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased)
@@ -737,48 +757,58 @@ namespace NMib::NNetwork
 
 	void CSocket_SSL::fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext)
 	{
-		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
+		smint iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		while (iOperation >= 0)
 		{
-			CSendOperation &Operation = mp_SendOperations[iOperation];
-			if (!Operation.m_bInUse || Operation.m_bResolved || Operation.m_iBuffer != _iBuffer)
-				continue;
+			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
+			smint iNext = Operation.m_iNextForBuffer;
 
-			Operation.m_bResolved = true;
-
-			if (Operation.m_bHasFunctors)
+			if (!Operation.m_bResolved)
 			{
-				// A staged transfer hears the plaintext it handed over through its own stored
-				// functors. They are the caller's ordinary completion pair and enqueue on the
-				// caller, so nothing re-enters this socket while the fan-out walks its state
-				NMib::NSys::CIoCompletion Result = _Result;
-				Result.m_nBytes = Operation.m_nPlaintext;
-				Result.m_iTransfer = NMib::NSys::CIoCompletion::mc_iTransferNone;
-				Operation.m_fOnComplete(Result);
-			}
-			else
-			{
-				// The operation's own transfer reports through the completion that is being
-				// resolved right now
-				o_nCarrierPlaintext += Operation.m_nPlaintext;
+				Operation.m_bResolved = true;
+
+				if (Operation.m_bHasFunctors)
+				{
+					// A staged transfer hears the plaintext it handed over through its own stored
+					// functors. They are the caller's ordinary completion pair and enqueue on the
+					// caller, so nothing re-enters this socket while the fan-out walks its state
+					NMib::NSys::CIoCompletion Result = _Result;
+					Result.m_nBytes = Operation.m_nPlaintext;
+					Result.m_iTransfer = NMib::NSys::CIoCompletion::mc_iTransferNone;
+					Operation.m_fOnComplete(Result);
+				}
+				else
+				{
+					// The operation's own transfer reports through the completion that is being
+					// resolved right now
+					o_nCarrierPlaintext += Operation.m_nPlaintext;
+				}
+
+				fp_TryFreeSendOperation(umint(iOperation));
 			}
 
-			fp_TryFreeSendOperation(iOperation);
+			iOperation = iNext;
 		}
 	}
 
 	void CSocket_SSL::fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer)
 	{
-		for (umint iOperation = 0; iOperation < mp_SendOperations.f_GetLen(); ++iOperation)
+		smint iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		while (iOperation >= 0)
 		{
-			CSendOperation &Operation = mp_SendOperations[iOperation];
-			if (!Operation.m_bInUse || Operation.m_bReleased || Operation.m_iBuffer != _iBuffer)
-				continue;
+			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
+			smint iNext = Operation.m_iNextForBuffer;
 
-			Operation.m_bReleased = true;
-			if (Operation.m_bHasFunctors)
-				Operation.m_fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
+			if (!Operation.m_bReleased)
+			{
+				Operation.m_bReleased = true;
+				if (Operation.m_bHasFunctors)
+					Operation.m_fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
 
-			fp_TryFreeSendOperation(iOperation);
+				fp_TryFreeSendOperation(umint(iOperation));
+			}
+
+			iOperation = iNext;
 		}
 	}
 
@@ -821,7 +851,7 @@ namespace NMib::NNetwork
 		CSendOperation &Operation = mp_SendOperations[_iOperation];
 
 		if (Operation.m_bResolved && Operation.m_bReleased)
-			Operation.m_bInUse = false;
+			fp_FreeSendOperation(_iOperation);
 	}
 
 	// Records the library produced on its own, the tail of a send the transport could not
