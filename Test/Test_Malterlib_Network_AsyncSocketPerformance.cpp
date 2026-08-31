@@ -201,6 +201,11 @@ namespace
 		return true;
 	}
 
+	// Local transports (a unix path or a loopback address) take the same one MiB frames the
+	// distributed transport picks for them: at local bandwidths a large frame costs
+	// microseconds of head of line blocking and halves the per-frame work. Network addresses
+	// keep the default so fragmentation bounds how long a frame blocks interleaved traffic
+	constexpr umint gc_BenchLocalFragmentationSize = 1024 * 1024 + 4096;
 	// The server half on its own, so the cross machine serve side can stand one up without a
 	// client in the same process; returns the bound port for listens on an ephemeral one
 	template <typename t_CHandler>
@@ -216,6 +221,9 @@ namespace
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
 		_pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+
+		if (_ListenAddress.f_GetType() == ENetAddressType_Unix || fg_IsLoopbackAddress(_ListenAddress))
+			_pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultFragmentationSize, gc_BenchLocalFragmentationSize).f_DiscardResult();
 
 		CAsyncSocketServerCallbacks ListenCallbacks;
 
@@ -319,6 +327,10 @@ namespace
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
 		_pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+
+		CNetAddress ResolvedAddress = CSocket::fs_ResolveAddress(_ConnectAddress);
+		if (ResolvedAddress.f_GetType() == ENetAddressType_Unix || fg_IsLoopbackAddress(ResolvedAddress))
+			_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, gc_BenchLocalFragmentationSize).f_DiscardResult();
 
 		auto NewClientConnection = _pState->m_ClientActor
 			(
