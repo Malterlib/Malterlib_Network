@@ -119,6 +119,7 @@ namespace NMib::NNetwork
 			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30))
 			, m_Timeout(_Timeout)
 		{
+			fp_SizeSendReservations();
 		}
 
 		~CInternal()
@@ -240,6 +241,7 @@ namespace NMib::NNetwork
 		NContainer::TCVector<CSendReservation> m_SendReservations;
 		smint m_iFreeSendReservation = -1;
 		umint m_nSendReservationsInUse = 0;
+		umint m_nMaxSendReservations = 8;
 
 		// Bytes of accepted sends whose release functors have not run; what the send window
 		// asks are measured against
@@ -259,13 +261,14 @@ namespace NMib::NNetwork
 			return m_nSendWindowBytes ? m_nSendWindowBytes : fp_SendWindowStartBytes();
 		}
 
-		umint fp_MaxSendReservations(NNetwork::ICSocketCompletionIo *_pCompletionIo) const
+		// The pool’s ceiling, from the send window: enough entries for the whole window in
+		// typical gathers, never fewer than eight. Computed once when the window is known,
+		// and the vector reserves it up front so growth never reallocates
+		void fp_SizeSendReservations()
 		{
-			if (_pCompletionIo->f_SupportsSendStaging())
-				return 8;
-
 			umint nFrameBytes = fp_SendWindowStartBytes() / 8;
-			return fg_Max(umint(8), fp_SendWindowBytes() / nFrameBytes + 2);
+			m_nMaxSendReservations = fg_Max(umint(8), fp_SendWindowBytes() / nFrameBytes + 2);
+			m_SendReservations.f_Reserve(m_nMaxSendReservations);
 		}
 
 		// Tearing the connection down gives every reservation back at once; operations still in
@@ -1269,7 +1272,9 @@ namespace NMib::NNetwork
 		// spoken for the batch waits; the completion that frees one re-drives this
 		if (!_bContinue)
 		{
-			if (Internal.m_nSendReservationsInUse >= Internal.fp_MaxSendReservations(pCompletionIo))
+			// A staging socket bounds its own pipeline and keeps the historical eight
+			umint nMaxReservations = pCompletionIo->f_SupportsSendStaging() ? umint(8) : Internal.m_nMaxSendReservations;
+			if (Internal.m_nSendReservationsInUse >= nMaxReservations)
 				return;
 
 #if DMibConfig_IoDebug_Enable
@@ -2249,6 +2254,7 @@ namespace NMib::NNetwork
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_nSendWindowBytes = _nBytes;
+		Internal.fp_SizeSendReservations();
 		if (Internal.m_pSocket)
 			Internal.m_pSocket->f_SetSendWindow(Internal.fp_SendWindowBytes(), _nBytes != 0);
 
