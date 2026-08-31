@@ -90,12 +90,13 @@ namespace NMib::NNetwork
 		// The io subsystem, cached since each access through the getter is an atomic operation
 		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
-		// What each operation in flight took. Addressed rather than ordered, because
-		// operations do not always report in submission order
+		// What each operation in flight took, addressed rather than ordered because operations
+		// do not always report in submission order. A zero byte count is a free entry, and the
+		// free list threads through the entries the way the TLS transport’s generations do
 		struct CSendReservation
 		{
-			umint m_nBytes:sizeof(umint) * 8 - 1 = 0;
-			umint m_bInUse:1 = false;
+			umint m_nBytes = 0;
+			smint m_iNextFree = -1;
 		};
 
 		CInternal
@@ -113,7 +114,7 @@ namespace NMib::NNetwork
 			, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
 			, m_bClient(_bClient)
 			, m_MaxMessageSize(_MaxMessageSize)
-			// Bounded so every gather size derived from it fits the reservation bit field,
+			// Bounded so every gather size derived from it stays well inside umint,
 			// on 32 bit platforms included
 			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30))
 			, m_Timeout(_Timeout)
@@ -233,11 +234,11 @@ namespace NMib::NNetwork
 		static constexpr umint mc_iNoReservation = umint(-1);
 
 		// Grown one at a time as the send window actually admits more, never scanned per entry:
-		// free slots wait on their own list. A staging socket bounds its own pipeline and keeps
+		// the free entries thread an intrusive index list. A staging socket bounds its own pipeline and keeps
 		// the historical eight; a plain socket’s pipeline is bounded by the send window in bytes,
 		// so the slots only need to never be the binding constraint
 		NContainer::TCVector<CSendReservation> m_SendReservations;
-		NContainer::TCVector<uint32> m_iFreeSendReservations;
+		smint m_iFreeSendReservation = -1;
 		umint m_nSendReservationsInUse = 0;
 
 		// Bytes of accepted sends whose release functors have not run; what the send window
@@ -271,11 +272,12 @@ namespace NMib::NNetwork
 		// flight then find their own already accounted for
 		void fp_ResetSendReservations()
 		{
-			m_iFreeSendReservations.f_Clear();
-			for (umint iSlot = 0; iSlot < m_SendReservations.f_GetLen(); ++iSlot)
+			m_iFreeSendReservation = -1;
+			for (umint iSlot = m_SendReservations.f_GetLen(); iSlot-- > 0;)
 			{
-				m_SendReservations[iSlot].m_bInUse = false;
-				m_iFreeSendReservations.f_InsertLast(uint32(iSlot));
+				m_SendReservations[iSlot].m_nBytes = 0;
+				m_SendReservations[iSlot].m_iNextFree = m_iFreeSendReservation;
+				m_iFreeSendReservation = smint(iSlot);
 			}
 
 			m_nSendReservationsInUse = 0;
@@ -490,8 +492,7 @@ namespace NMib::NNetwork
 		m_OutgoingSegments.f_Clear();
 		m_nOutgoingQueuedBytes = 0;
 		m_nOutgoingSubmitted = 0;
-		for (auto &Reservation : m_SendReservations)
-			Reservation.m_bInUse = false;
+		fp_ResetSendReservations();
 		m_ReceiveData.f_Clear();
 		m_nReceiveFill = 0;
 #if DMibConfig_Tests_Enable
@@ -1211,15 +1212,16 @@ namespace NMib::NNetwork
 
 				// Tearing the connection down gives every reservation back at once, so an
 				// operation still in flight then finds its own already accounted for
-				if (!Reservation.m_bInUse)
+				if (!Reservation.m_nBytes)
 					return;
 
 				DMibFastCheck(Internal.m_nOutgoingSubmitted >= Reservation.m_nBytes);
 
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
-				Reservation.m_bInUse = false;
+				Reservation.m_nBytes = 0;
+				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
+				Internal.m_iFreeSendReservation = smint(iReservation);
 				--Internal.m_nSendReservationsInUse;
-				Internal.m_iFreeSendReservations.f_InsertLast(uint32(iReservation));
 			}
 		;
 
@@ -1305,8 +1307,11 @@ namespace NMib::NNetwork
 		// reports, because a short write leaves part of them still to send
 		if (!_bContinue)
 		{
-			if (!Internal.m_iFreeSendReservations.f_IsEmpty())
-				iReservation = Internal.m_iFreeSendReservations.f_Pop();
+			if (Internal.m_iFreeSendReservation >= 0)
+			{
+				iReservation = umint(Internal.m_iFreeSendReservation);
+				Internal.m_iFreeSendReservation = Internal.m_SendReservations[iReservation].m_iNextFree;
+			}
 			else
 			{
 				iReservation = Internal.m_SendReservations.f_GetLen();
@@ -1315,10 +1320,7 @@ namespace NMib::NNetwork
 
 			++Internal.m_nSendReservationsInUse;
 
-			DMibFastCheck(nGatheredBytes < (umint(1) << (sizeof(umint) * 8 - 1)));
-
 			Internal.m_SendReservations[iReservation].m_nBytes = nGatheredBytes;
-			Internal.m_SendReservations[iReservation].m_bInUse = true;
 			Internal.m_nOutgoingSubmitted += nGatheredBytes;
 		}
 
@@ -1602,15 +1604,16 @@ namespace NMib::NNetwork
 
 				// Tearing the connection down gives every reservation back at once, so an
 				// operation still in flight then finds its own already accounted for
-				if (!Reservation.m_bInUse)
+				if (!Reservation.m_nBytes)
 					return;
 
 				DMibFastCheck(Internal.m_nOutgoingSubmitted >= Reservation.m_nBytes);
 
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
-				Reservation.m_bInUse = false;
+				Reservation.m_nBytes = 0;
+				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
+				Internal.m_iFreeSendReservation = smint(_iReservation);
 				--Internal.m_nSendReservationsInUse;
-				Internal.m_iFreeSendReservations.f_InsertLast(uint32(_iReservation));
 			}
 		;
 
