@@ -74,7 +74,7 @@ namespace NMib::NNetwork
 		virtual void f_SetInheritable() override;
 		virtual void f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual CSocket f_GiveUpSocket() override;
-		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited) override;
+		virtual bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual umint f_GetSendDepth() const override;
 		virtual bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes) override;

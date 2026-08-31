@@ -229,9 +229,9 @@ namespace NMib::NNetwork
 		mp_Socket.f_Adopt(fg_Move(_Socket), fg_Move(_fOnStateChange));
 	}
 
-	bool CSocket_TCP::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	bool CSocket_TCP::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
 	{
-		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+		return mp_Socket.f_QueryPathDeliveryRate(o_nBytes, o_bAppLimited);
 	}
 
 	// Receives are only carried by the stream; a loop that cannot provide one leaves this

@@ -34,6 +34,9 @@ namespace NMib::NNetwork
 			umint m_iSent = 0;
 			umint m_nPinnedBytes = 0;
 
+			// When the generation was pinned, for the release latency sample its release takes
+			uint64 m_PinStamp = 0;
+
 			// The next generation with unsent bytes, in the order they were sealed, or the next
 			// free one; -1 ends either list
 			int32 m_iNextUnsent = -1;
@@ -143,6 +146,7 @@ namespace NMib::NNetwork
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
 		umint fp_GetEffectiveSendWindow() const;
+		void fp_EnsureWindowTicks();
 		void fp_ConsiderSendWindowGrowth();
 		static uint64 fsp_NowTicks();
 		void fp_EnqueueUnsent(umint _iBuffer);
@@ -212,8 +216,15 @@ namespace NMib::NNetwork
 		// query; the transport runs on its connection alone, so plain members need no guard
 		uint64 mp_WindowQueryIntervalTicks = 0;
 		uint64 mp_WindowShrinkAfterTicks = 0;
+		uint64 mp_WindowTicksPerSecond = 0;
 		uint64 mp_WindowQueryStamp = 0;
 		uint64 mp_WindowShrinkSince = 0;
+
+		// The release latency's sliding minimum: two epochs of the lowest pin-to-release lag
+		// seen, so the growth target multiplies the delivery rate by the lag a release meets
+		// with no self-queueing ahead of it, and a changed path re-teaches it within two epochs
+		uint64 mp_MinReleaseLagTicks[2] = {};
+		uint64 mp_LagEpochStamp = 0;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;

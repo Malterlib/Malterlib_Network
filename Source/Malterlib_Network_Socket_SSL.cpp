@@ -1026,6 +1026,11 @@ namespace NMib::NNetwork
 	{
 		mp_nSendWindowBytes = _nBytes;
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);
+
+		// The async socket path applies the window after the completion start has already
+		// armed the transport; the ceiling still takes as long as nothing is pinned yet
+		if (mp_bCompletionActive && _nBytes && !mp_Socket.f_SendReleaseIsPrompt() && !mp_SSLConnection.f_IsSendPinned())
+			mp_SSLConnection.f_SetSendWindow(_nBytes);
 	}
 
 	void CSocket_SSL::f_SetInheritable()
@@ -1052,9 +1057,9 @@ namespace NMib::NNetwork
 		fp_HandleHandshake();
 	}
 
-	bool CSocket_SSL::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	bool CSocket_SSL::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
 	{
-		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+		return mp_Socket.f_QueryPathDeliveryRate(o_nBytes, o_bAppLimited);
 	}
 
 	CSocketOperationResult CSocket_SSL::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)

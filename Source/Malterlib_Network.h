@@ -452,7 +452,7 @@ namespace NMib::NSys::NNetwork
 	// from what the kernel knows of the connection. False until it knows enough, or where it
 	// cannot be asked. o_bAppLimited says the rate was limited by what the sender offered, so it
 	// understates the path and must not shrink anything
-	bool fg_QueryPathBandwidthDelay(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
+	bool fg_QueryPathDeliveryRate(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
 	// Whether the socket’s unreleased send bytes have reached the window the path has earned; the
 	// completion send consumer asks before gathering another batch. See ICIoLoop::f_IsSendWindowFull
 	bool fg_IsSendWindowFull(void *_pSocket, umint _nUnreleasedBytes, umint _nStartBytes);
@@ -1178,9 +1178,9 @@ namespace NMib::NNetwork
 			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
 		}
 
-		bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+		bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
 		{
-			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathBandwidthDelay(mp_pSocket, o_nBytes, o_bAppLimited);
+			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathDeliveryRate(mp_pSocket, o_nBytes, o_bAppLimited);
 		}
 
 		bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)

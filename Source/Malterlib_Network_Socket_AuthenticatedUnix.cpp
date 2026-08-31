@@ -582,9 +582,9 @@ namespace NMib::NNetwork
 		fp_HandleHandshake();
 	}
 
-	bool CSocket_AuthenticatedUnix::f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
+	bool CSocket_AuthenticatedUnix::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
 	{
-		return mp_Socket.f_QueryPathBandwidthDelay(o_nBytes, o_bAppLimited);
+		return mp_Socket.f_QueryPathDeliveryRate(o_nBytes, o_bAppLimited);
 	}
 
 	bool CSocket_AuthenticatedUnix::f_SupportsCompletionReceive() const

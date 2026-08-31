@@ -193,7 +193,7 @@ namespace NMib::NNetwork
 		DMibErrorNet("This transport cannot take over a socket");
 	}
 
-	bool ICSocket::f_QueryPathBandwidthDelay(umint &, bool &)
+	bool ICSocket::f_QueryPathDeliveryRate(umint &, bool &)
 	{
 		return false;
 	}

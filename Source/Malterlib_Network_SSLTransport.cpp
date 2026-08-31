@@ -280,6 +280,7 @@ namespace NMib::NNetwork
 		o_iBuffer = iBuffer;
 
 		Buffer.m_nPinnedBytes = o_nBytes;
+		Buffer.m_PinStamp = fsp_NowTicks();
 		++mp_nPinned;
 		mp_nPinnedBytes += o_nBytes;
 		mp_nPendingWriteUnpinned -= o_nBytes;
@@ -731,6 +732,27 @@ namespace NMib::NNetwork
 		if (!Buffer.m_nPinnedBytes)
 			return;
 
+		// The release latency feeds the window's sliding minimum: the lag of a release that
+		// met no self-queueing is what the growth target multiplies the delivery rate by
+		if (Buffer.m_PinStamp)
+		{
+			fp_EnsureWindowTicks();
+
+			uint64 Now = fsp_NowTicks();
+			if (!mp_LagEpochStamp || Now - mp_LagEpochStamp >= mp_WindowShrinkAfterTicks)
+			{
+				mp_MinReleaseLagTicks[1] = mp_MinReleaseLagTicks[0];
+				mp_MinReleaseLagTicks[0] = 0;
+				mp_LagEpochStamp = Now;
+			}
+
+			uint64 LagTicks = Now - Buffer.m_PinStamp;
+			if (!mp_MinReleaseLagTicks[0] || LagTicks < mp_MinReleaseLagTicks[0])
+				mp_MinReleaseLagTicks[0] = LagTicks;
+
+			Buffer.m_PinStamp = 0;
+		}
+
 		--mp_nPinned;
 		mp_nPinnedBytes -= Buffer.m_nPinnedBytes;
 		Buffer.m_nPinnedBytes = 0;
@@ -775,14 +797,25 @@ namespace NMib::NNetwork
 		return uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
 	}
 
-	// The cap is binding and more wants out. The kernel's bandwidth-delay product for the path,
-	// plus a quarter and two frames of margin, is what the cap grows toward — by no more than a
-	// doubling per query, so one odd reading cannot open it wide. A product at or under the cap
-	// leaves it where it is: the pipeline then keeps running dry, which is what lets the release
-	// notifications through. A product under three quarters of the cap for a whole second brings
-	// the cap down to it, and nothing is moved for that: pins above it are simply not replaced as
-	// their releases arrive. A rate the kernel says the sender held back never shrinks anything —
-	// a small cap would then read as a small path
+	// The cap is binding and more wants out. The kernel's delivery rate times the least release
+	// latency this connection has observed, plus a quarter and two frames of margin, is what the
+	// cap grows toward — by no more than a doubling per query, so one odd reading cannot open it
+	// wide. A product at or under the cap leaves it where it is: the pipeline then keeps running
+	// dry, which is what lets the release notifications through. A product under three quarters
+	// of the cap for a whole second brings the cap down to it, and nothing is moved for that:
+	// pins above it are simply not replaced as their releases arrive. A rate the kernel says the
+	// sender held back never shrinks anything — a small cap would then read as a small path
+	void CSSLTransport::fp_EnsureWindowTicks()
+	{
+		if (mp_WindowQueryIntervalTicks)
+			return;
+
+		uint64 Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
+		mp_WindowQueryIntervalTicks = Frequency / 100;
+		mp_WindowShrinkAfterTicks = Frequency;
+		mp_WindowTicksPerSecond = Frequency;
+	}
+
 	void CSSLTransport::fp_ConsiderSendWindowGrowth()
 	{
 		if (!mp_pSocket)
@@ -790,22 +823,26 @@ namespace NMib::NNetwork
 
 		// The path is asked at most every 10 ms, and the cap shrinks only once the target has
 		// stayed low for a second
-		if (!mp_WindowQueryIntervalTicks)
-		{
-			uint64 Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
-			mp_WindowQueryIntervalTicks = Frequency / 100;
-			mp_WindowShrinkAfterTicks = Frequency;
-		}
+		fp_EnsureWindowTicks();
 
 		uint64 Now = fsp_NowTicks();
 		if (mp_WindowQueryStamp && Now - mp_WindowQueryStamp < mp_WindowQueryIntervalTicks)
 			return;
 		mp_WindowQueryStamp = Now;
 
-		umint nBandwidthDelay = 0;
+		umint nDeliveryRate = 0;
 		bool bAppLimited = false;
-		if (!mp_pSocket->f_QueryPathBandwidthDelay(nBandwidthDelay, bAppLimited))
+		if (!mp_pSocket->f_QueryPathDeliveryRate(nDeliveryRate, bAppLimited))
 			return;
+
+		// The delivery rate times the least release latency observed is what must stay pinned
+		// for the pipeline to never run dry of it; the least lag rather than the average keeps
+		// the product from chasing its own queue
+		uint64 nLagTicks = mp_MinReleaseLagTicks[0];
+		if (mp_MinReleaseLagTicks[1] && (!nLagTicks || mp_MinReleaseLagTicks[1] < nLagTicks))
+			nLagTicks = mp_MinReleaseLagTicks[1];
+
+		umint nBandwidthDelay = umint(uint64(nDeliveryRate) * nLagTicks / mp_WindowTicksPerSecond);
 
 		umint nCap = fp_GetEffectiveSendWindow();
 		umint nTarget = fg_Min(nBandwidthDelay + nBandwidthDelay / 4 + 2 * mp_nOutboundCap, mp_nSendWindowBytes);

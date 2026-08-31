@@ -302,7 +302,7 @@ namespace NMib::NNetwork
 
 		// The bytes the path can hold in flight, from what the kernel knows of the connection;
 		// false until it knows enough, or where it cannot be asked
-		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited);
+		virtual bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited);
 
 		// Null for platforms or loops without kernel-completed transfers. May flip from null to
 		// non-null while a handshake is pending, so callers decide their mode once their protocol
