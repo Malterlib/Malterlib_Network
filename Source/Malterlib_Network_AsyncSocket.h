@@ -89,6 +89,9 @@ namespace NMib::NNetwork
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
+		// The bytes the connection may have in flight on its sends — the ceiling the adaptive
+		// window may grow to; 0 keeps the eight frame start as the ceiling too
+		NConcurrency::TCFuture<void> f_SetSendWindow(umint _nBytes);
 		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname);
 
 		NConcurrency::TCFuture<void> f_SendData(NContainer::CSharedByteVector _Message, uint32 _Priority);
@@ -136,7 +139,7 @@ namespace NMib::NNetwork
 		void fp_ReceiveSegment(NSys::CIoStreamSegment &&_Segment);
 		void fp_ReceiveWindowResume();
 		void fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation);
-		void fp_SendBufferReleased(umint _iTransfer);
+		void fp_SendBufferReleased(umint _iTransfer, umint _nBytes);
 		void fp_Shutdown();
 		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks);
 		void fp_CheckHandshake(CInternal &_Internal);

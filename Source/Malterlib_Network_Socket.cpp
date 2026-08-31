@@ -98,6 +98,11 @@ namespace NMib::NNetwork
 		return false;
 	}
 
+	bool ICSocketCompletionIo::f_IsSendWindowFull(umint, umint)
+	{
+		return false;
+	}
+
 	bool ICSocketCompletionIo::f_HasSendOperationInFlight() const
 	{
 		return false;

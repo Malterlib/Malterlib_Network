@@ -453,6 +453,9 @@ namespace NMib::NSys::NNetwork
 	// cannot be asked. o_bAppLimited says the rate was limited by what the sender offered, so it
 	// understates the path and must not shrink anything
 	bool fg_QueryPathBandwidthDelay(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
+	// Whether the socket’s unreleased send bytes have reached the window the path has earned; the
+	// completion send consumer asks before gathering another batch. See ICIoLoop::f_IsSendWindowFull
+	bool fg_IsSendWindowFull(void *_pSocket, umint _nUnreleasedBytes, umint _nStartBytes);
 	bool fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
@@ -1178,6 +1181,11 @@ namespace NMib::NNetwork
 		bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited)
 		{
 			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathBandwidthDelay(mp_pSocket, o_nBytes, o_bAppLimited);
+		}
+
+		bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_IsSendWindowFull(mp_pSocket, _nUnreleasedBytes, _nStartBytes);
 		}
 
 		// Marks the socket as one that will be given up to an owner that cannot rebind a handle (see

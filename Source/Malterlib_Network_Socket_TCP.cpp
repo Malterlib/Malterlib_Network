@@ -204,6 +204,11 @@ namespace NMib::NNetwork
 		mp_nTransferSizeHint = _nBytes;
 	}
 
+	bool CSocket_TCP::f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
+	{
+		return mp_Socket.f_IsSendWindowFull(_nUnreleasedBytes, _nStartBytes);
+	}
+
 	void CSocket_TCP::f_SetSendWindow(umint _nBytes, bool _bConfigured)
 	{
 		mp_Socket.f_SetSendWindow(_nBytes, _bConfigured);

@@ -97,6 +97,13 @@ namespace NMib::NNetwork
 		// through its own functors when the generation carrying its batch has fully left
 		virtual bool f_SupportsSendStaging() const;
 
+		// Whether the bytes the caller holds unreleased have reached the window the path has
+		// earned — asked before gathering another batch, with the caller’s own count of bytes
+		// whose release functors have not run and the window a connection begins with. A full
+		// answer leaves the batch in the caller’s queue; the next release re-asks. A socket
+		// that stages its sends bounds them itself and answers false
+		virtual bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes);
+
 		// Whether a kernel operation is with the socket right now. A staging socket's caller
 		// cannot tell this from its own transfer count — staged transfers are outstanding
 		// without an operation — and the drain that carries pending output must run exactly

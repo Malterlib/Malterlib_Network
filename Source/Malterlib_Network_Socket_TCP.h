@@ -77,6 +77,7 @@ namespace NMib::NNetwork
 		virtual bool f_QueryPathBandwidthDelay(umint &o_nBytes, bool &o_bAppLimited) override;
 		virtual ICSocketCompletionIo *f_GetCompletionIo() override;
 		virtual umint f_GetSendDepth() const override;
+		virtual bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes) override;
 		virtual bool f_SendReleaseIsPrompt() const override;
 		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
 		virtual bool f_SupportsCompletionReceive() const override;

@@ -25,8 +25,9 @@ namespace
 	fp64 g_Timeout = 60.0 * gc_TimeoutMultiplier;
 
 	// Measures the raw async socket actor pair: a ping over an echoing server for round trip
-	// latency and a client to server upload for throughput, over a plain unix socket and the
-	// same unix socket under TLS so the comparison mirrors the wsa/wss transport benchmark
+	// latency and a client to server upload for throughput, over a plain unix socket, plain
+	// loopback TCP, and the unix socket under TLS so the comparison mirrors the transport
+	// benchmark and covers the send window machinery’s plain TCP path
 	struct CBenchState
 	{
 		CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho, uint64 _AckTargetBytes)
@@ -242,13 +243,19 @@ namespace
 		;
 		_pState->m_ListenSubscription = fg_Move(ListenResult.m_Subscription);
 
+		// A TCP address listening on port 0 gets its port from the kernel; the client connects
+		// to the bound one
+		CStr ConnectAddress = _Address;
+		if (_Address.f_EndsWith(":0") && !ListenResult.m_ListenPorts.f_IsEmpty())
+			ConnectAddress = "{}{}"_f << _Address.f_Left(_Address.f_GetLen() - 1) << ListenResult.m_ListenPorts[0];
+
 		_pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
 		_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, 1024 * 1024).f_DiscardResult();
 
 		auto NewClientConnection = _pState->m_ClientActor
 			(
 				&CAsyncSocketClientActor::f_Connect
-				, _Address
+				, ConnectAddress
 				, ""
 				, ENetAddressType_None
 				, 0
@@ -267,6 +274,11 @@ namespace
 		;
 
 		_pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		// SendWindow=<bytes> raises the adaptive window’s ceiling for the plain schemes, the way
+		// the transport benchmark takes it
+		if (umint nSendWindow = fg_GetSys()->f_GetEnvironmentVariable("SendWindow").f_ToInt(umint(0)))
+			_pState->m_ClientSocket(&CAsyncSocketActor::f_SetSendWindow, nSendWindow).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
 	}
 
 	// Drives the benchmark from a coroutine so each iteration costs actor scheduling, not test
@@ -364,6 +376,10 @@ namespace
 			;
 
 			_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
+
+			// Plain TCP over loopback: completion sends with no TLS transport gating ahead — the
+			// path the send window ask and the dynamic reservations bound
+			_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
 
 			CSSLSettings ServerSettings;
 			CCertificateOptions Options;

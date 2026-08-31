@@ -229,8 +229,58 @@ namespace NMib::NNetwork
 		// cannot gather bytes the first is already carrying
 		umint m_nOutgoingSubmitted = 0;
 
-		static constexpr umint mc_nMaxSendReservations = 8;
-		CSendReservation m_SendReservations[mc_nMaxSendReservations];
+		// A continuation carries no reservation of its own
+		static constexpr umint mc_iNoReservation = umint(-1);
+
+		// Grown one at a time as the send window actually admits more, never scanned per entry:
+		// free slots wait on their own list. A staging socket bounds its own pipeline and keeps
+		// the historical eight; a plain socket’s pipeline is bounded by the send window in bytes,
+		// so the slots only need to never be the binding constraint
+		NContainer::TCVector<CSendReservation> m_SendReservations;
+		NContainer::TCVector<uint32> m_iFreeSendReservations;
+		umint m_nSendReservationsInUse = 0;
+
+		// Bytes of accepted sends whose release functors have not run; what the send window
+		// asks are measured against
+		umint m_nSendBytesUnreleased = 0;
+
+		// 0 keeps the connection at its start window of eight frames
+		umint m_nSendWindowBytes = 0;
+
+		// The window a connection begins at: eight frames of the fragmentation size
+		umint fp_SendWindowStartBytes() const
+		{
+			return 8 * (fg_Max(m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+		}
+
+		umint fp_SendWindowBytes() const
+		{
+			return m_nSendWindowBytes ? m_nSendWindowBytes : fp_SendWindowStartBytes();
+		}
+
+		umint fp_MaxSendReservations(NNetwork::ICSocketCompletionIo *_pCompletionIo) const
+		{
+			if (_pCompletionIo->f_SupportsSendStaging())
+				return 8;
+
+			umint nFrameBytes = fp_SendWindowStartBytes() / 8;
+			return fg_Max(umint(8), fp_SendWindowBytes() / nFrameBytes + 2);
+		}
+
+		// Tearing the connection down gives every reservation back at once; operations still in
+		// flight then find their own already accounted for
+		void fp_ResetSendReservations()
+		{
+			m_iFreeSendReservations.f_Clear();
+			for (umint iSlot = 0; iSlot < m_SendReservations.f_GetLen(); ++iSlot)
+			{
+				m_SendReservations[iSlot].m_bInUse = false;
+				m_iFreeSendReservations.f_InsertLast(uint32(iSlot));
+			}
+
+			m_nSendReservationsInUse = 0;
+			m_nSendBytesUnreleased = 0;
+		}
 
 		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
 		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
@@ -577,7 +627,10 @@ namespace NMib::NNetwork
 		// A transport that buffers on the way through sizes that buffering from what one transfer
 		// is worth here, which is the same size the receive buffer is cut to
 		if (Internal.m_pSocket)
+		{
 			Internal.m_pSocket->f_SetTransferSizeHint(fg_Max(Internal.m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+			Internal.m_pSocket->f_SetSendWindow(Internal.fp_SendWindowBytes(), Internal.m_nSendWindowBytes != 0);
+		}
 		Internal.m_State = EState_None;
 
 		auto Future = Internal.m_UpgradeSocketPromise.f_CreateNew().f_Future();
@@ -1147,11 +1200,11 @@ namespace NMib::NNetwork
 		// reservation rather than one of its own. Held from here, above every way out of this
 		// function: a continuation that cannot be submitted has to give the reservation back, or
 		// nothing ever will and the queue stays permanently spoken for
-		umint iReservation = _bContinue ? _iInheritedReservation : Internal.mc_nMaxSendReservations;
+		umint iReservation = _bContinue ? _iInheritedReservation : Internal.mc_iNoReservation;
 
 		auto fReleaseOnFailure = NMib::g_OnScopeExit / [&]
 			{
-				if (iReservation >= Internal.mc_nMaxSendReservations)
+				if (iReservation == Internal.mc_iNoReservation)
 					return;
 
 				auto &Reservation = Internal.m_SendReservations[iReservation];
@@ -1165,6 +1218,8 @@ namespace NMib::NNetwork
 
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
 				Reservation.m_bInUse = false;
+				--Internal.m_nSendReservationsInUse;
+				Internal.m_iFreeSendReservations.f_InsertLast(uint32(iReservation));
 			}
 		;
 
@@ -1177,6 +1232,19 @@ namespace NMib::NNetwork
 		auto *pCompletionIo = Internal.f_GetCompletionIoSend();
 		if (!pCompletionIo)
 			return;
+
+		// The send window: the path already holds as much unreleased as it has earned, so the
+		// batch stays in the queue — the release that shrinks the count re-drives this. New
+		// batches only, like the staging gate below
+		if (!_bContinue && pCompletionIo->f_IsSendWindowFull(Internal.m_nSendBytesUnreleased, Internal.fp_SendWindowStartBytes()))
+		{
+#if DMibConfig_IoDebug_Enable
+			if (auto *pStats = NNetwork::fg_NetIoStats())
+				pStats->m_nSendBlocked.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+#endif
+
+			return;
+		}
 
 		// Nothing new may be sealed: the transport cannot take another batch, and the release
 		// upcall is what re-drives this. The gate is for new plaintext only — a continuation
@@ -1199,20 +1267,13 @@ namespace NMib::NNetwork
 		// spoken for the batch waits; the completion that frees one re-drives this
 		if (!_bContinue)
 		{
-			umint nInUse = 0;
-			for (umint iSlot = 0; iSlot < Internal.mc_nMaxSendReservations; ++iSlot)
-			{
-				if (Internal.m_SendReservations[iSlot].m_bInUse)
-					++nInUse;
-			}
-
-			if (nInUse == Internal.mc_nMaxSendReservations)
+			if (Internal.m_nSendReservationsInUse >= Internal.fp_MaxSendReservations(pCompletionIo))
 				return;
 
 #if DMibConfig_IoDebug_Enable
 			if (auto *pStats = NNetwork::fg_NetIoStats())
 			{
-				uint64 nOutstanding = nInUse + 1;
+				uint64 nOutstanding = Internal.m_nSendReservationsInUse + 1;
 				uint64 nMax = pStats->m_nSendMaxOutstanding.f_Load(NAtomic::gc_MemoryOrder_Relaxed);
 				while (nMax < nOutstanding && !pStats->m_nSendMaxOutstanding.f_CompareExchangeWeak(nMax, nOutstanding, NAtomic::gc_MemoryOrder_Relaxed))
 				{
@@ -1244,17 +1305,16 @@ namespace NMib::NNetwork
 		// reports, because a short write leaves part of them still to send
 		if (!_bContinue)
 		{
-			for (umint iSlot = 0; iSlot < Internal.mc_nMaxSendReservations; ++iSlot)
+			if (!Internal.m_iFreeSendReservations.f_IsEmpty())
+				iReservation = Internal.m_iFreeSendReservations.f_Pop();
+			else
 			{
-				if (Internal.m_SendReservations[iSlot].m_bInUse)
-					continue;
-
-				iReservation = iSlot;
-				break;
+				iReservation = Internal.m_SendReservations.f_GetLen();
+				Internal.m_SendReservations.f_InsertLast(CInternal::CSendReservation());
 			}
 
-			// The socket never carries more sends than there are slots here
-			DMibFastCheck(iReservation < Internal.mc_nMaxSendReservations);
+			++Internal.m_nSendReservationsInUse;
+
 			DMibFastCheck(nGatheredBytes < (umint(1) << (sizeof(umint) * 8 - 1)));
 
 			Internal.m_SendReservations[iReservation].m_nBytes = nGatheredBytes;
@@ -1275,7 +1335,7 @@ namespace NMib::NNetwork
 						This.f_Bind<&CAsyncSocketActor::fp_SendCompleted>(_Result, iReservation).f_DiscardResult();
 				}
 				,
-				[Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker), KeepAlives = fg_Move(KeepAlives), WeakThis = fg_ThisActor(this).f_Weak()](umint _iTransfer) mutable
+				[Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker), KeepAlives = fg_Move(KeepAlives), WeakThis = fg_ThisActor(this).f_Weak(), nGatheredBytes](umint _iTransfer) mutable
 				{
 					// The kernel is done with the gathered pages; the keep alives this functor
 					// carried can finally go, and the socket gets its buffer back on the
@@ -1283,13 +1343,16 @@ namespace NMib::NNetwork
 					KeepAlives.f_Clear();
 
 					if (auto This = WeakThis.f_Lock())
-						This.f_Bind<&CAsyncSocketActor::fp_SendBufferReleased>(_iTransfer).f_DiscardResult();
+						This.f_Bind<&CAsyncSocketActor::fp_SendBufferReleased>(_iTransfer, nGatheredBytes).f_DiscardResult();
 				}
 			)
 		;
 
 		if (bSubmitted)
+		{
 			fReleaseOnFailure.f_Clear();
+			Internal.m_nSendBytesUnreleased += nGatheredBytes;
+		}
 		else
 		{
 			// Terminal by contract, and the queue is still holding the plaintext this was meant to
@@ -1532,7 +1595,7 @@ namespace NMib::NNetwork
 				// done with these bytes yet is carrying them still, and releasing here would let
 				// the next gather offer them a second time. A continuation reserved nothing of its
 				// own, and says so with no reservation at all
-				if (_iReservation >= Internal.mc_nMaxSendReservations)
+				if (_iReservation == Internal.mc_iNoReservation)
 					return;
 
 				auto &Reservation = Internal.m_SendReservations[_iReservation];
@@ -1546,6 +1609,8 @@ namespace NMib::NNetwork
 
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
 				Reservation.m_bInUse = false;
+				--Internal.m_nSendReservationsInUse;
+				Internal.m_iFreeSendReservations.f_InsertLast(uint32(_iReservation));
 			}
 		;
 
@@ -1563,8 +1628,7 @@ namespace NMib::NNetwork
 		if (_Result.m_Status == NSys::EIoCompletionStatus::mc_Cancelled || !bSocketUsable)
 		{
 			Internal.m_nOutgoingSubmitted = 0;
-			for (auto &Reservation : Internal.m_SendReservations)
-				Reservation.m_bInUse = false;
+			Internal.fp_ResetSendReservations();
 			Internal.f_TryReleaseDeferredTransferState();
 			return;
 		}
@@ -1600,9 +1664,12 @@ namespace NMib::NNetwork
 
 	// The kernel released a send's buffers. For a socket that stages what it carries this is
 	// what lets the next generation be filled, so anything parked behind the cap moves now
-	void CAsyncSocketActor::fp_SendBufferReleased(umint _iTransfer)
+	void CAsyncSocketActor::fp_SendBufferReleased(umint _iTransfer, umint _nBytes)
 	{
 		auto &Internal = *mp_pInternal;
+
+		// The window asks measure against this; a teardown may have zeroed the count already
+		Internal.m_nSendBytesUnreleased -= fg_Min(_nBytes, Internal.m_nSendBytesUnreleased);
 
 		if (f_IsDestroyed())
 			return;
@@ -2136,7 +2203,10 @@ namespace NMib::NNetwork
 		// A transport that buffers on the way through sizes that buffering from what one transfer
 		// is worth here, which is the same size the receive buffer is cut to
 		if (Internal.m_pSocket)
+		{
 			Internal.m_pSocket->f_SetTransferSizeHint(fg_Max(Internal.m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+			Internal.m_pSocket->f_SetSendWindow(Internal.fp_SendWindowBytes(), Internal.m_nSendWindowBytes != 0);
+		}
 
 		NNetwork::ENetTCPState State = NNetwork::ENetTCPState_None;
 		if (Internal.m_pSocket->f_IsValid())
@@ -2170,6 +2240,16 @@ namespace NMib::NNetwork
 	{
 		auto &Internal = *mp_pInternal;
 		co_return co_await Internal.m_FinishConnectionPromise.f_Future();
+	}
+
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetSendWindow(umint _nBytes)
+	{
+		auto &Internal = *mp_pInternal;
+		Internal.m_nSendWindowBytes = _nBytes;
+		if (Internal.m_pSocket)
+			Internal.m_pSocket->f_SetSendWindow(Internal.fp_SendWindowBytes(), _nBytes != 0);
+
+		co_return {};
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)
