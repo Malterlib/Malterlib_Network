@@ -9,6 +9,7 @@
 #include <Mib/Cryptography/Certificate>
 #include <Mib/Concurrency/DistributedActorTestHelpers>
 #include <Mib/File/File>
+#include <Mib/Time/Stopwatch>
 
 using namespace NMib;
 using namespace NMib::NNetwork;
@@ -167,26 +168,61 @@ namespace
 	using CBenchHandlerActor = TCBenchHandlerActor<EPriority_Normal>;
 	using CBenchHandlerActorHighCpu = TCBenchHandlerActor<EPriority_NormalHighCPU>;
 
+	// The upload ack target travels in band as a tiny control message, so the loopback and the
+	// cross machine suites share one driver and one server callback: eight magic bytes and the
+	// payload byte count the server answers with an eight byte ack
+	constexpr uint64 gc_BenchControlMagic = 0x68636E654262694Dull; // "MibBench"
+	constexpr umint gc_BenchControlBytes = 16;
+
+	CSharedByteVector fg_BenchControlMessage(uint64 _AckTargetBytes)
+	{
+		CIOByteVector Message;
+		Message.f_SetLen(gc_BenchControlBytes);
+
+		uint64 Magic = gc_BenchControlMagic;
+		NMemory::fg_ObjectCopy(Message.f_GetArray(), (uint8 const *)&Magic, sizeof(Magic));
+		NMemory::fg_ObjectCopy(Message.f_GetArray() + sizeof(Magic), (uint8 const *)&_AckTargetBytes, sizeof(_AckTargetBytes));
+
+		return CSharedByteVector(fg_Move(Message));
+	}
+
+	bool fg_BenchParseControl(uint8 const *_pData, umint _nBytes, uint64 &o_AckTargetBytes)
+	{
+		if (_nBytes != gc_BenchControlBytes)
+			return false;
+
+		uint64 Magic = 0;
+		NMemory::fg_ObjectCopy((uint8 *)&Magic, _pData, sizeof(Magic));
+		if (Magic != gc_BenchControlMagic)
+			return false;
+
+		NMemory::fg_ObjectCopy((uint8 *)&o_AckTargetBytes, _pData + sizeof(Magic), sizeof(o_AckTargetBytes));
+
+		return true;
+	}
+
+	// The server half on its own, so the cross machine serve side can stand one up without a
+	// client in the same process; returns the bound port for listens on an ephemeral one
 	template <typename t_CHandler>
-	void fg_SetupConnection
+	uint16 fg_SetupServer
 		(
 			CActorRunLoopTestHelper &_RunLoopHelper
 			, TCSharedPointerSupportWeak<CBenchState> const &_pState
-			, CStr const &_Address
+			, CNetAddress const &_ListenAddress
 			, FVirtualSocketFactory const &_ServerFactory
-			, FVirtualSocketFactory const &_ClientFactory
 			, TCActor<t_CHandler> const &_HandlerActor
 		)
 	{
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
-		CNetAddress ListenAddress = CSocket::fs_ResolveAddress(_Address);
-
 		_pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
 		_pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultFragmentationSize, 1024 * 1024).f_DiscardResult();
 
 		CAsyncSocketServerCallbacks ListenCallbacks;
-		ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, _HandlerActor](CAsyncSocketNewServerConnection _ConnectionInfo) -> TCFuture<void>
+
+		// Bound to the handler actor: an unbound functor runs on the ambient test actor, whose
+		// thread the cross machine serve parks in a sleep loop instead of pumping the run loop
+		ListenCallbacks.m_fNewConnection = g_ActorFunctor(_HandlerActor) / [pStateWeak, _HandlerActor](CAsyncSocketNewServerConnection _ConnectionInfo) -> TCFuture<void>
 			{
 				CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
 
@@ -200,6 +236,14 @@ namespace
 						co_await pState->f_WaitServerConnection();
 
 						DMibLock(pState->m_Lock);
+
+						uint64 ControlTarget = 0;
+						if (fg_BenchParseControl(_Data.f_GetArray(), _Data.f_GetLen(), ControlTarget))
+						{
+							pState->m_AckTargetBytes = ControlTarget;
+							pState->m_nServerReceivedBytes = 0;
+							co_return {};
+						}
 
 						if (pState->m_bEcho)
 						{
@@ -250,7 +294,7 @@ namespace
 		auto ListenResult = _pState->m_ServerActor
 			(
 				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector(ListenAddress)
+				, fg_CreateVector(_ListenAddress)
 				, ENetFlag_None
 				, fg_Move(ListenCallbacks)
 				, fg_TempCopy(_ServerFactory)
@@ -259,11 +303,21 @@ namespace
 		;
 		_pState->m_ListenSubscription = fg_Move(ListenResult.m_Subscription);
 
-		// A TCP address listening on port 0 gets its port from the kernel; the client connects
-		// to the bound one
-		CStr ConnectAddress = _Address;
-		if (_Address.f_EndsWith(":0") && !ListenResult.m_ListenPorts.f_IsEmpty())
-			ConnectAddress = "{}{}"_f << _Address.f_Left(_Address.f_GetLen() - 1) << ListenResult.m_ListenPorts[0];
+		return ListenResult.m_ListenPorts.f_IsEmpty() ? uint16(0) : ListenResult.m_ListenPorts[0];
+	}
+
+	// The client half: connect, receive counting, and the send window override
+	template <typename t_CHandler>
+	void fg_SetupClient
+		(
+			CActorRunLoopTestHelper &_RunLoopHelper
+			, TCSharedPointerSupportWeak<CBenchState> const &_pState
+			, CStr const &_ConnectAddress
+			, FVirtualSocketFactory const &_ClientFactory
+			, TCActor<t_CHandler> const &_HandlerActor
+		)
+	{
+		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
 		_pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
 		_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, 1024 * 1024).f_DiscardResult();
@@ -271,7 +325,7 @@ namespace
 		auto NewClientConnection = _pState->m_ClientActor
 			(
 				&CAsyncSocketClientActor::f_Connect
-				, ConnectAddress
+				, _ConnectAddress
 				, ""
 				, ENetAddressType_None
 				, 0
@@ -297,6 +351,28 @@ namespace
 		// the transport benchmark takes it
 		if (umint nSendWindow = fg_GetSys()->f_GetEnvironmentVariable("SendWindow").f_ToInt(umint(0)))
 			_pState->m_ClientSocket(&CAsyncSocketActor::f_SetSendWindow, nSendWindow).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
+	}
+
+	template <typename t_CHandler>
+	void fg_SetupConnection
+		(
+			CActorRunLoopTestHelper &_RunLoopHelper
+			, TCSharedPointerSupportWeak<CBenchState> const &_pState
+			, CStr const &_Address
+			, FVirtualSocketFactory const &_ServerFactory
+			, FVirtualSocketFactory const &_ClientFactory
+			, TCActor<t_CHandler> const &_HandlerActor
+		)
+	{
+		uint16 ListenPort = fg_SetupServer(_RunLoopHelper, _pState, CSocket::fs_ResolveAddress(_Address), _ServerFactory, _HandlerActor);
+
+		// A TCP address listening on port 0 gets its port from the kernel; the client connects
+		// to the bound one
+		CStr ConnectAddress = _Address;
+		if (_Address.f_EndsWith(":0") && ListenPort != 0)
+			ConnectAddress = "{}{}"_f << _Address.f_Left(_Address.f_GetLen() - 1) << ListenPort;
+
+		fg_SetupClient(_RunLoopHelper, _pState, ConnectAddress, _ClientFactory, _HandlerActor);
 	}
 
 	// Drives the benchmark from a coroutine so each iteration costs actor scheduling, not test
@@ -334,6 +410,10 @@ namespace
 		TCFuture<void> f_RunUpload(TCSharedPointerSupportWeak<CBenchState> _pState, CSharedByteVector _Chunk, uint64 _nBytes)
 		{
 			umint ChunkSize = _Chunk.f_GetLen();
+
+			// Tells the server how many payload bytes this run covers before any of them are
+			// queued; sends on one connection stay ordered
+			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchControlMessage(_nBytes), 0).f_DiscardResult();
 
 			uint64 AckTargetBytes = 0;
 			{
@@ -406,6 +486,47 @@ namespace
 				.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
 			;
 			Time.f_Stop(_nPingRoundTrips);
+		}
+		_PerfTest.f_Add(Time);
+
+		Driver->f_BlockDestroy(_RunLoopHelper.m_pRunLoop->f_ActorDestroyLoop());
+	}
+
+	// The measured upload loop on an already connected state, shared by the loopback suites and
+	// the cross machine client
+	void fg_MeasureUpload
+		(
+			CActorRunLoopTestHelper &_RunLoopHelper
+			, CTestPerformance &_PerfTest
+			, TCSharedPointerSupportWeak<CBenchState> const &_pState
+			, CStr const &_MeasureName
+			, uint64 _nTransferBytes
+			, uint32 _ChunkSize
+			, umint _nRepetitions
+			, fp64 _CallTimeout
+		)
+	{
+		TCActor<CBenchDriverActor> Driver = fg_ConstructActor<CBenchDriverActor>();
+
+		// The chunk is created once outside the measured path and sent by reference every time,
+		// so the benchmark measures the transport rather than buffer creation
+		CIOByteVector ChunkData;
+		ChunkData.f_SetLen(_ChunkSize);
+		NMemory::fg_ObjectSet(ChunkData.f_GetArray(), (uint8)0x3C, _ChunkSize);
+		CSharedByteVector Chunk(fg_Move(ChunkData));
+
+		Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, uint64(_ChunkSize))
+			.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
+		;
+
+		CTestPerformanceMeasure Time(_MeasureName);
+		for (umint iRepetition = 0; iRepetition < _nRepetitions; ++iRepetition)
+		{
+			Time.f_Start();
+			Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, _nTransferBytes)
+				.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
+			;
+			Time.f_Stop(_nTransferBytes);
 		}
 		_PerfTest.f_Add(Time);
 
@@ -500,47 +621,126 @@ namespace
 						{
 							DMibTestPath(_Tag);
 
-							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, mc_nTransferBytes);
+							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
 							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
-							TCActor<CBenchDriverActor> Driver = fg_ConstructActor<CBenchDriverActor>();
-
-							// The chunk is created once outside the measured path and sent by
-							// reference every time, so the benchmark measures the transport
-							// rather than buffer creation
-							CIOByteVector ChunkData;
-							ChunkData.f_SetLen(mc_ChunkSize);
-							NMemory::fg_ObjectSet(ChunkData.f_GetArray(), (uint8)0x3C, mc_ChunkSize);
-							CSharedByteVector Chunk(fg_Move(ChunkData));
-
-							{
-								DMibLock(pState->m_Lock);
-								pState->m_AckTargetBytes = uint64(mc_ChunkSize);
-							}
-							Driver(&CBenchDriverActor::f_RunUpload, pState, Chunk, uint64(mc_ChunkSize))
-								.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-							;
-
-							{
-								DMibLock(pState->m_Lock);
-								pState->m_AckTargetBytes = mc_nTransferBytes;
-							}
-
-							CTestPerformanceMeasure Time("Thr_{}"_f << _Tag);
-							for (umint iRepetition = 0; iRepetition < mc_nRepetitions; ++iRepetition)
-							{
-								Time.f_Start();
-								Driver(&CBenchDriverActor::f_RunUpload, pState, Chunk, mc_nTransferBytes)
-									.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-								;
-								Time.f_Stop(mc_nTransferBytes);
-							}
-							PerfTest.f_Add(Time);
-
-							Driver->f_BlockDestroy(RunLoopHelper.m_pRunLoop->f_ActorDestroyLoop());
+							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, mc_nTransferBytes, mc_ChunkSize, mc_nRepetitions, g_Timeout);
 						}
 					)
 				;
+			};
+
+			// The cross machine pair, mirroring the transport benchmark's remote suites: the
+			// same upload benchmark split over two processes on two hosts. The serve side
+			// listens on a routable address and writes its connect URL as the ticket; the
+			// ticket is carried to the client host, and the client connects from it and runs
+			// the same measured loop as the loopback suites — the ticket reading side is the
+			// SENDER, so run the client on the machine whose send path is measured. One client
+			// at a time. Both sides are quiet no-ops without their required environment.
+			//
+			//   serve:  BenchHost=<routable address> [BenchPort=39301] [BenchSchemes=tls|tcp]
+			//           [BenchTicketFile=<program dir>/AsyncSocketBench.ticket]
+			//           [BenchServeSeconds=600]
+			//   client: BenchTicketFile=<carried ticket> (or BenchTicket=<url>)
+			//           plus TransferBytes/ChunkSize/PipelineLength/SendWindow exactly as the
+			//           loopback suites, and [BenchCallTimeout=600] to cover one upload on a
+			//           slow link
+			DMibTestSuite(CTestCategory("AsyncSocketRemoteServe") << CTestGroup("Performance"))
+			{
+				CStr Host = fg_GetSys()->f_GetEnvironmentVariable("BenchHost");
+				if (!Host.f_IsEmpty())
+				{
+					CStr Scheme = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
+					if (Scheme.f_IsEmpty())
+						Scheme = "tls";
+					uint32 Port = fg_GetSys()->f_GetEnvironmentVariable("BenchPort").f_ToInt(uint32(39301));
+					CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
+					if (TicketFile.f_IsEmpty())
+						TicketFile = NFile::CFile::fs_GetProgramDirectory() / "AsyncSocketBench.ticket";
+					fp64 ServeSeconds = fg_GetSys()->f_GetEnvironmentVariable("BenchServeSeconds").f_ToFloat(fp64(600.0));
+
+					CActorRunLoopTestHelper RunLoopHelper;
+
+					FVirtualSocketFactory ServerFactory;
+					if (Scheme == "tls")
+					{
+						CSSLSettings ServerSettings;
+						CCertificateOptions Options;
+						Options.m_CommonName = "Malterlib async socket benchmark";
+						Options.m_Hostnames = fg_CreateVector<CStr>(Host);
+						Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
+						CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+						ServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+					}
+
+					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+
+					// Chunk counting is the serve side's hot path, so its receive handling stays
+					// in the socket actors' pool
+					fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), ServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
+
+					CStr TicketString = "{}://{}:{}"_f << Scheme << Host << Port;
+					NFile::CFile::fs_WriteStringToFile(TicketFile, TicketString, false);
+
+					NSys::fg_ConsoleOutput(CStr("AsyncSocketRemoteServe: {} for {} seconds, ticket at {}\n"_f << TicketString << ServeSeconds << TicketFile));
+
+					// Removing the ticket file ends the serve early, which is how a driver
+					// script releases the server the moment its client is done
+					NTime::CStopwatch Serving(true);
+					while (Serving.f_GetTime() < ServeSeconds && NFile::CFile::fs_FileExists(TicketFile))
+						NSys::fg_Thread_Sleep(0.25);
+				}
+			};
+
+			DMibTestSuite(CTestCategory("AsyncSocketRemoteThroughput") << CTestGroup("Performance"))
+			{
+				CStr TicketString = fg_GetSys()->f_GetEnvironmentVariable("BenchTicket");
+				CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
+				if (TicketString.f_IsEmpty() && !TicketFile.f_IsEmpty())
+					TicketString = NFile::CFile::fs_ReadStringFromFile(TicketFile);
+
+				if (!TicketString.f_IsEmpty())
+				{
+					CStr Scheme = "tcp";
+					CStr Address = TicketString;
+					if (TicketString.f_StartsWith("tls://"))
+					{
+						Scheme = "tls";
+						Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
+					}
+					else if (TicketString.f_StartsWith("tcp://"))
+						Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
+
+					uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mc_ChunkSize);
+					uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mc_nTransferBytes);
+					fp64 CallTimeout = fg_GetSys()->f_GetEnvironmentVariable("BenchCallTimeout").f_ToFloat(fp64(600.0));
+
+					CActorRunLoopTestHelper RunLoopHelper;
+
+					CTestPerformance PerfTest(0.015);
+
+					FVirtualSocketFactory ClientFactory;
+					if (Scheme == "tls")
+					{
+						// The serve side's certificate is self signed and per run; the client
+						// accepts it outright — a benchmark link, with the handshake and record
+						// crypto still fully measured
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreTrustFailures;
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+						ClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+					}
+
+					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+					fg_SetupClient(RunLoopHelper, pState, Address, ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
+
+					DMibTestPath("Remote");
+					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mc_nRepetitions, CallTimeout);
+
+					DMibExpectTrue(PerfTest);
+				}
 			};
 		}
 	};
