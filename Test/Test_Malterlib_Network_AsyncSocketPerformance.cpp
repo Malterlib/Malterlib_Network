@@ -155,13 +155,19 @@ namespace
 		TCUniquePointer<TCPromise<void>> m_pClientWaitPromise;
 	};
 
-	// A callback host on the high CPU pool, so the high variants handle receives where the
-	// socket actors already run
-	struct CBenchHandlerActor : public CActor
+	// The callback host: replies and receive counting run on a pool actor of the chosen
+	// priority — never on the ambient test actor, which is in no pool. The normal variant
+	// measures the cross pool hop, the high CPU one stays in the socket actors’ pool
+	template <EPriority t_Priority>
+	struct TCBenchHandlerActor : public CActor
 	{
-		static constexpr EPriority mc_Priority = EPriority_NormalHighCPU;
+		static constexpr EPriority mc_Priority = t_Priority;
 	};
 
+	using CBenchHandlerActor = TCBenchHandlerActor<EPriority_Normal>;
+	using CBenchHandlerActorHighCpu = TCBenchHandlerActor<EPriority_NormalHighCPU>;
+
+	template <typename t_CHandler>
 	void fg_SetupConnection
 		(
 			CActorRunLoopTestHelper &_RunLoopHelper
@@ -169,7 +175,7 @@ namespace
 			, CStr const &_Address
 			, FVirtualSocketFactory const &_ServerFactory
 			, FVirtualSocketFactory const &_ClientFactory
-			, TCActor<CBenchHandlerActor> const &_HandlerActor
+			, TCActor<t_CHandler> const &_HandlerActor
 		)
 	{
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
@@ -218,10 +224,7 @@ namespace
 					}
 				;
 
-				if (_HandlerActor)
-					Callbacks.m_fOnReceiveData = g_ActorFunctor(_HandlerActor) / fOnReceiveData;
-				else
-					Callbacks.m_fOnReceiveData = g_ActorFunctor / fOnReceiveData;
+				Callbacks.m_fOnReceiveData = g_ActorFunctor(_HandlerActor) / fOnReceiveData;
 
 				auto Socket = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
 
@@ -286,10 +289,7 @@ namespace
 			}
 		;
 
-		if (_HandlerActor)
-			ClientCallbacks.m_fOnReceiveData = g_ActorFunctor(_HandlerActor) / fOnClientReceiveData;
-		else
-			ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / fOnClientReceiveData;
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor(_HandlerActor) / fOnClientReceiveData;
 
 		_pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
 
@@ -376,7 +376,7 @@ namespace
 	using CBenchDriverActor = TCBenchDriverActor<EPriority_Normal>;
 	using CBenchDriverActorHighCpu = TCBenchDriverActor<EPriority_NormalHighCPU>;
 
-	template <typename t_CDriver>
+	template <typename t_CDriver, typename t_CHandler>
 	void fg_MeasurePing
 		(
 			CActorRunLoopTestHelper &_RunLoopHelper
@@ -385,13 +385,12 @@ namespace
 			, CStr const &_Address
 			, FVirtualSocketFactory const &_ServerFactory
 			, FVirtualSocketFactory const &_ClientFactory
-			, TCActor<CBenchHandlerActor> const &_HandlerActor
 			, umint _nPingRoundTrips
 			, umint _nRepetitions
 		)
 	{
 		TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(_RunLoopHelper.m_pRunLoop, true, uint64(0));
-		fg_SetupConnection(_RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, _HandlerActor);
+		fg_SetupConnection(_RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<t_CHandler>());
 
 		TCActor<t_CDriver> Driver = fg_ConstructActor<t_CDriver>();
 
@@ -478,11 +477,11 @@ namespace
 						{
 							DMibTestPath(_Tag);
 
-							fg_MeasurePing<CBenchDriverActor>(RunLoopHelper, PerfTest, "Ping_{}"_f << _Tag, _Address, _ServerFactory, _ClientFactory, {}, mc_nPingRoundTrips, mc_nRepetitions);
+							fg_MeasurePing<CBenchDriverActor, CBenchHandlerActor>(RunLoopHelper, PerfTest, "Ping_{}"_f << _Tag, _Address, _ServerFactory, _ClientFactory, mc_nPingRoundTrips, mc_nRepetitions);
 
 							// The high CPU variant keeps the driver and the receive handling in the
 							// socket actors’ pool, so a round trip never hops pools
-							fg_MeasurePing<CBenchDriverActorHighCpu>(RunLoopHelper, PerfTest, "PingHigh_{}"_f << _Tag, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>(), mc_nPingRoundTrips, mc_nRepetitions);
+							fg_MeasurePing<CBenchDriverActorHighCpu, CBenchHandlerActorHighCpu>(RunLoopHelper, PerfTest, "PingHigh_{}"_f << _Tag, _Address, _ServerFactory, _ClientFactory, mc_nPingRoundTrips, mc_nRepetitions);
 						}
 					)
 				;
@@ -502,7 +501,7 @@ namespace
 							DMibTestPath(_Tag);
 
 							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, mc_nTransferBytes);
-							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, {});
+							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 							TCActor<CBenchDriverActor> Driver = fg_ConstructActor<CBenchDriverActor>();
 
