@@ -280,7 +280,13 @@ namespace NMib::NNetwork
 		o_iBuffer = iBuffer;
 
 		Buffer.m_nPinnedBytes = o_nBytes;
-		Buffer.m_PinStamp = fsp_NowTicks();
+
+		// Only a generation with at most one pinned ahead of it samples the release lag: one
+		// behind a standing queue measures the queue, and a cap sized by its own occupancy
+		// only grows the occupancy
+		if (mp_nPinned <= 1)
+			Buffer.m_PinStamp = fsp_NowTicks();
+
 		++mp_nPinned;
 		mp_nPinnedBytes += o_nBytes;
 		mp_nPendingWriteUnpinned -= o_nBytes;
