@@ -216,7 +216,6 @@ namespace
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
 		_pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		_pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultFragmentationSize, 1024 * 1024).f_DiscardResult();
 
 		CAsyncSocketServerCallbacks ListenCallbacks;
 
@@ -320,7 +319,6 @@ namespace
 		TCWeakPointer<CBenchState> pStateWeak = _pState;
 
 		_pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, 1024 * 1024).f_DiscardResult();
 
 		auto NewClientConnection = _pState->m_ClientActor
 			(
