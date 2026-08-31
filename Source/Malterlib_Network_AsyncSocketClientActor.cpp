@@ -31,6 +31,11 @@ namespace NMib::NNetwork
 		mp_FragmentationSize = _FragmentationSize;
 	}
 
+	void CAsyncSocketClientActor::f_SetDefaultSendWindow(umint _nBytes)
+	{
+		mp_SendWindowBytes = _nBytes;
+	}
+
 	void CAsyncSocketClientActor::f_SetDefaultTimeout(fp64 _Timeout)
 	{
 		mp_Timeout = _Timeout;
@@ -210,7 +215,7 @@ namespace NMib::NNetwork
 									// same manager whose loop the socket was bound to, or stopping
 									// that manager destroys a loop the live socket still references
 									NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor
-										= f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fCheckUpgrade)))
+										= f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_SendWindowBytes, mp_Timeout, fg_Move(fCheckUpgrade)))
 									;
 
 									// Seed the scheduler placement to the bound queue so even the

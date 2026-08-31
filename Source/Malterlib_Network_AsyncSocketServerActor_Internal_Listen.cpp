@@ -13,6 +13,7 @@ namespace NMib::NNetwork::NAsyncSocket
 			NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
 			, umint _MaxMesageSize
 			, umint _FragmentationSize
+			, umint _SendWindowBytes
 			, fp64 _Timeout
 			, NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> const &_pCheckUpgradeFactory
 			, umint _ListenID
@@ -21,6 +22,7 @@ namespace NMib::NNetwork::NAsyncSocket
 		, mp_Server(_Server)
 		, mp_MaxMessageSize(_MaxMesageSize)
 		, mp_FragmentationSize(_FragmentationSize)
+		, mp_SendWindowBytes(_SendWindowBytes)
 		, mp_pCheckUpgradeFactory(_pCheckUpgradeFactory)
 		, mp_ListenID(_ListenID)
 	{
@@ -89,7 +91,7 @@ namespace NMib::NNetwork::NAsyncSocket
 					FAsyncSocketUpgradeCheck fEmptyCheckUpgrade;
 
 					// The actor's own manager, matching the loop the socket binds to
-					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade)));
+					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_SendWindowBytes, mp_Timeout, fg_Move(fEmptyCheckUpgrade)));
 
 					// Seed the scheduler placement to the bound queue so even the first job runs
 					// where the loop reports the socket's events; no pinning — every later job

@@ -33,6 +33,11 @@ namespace NMib::NNetwork
 		mp_pInternal->m_FragmentationSize = _FragmentationSize;
 	}
 
+	void CAsyncSocketServerActor::f_SetDefaultSendWindow(umint _nBytes)
+	{
+		mp_pInternal->m_SendWindowBytes = _nBytes;
+	}
+
 	void CAsyncSocketServerActor::f_SetDefaultTimeout(fp64 _Timeout)
 	{
 		mp_pInternal->m_Timeout = _Timeout;
@@ -116,6 +121,7 @@ namespace NMib::NNetwork
 							fg_ThisActor(this)
 							, mp_pInternal->m_MaxMessageSize
 							, mp_pInternal->m_FragmentationSize
+							, mp_pInternal->m_SendWindowBytes
 							, mp_pInternal->m_Timeout
 							, mp_pInternal->m_pCheckUpgradeFactory
 							, ListenID

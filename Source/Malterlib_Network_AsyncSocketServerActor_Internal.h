@@ -14,6 +14,7 @@ namespace NMib::NNetwork
 			: m_pThis(_pThis)
 			, m_MaxMessageSize(24*1024*1024)
 			, m_FragmentationSize(32*1024)
+			, m_SendWindowBytes(0)
 			, m_Timeout(0.0)
 		{
 		}
@@ -34,6 +35,7 @@ namespace NMib::NNetwork
 		fp64 m_Timeout;
 		umint m_MaxMessageSize;
 		umint m_FragmentationSize;
+		umint m_SendWindowBytes;
 		umint m_ListenID = 0;
 	};
 }

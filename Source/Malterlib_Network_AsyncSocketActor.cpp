@@ -105,6 +105,7 @@ namespace NMib::NNetwork
 				, bool _bClient
 				, umint _MaxMessageSize
 				, umint _FragmentationSize
+				, umint _SendWindowBytes
 				, fp64 _Timeout
 				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
 			)
@@ -119,6 +120,7 @@ namespace NMib::NNetwork
 			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30))
 			, m_Timeout(_Timeout)
 		{
+			m_nSendWindowBytes = _SendWindowBytes;
 			fp_SizeSendReservations();
 		}
 
@@ -323,8 +325,8 @@ namespace NMib::NNetwork
 #endif
 	};
 
-	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
-		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout, fg_Move(_fCheckUpgrade)))
+	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _SendWindowBytes, _Timeout, fg_Move(_fCheckUpgrade)))
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.f_SetupTimeout();
