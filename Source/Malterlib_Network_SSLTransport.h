@@ -146,6 +146,7 @@ namespace NMib::NNetwork
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
 		umint fp_GetEffectiveSendWindow() const;
+		void fp_RollLagEpochs(uint64 _Now);
 		void fp_EnsureWindowTicks();
 		void fp_ConsiderSendWindowGrowth();
 		static uint64 fsp_NowTicks();

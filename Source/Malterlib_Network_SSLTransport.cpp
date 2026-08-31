@@ -745,12 +745,7 @@ namespace NMib::NNetwork
 			fp_EnsureWindowTicks();
 
 			uint64 Now = fsp_NowTicks();
-			if (!mp_LagEpochStamp || Now - mp_LagEpochStamp >= mp_WindowShrinkAfterTicks)
-			{
-				mp_MinReleaseLagTicks[1] = mp_MinReleaseLagTicks[0];
-				mp_MinReleaseLagTicks[0] = 0;
-				mp_LagEpochStamp = Now;
-			}
+			fp_RollLagEpochs(Now);
 
 			uint64 LagTicks = Now - Buffer.m_PinStamp;
 			if (!mp_MinReleaseLagTicks[0] || LagTicks < mp_MinReleaseLagTicks[0])
@@ -811,6 +806,28 @@ namespace NMib::NNetwork
 	// of the cap for a whole second brings the cap down to it, and nothing is moved for that:
 	// pins above it are simply not replaced as their releases arrive. A rate the kernel says the
 	// sender held back never shrinks anything — a small cap would then read as a small path
+	// Ages the sliding minimum on time rather than on samples: a cap that ballooned takes no
+	// more low-occupancy samples, and a minimum that only ages on samples would keep the
+	// value that ballooned it forever. Empty epochs zero the product, the target falls to
+	// its two-frame headroom, the shrink rule brings the cap down, and the smaller
+	// occupancy is what lets honest samples flow again
+	void CSSLTransport::fp_RollLagEpochs(uint64 _Now)
+	{
+		if (!mp_LagEpochStamp)
+		{
+			mp_LagEpochStamp = _Now;
+			return;
+		}
+
+		uint64 nElapsed = _Now - mp_LagEpochStamp;
+		if (nElapsed < mp_WindowShrinkAfterTicks)
+			return;
+
+		mp_MinReleaseLagTicks[1] = nElapsed >= 2 * mp_WindowShrinkAfterTicks ? 0 : mp_MinReleaseLagTicks[0];
+		mp_MinReleaseLagTicks[0] = 0;
+		mp_LagEpochStamp = _Now;
+	}
+
 	void CSSLTransport::fp_EnsureWindowTicks()
 	{
 		if (mp_WindowQueryIntervalTicks)
@@ -836,6 +853,8 @@ namespace NMib::NNetwork
 			return;
 		mp_WindowQueryStamp = Now;
 
+		fp_RollLagEpochs(Now);
+
 		umint nDeliveryRate = 0;
 		bool bAppLimited = false;
 		if (!mp_pSocket->f_QueryPathDeliveryRate(nDeliveryRate, bAppLimited))
@@ -848,10 +867,20 @@ namespace NMib::NNetwork
 		if (mp_MinReleaseLagTicks[1] && (!nLagTicks || mp_MinReleaseLagTicks[1] < nLagTicks))
 			nLagTicks = mp_MinReleaseLagTicks[1];
 
-		umint nBandwidthDelay = umint(uint64(nDeliveryRate) * nLagTicks / mp_WindowTicksPerSecond);
-
 		umint nCap = fp_GetEffectiveSendWindow();
-		umint nTarget = fg_Min(nBandwidthDelay + nBandwidthDelay / 4 + 2 * mp_nOutboundCap, mp_nSendWindowBytes);
+
+		// Without a release that met a low occupancy lately the honest latency is unknown:
+		// the target then decays a quarter per shrink period, and the smaller cap is itself
+		// what lets samples flow again and stop the decay where they say
+		umint nBandwidthDelay = 0;
+		umint nTarget;
+		if (nLagTicks)
+		{
+			nBandwidthDelay = umint(uint64(nDeliveryRate) * nLagTicks / mp_WindowTicksPerSecond);
+			nTarget = fg_Min(nBandwidthDelay + nBandwidthDelay / 4 + 2 * mp_nOutboundCap, mp_nSendWindowBytes);
+		}
+		else
+			nTarget = fg_Max(umint(2 * mp_nOutboundCap), nCap - nCap / 4 - 1);
 		if (nTarget > nCap)
 		{
 			mp_nWindowEffective = fg_Min(nTarget, nCap * 2);
