@@ -59,6 +59,12 @@ namespace NMib::NNetwork
 		void f_SetSendDepth(umint _nDepth);
 		umint f_GetSendDepth() const;
 		void f_SetSendWindow(umint _nBytes);
+
+		// The submitter's ask when the window refuses its next send: full while more wants out
+		// is the moment to grow, and the refusal happens at the gates — const, and reached
+		// before f_BeginSend ever runs — so the consideration has to be reachable from outside
+		void f_ConsiderSendWindowGrowth();
+
 		void f_SetSocket(CSocket *_pSocket);
 		void f_SetDeferFlush(bool _bDefer);
 

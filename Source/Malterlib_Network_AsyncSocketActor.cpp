@@ -249,18 +249,20 @@ namespace NMib::NNetwork
 		// asks are measured against
 		umint m_nSendBytesUnreleased = 0;
 
-		// 0 keeps the connection at its start window of eight frames
+		// 0 keeps the connection at the default ceiling of eight frames
 		umint m_nSendWindowBytes = 0;
 
-		// The window a connection begins at: eight frames of the fragmentation size
+		// The window a connection begins at: one frame of the fragmentation size. The path
+		// grows it toward the ceiling only when its bandwidth-delay product asks
 		umint fp_SendWindowStartBytes() const
 		{
-			return 8 * (fg_Max(m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+			return fg_Max(m_FramentationSize, umint(4096)) + gc_SocketFramingMargin;
 		}
 
+		// The ceiling: the configured window, or eight frames unconfigured
 		umint fp_SendWindowBytes() const
 		{
-			return m_nSendWindowBytes ? m_nSendWindowBytes : fp_SendWindowStartBytes();
+			return m_nSendWindowBytes ? m_nSendWindowBytes : 8 * fp_SendWindowStartBytes();
 		}
 
 		// The pool’s ceiling, from the send window: enough entries for the whole window in
@@ -268,7 +270,7 @@ namespace NMib::NNetwork
 		// and the vector reserves it up front so growth never reallocates
 		void fp_SizeSendReservations()
 		{
-			umint nFrameBytes = fp_SendWindowStartBytes() / 8;
+			umint nFrameBytes = fp_SendWindowStartBytes();
 			m_nMaxSendReservations = fg_Max(umint(8), fp_SendWindowBytes() / nFrameBytes + 2);
 			m_SendReservations.f_Reserve(m_nMaxSendReservations);
 		}

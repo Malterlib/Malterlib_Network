@@ -94,6 +94,7 @@ namespace NMib::NNetwork
 		virtual umint f_GetSendDepth() const override;
 		virtual bool f_SupportsCompletionSend() const override;
 		virtual bool f_CanSubmitSend() const override;
+		virtual bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes) override;
 		virtual bool f_SupportsSendStaging() const override;
 		virtual bool f_HasSendOperationInFlight() const override;
 		virtual bool f_SupportsCompletionReceive() const override;
@@ -214,6 +215,12 @@ namespace NMib::NNetwork
 		bool mp_bCompletionActive = false;
 
 		bool mp_bBrokenStateReported = false;
+
+		// Whether a send resolved against a full window since the last window ask. The full
+		// moment itself is unobservable from the ask — submissions are re-driven by the very
+		// releases that open the window — so the resolve remembers it and the next ask grows on
+		// the history instead
+		bool mp_bSendWindowWasFull = false;
 	};
 }
 

@@ -55,6 +55,11 @@ namespace NMib::NNetwork
 		mp_nSendWindowBytes = _nBytes;
 	}
 
+	void CSSLTransport::f_ConsiderSendWindowGrowth()
+	{
+		fp_ConsiderSendWindowGrowth();
+	}
+
 	// What still needs an operation of its own: unsent bytes in generations no operation
 	// carries. Pinned generations' bytes are with their operations already — several fly at
 	// once — and counting them here would have the drain spin submitting continuations that
@@ -756,7 +761,9 @@ namespace NMib::NNetwork
 
 	umint CSSLTransport::fp_GetEffectiveSendWindow() const
 	{
-		umint nFloor = fg_Min(mp_nSendWindowBytes, umint(mc_nMaxSendDepth) * mp_nOutboundCap);
+		// The window a connection begins at: one generation, which the path grows past only
+		// when its bandwidth-delay product asks
+		umint nFloor = fg_Min(mp_nSendWindowBytes, mp_nOutboundCap);
 		if (!mp_nWindowEffective)
 			return nFloor;
 

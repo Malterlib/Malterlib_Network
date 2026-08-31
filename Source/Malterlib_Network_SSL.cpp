@@ -1198,6 +1198,11 @@ namespace NMib::NNetwork
 			return mp_Transport.f_CanBeginSend();
 		}
 
+		void f_ConsiderSendWindowGrowth()
+		{
+			mp_Transport.f_ConsiderSendWindowGrowth();
+		}
+
 		smint f_NextBeginSend() const
 		{
 			return mp_Transport.f_NextBeginSend();
@@ -2113,6 +2118,11 @@ namespace NMib::NNetwork
 	bool CSSLConnection::f_CanBeginSend() const
 	{
 		return mp_pInternal->f_CanBeginSend();
+	}
+
+	void CSSLConnection::f_ConsiderSendWindowGrowth()
+	{
+		mp_pInternal->f_ConsiderSendWindowGrowth();
 	}
 
 	smint CSSLConnection::f_NextBeginSend() const

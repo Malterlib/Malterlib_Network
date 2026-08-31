@@ -305,6 +305,9 @@ namespace NMib::NNetwork
 		// Whether a send operation could be begun right now; false while everything is blocked
 		// behind buffer-released notifications
 		bool f_CanBeginSend() const;
+		// The submitter's ask when f_CanBeginSend refuses on a full window while more wants
+		// out: grows the effective window when the path's bandwidth-delay product asks for it
+		void f_ConsiderSendWindowGrowth();
 		smint f_NextBeginSend() const;
 		umint f_GetPendingSend() const;
 		umint f_GetPendingSendUnpinned() const;

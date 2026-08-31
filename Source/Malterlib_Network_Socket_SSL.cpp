@@ -422,6 +422,21 @@ namespace NMib::NNetwork
 		return true;
 	}
 
+	// The transport gates its own submissions, so the answer stays no — but the actor's ask
+	// lands exactly when a fresh batch wants out, and that is the moment to grow the
+	// transport's window when it is full: the refusing gates themselves are const and run
+	// before f_BeginSend's own consideration could
+	bool CSocket_SSL::f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
+	{
+		if (mp_bSendWindowWasFull || !mp_SSLConnection.f_CanBeginSend())
+		{
+			mp_bSendWindowWasFull = false;
+			mp_SSLConnection.f_ConsiderSendWindowGrowth();
+		}
+
+		return false;
+	}
+
 	bool CSocket_SSL::f_SupportsSendStaging() const
 	{
 		return true;
@@ -716,6 +731,15 @@ namespace NMib::NNetwork
 		// The operation chain reports once, when nothing is left to carry: carrier plaintext
 		// accumulates across a short send's continuations, whose own calls hand over nothing
 		mp_nSendPlaintextHeld += nCarrierPlaintext;
+
+		// Pending bytes parked behind the pinned window while an operation just went out is the
+		// full-while-more-wants-out moment — the submission-time ask never sees it, because
+		// submissions are re-driven by the very releases that open the window again. A grown
+		// window lets the continuation below carry the parked bytes at once
+		// A resolve against a full window marks the cycle as window limited; the next ask
+		// grows on that history, since the full moment itself never coincides with an ask
+		if (!mp_SSLConnection.f_CanBeginSend())
+			mp_bSendWindowWasFull = true;
 
 		// A short send's remainder and staged generations both still need carrying; the caller
 		// answers false with a continuation, whose fresh functors ride the next operation. But
