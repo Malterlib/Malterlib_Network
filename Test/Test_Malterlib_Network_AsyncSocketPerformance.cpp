@@ -343,7 +343,7 @@ namespace
 
 			// Keep a pipeline of sends in flight so the socket never idles between chunks,
 			// mirroring the transport benchmark's pipeline depth
-			umint PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(umint(2));
+			umint PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(umint(16));
 
 			uint64 nChunks = (_nBytes + ChunkSize - 1) / ChunkSize;
 			uint64 nQueued = 0;
