@@ -22,6 +22,7 @@ namespace NMib::NNetwork::NAsyncSocket
 				NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
 				, umint _MaxMesageSize
 				, umint _FragmentationSize
+				, umint _SendWindowBytes
 				, fp64 _Timeout
 				, NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> const &_pCheckUpgradeFactory
 				, umint _ListenID
@@ -42,6 +43,7 @@ namespace NMib::NNetwork::NAsyncSocket
 		NConcurrency::TCWeakActor<CAsyncSocketServerActor> mp_Server;
 		umint mp_MaxMessageSize;
 		umint mp_FragmentationSize;
+		umint mp_SendWindowBytes;
 		NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> mp_pCheckUpgradeFactory;
 		umint mp_ListenID;
 	};
