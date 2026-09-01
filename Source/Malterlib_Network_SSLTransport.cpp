@@ -52,7 +52,7 @@ namespace NMib::NNetwork
 	{
 		DMibFastCheck(!mp_nPinned);
 
-		mp_nSendWindowBytes = _nBytes;
+		mp_Window.m_nMaxBytes = _nBytes;
 	}
 
 	void CSSLTransport::f_ConsiderSendWindowGrowth()
@@ -742,14 +742,8 @@ namespace NMib::NNetwork
 		// met no self-queueing is what the growth target multiplies the delivery rate by
 		if (Buffer.m_PinStamp)
 		{
-			fp_EnsureWindowTicks();
-
 			uint64 Now = fsp_NowTicks();
-			fp_RollLagEpochs(Now);
-
-			uint64 LagTicks = Now - Buffer.m_PinStamp;
-			if (!mp_MinReleaseLagTicks[0] || LagTicks < mp_MinReleaseLagTicks[0])
-				mp_MinReleaseLagTicks[0] = LagTicks;
+			NSys::fg_SampleIoSendReleaseLag(mp_Window, Now - Buffer.m_PinStamp, Now, NSys::fg_IoSubSystem().m_nWindowShrinkAfterTicks);
 
 			Buffer.m_PinStamp = 0;
 		}
@@ -776,7 +770,7 @@ namespace NMib::NNetwork
 	// its sends promptly, otherwise within the cap
 	bool CSSLTransport::fp_SendWindowFull() const
 	{
-		if (!mp_nSendWindowBytes)
+		if (!mp_Window.m_nMaxBytes)
 			return mp_nPinned >= f_GetSendDepth();
 
 		return mp_nPinnedBytes >= fp_GetEffectiveSendWindow();
@@ -786,11 +780,11 @@ namespace NMib::NNetwork
 	{
 		// The window a connection begins at: one generation, which the path grows past only
 		// when its bandwidth-delay product asks
-		umint nFloor = fg_Min(mp_nSendWindowBytes, mp_nOutboundCap);
-		if (!mp_nWindowEffective)
+		umint nFloor = fg_Min(mp_Window.m_nMaxBytes, mp_nOutboundCap);
+		if (!mp_Window.m_nEffectiveBytes)
 			return nFloor;
 
-		return fg_Clamp(mp_nWindowEffective, nFloor, mp_nSendWindowBytes);
+		return fg_Clamp(mp_Window.m_nEffectiveBytes, nFloor, mp_Window.m_nMaxBytes);
 	}
 
 	uint64 CSSLTransport::fsp_NowTicks()
@@ -798,111 +792,46 @@ namespace NMib::NNetwork
 		return uint64(NTime::NPlatform::fg_TimerRaw_PreciseGet());
 	}
 
-	// The cap is binding and more wants out. The kernel's delivery rate times the least release
-	// latency this connection has observed, plus a quarter and two frames of margin, is what the
-	// cap grows toward — by no more than a doubling per query, so one odd reading cannot open it
-	// wide. A product at or under the cap leaves it where it is: the pipeline then keeps running
-	// dry, which is what lets the release notifications through. A product under three quarters
-	// of the cap for a whole second brings the cap down to it, and nothing is moved for that:
-	// pins above it are simply not replaced as their releases arrive. A rate the kernel says the
-	// sender held back never shrinks anything — a small cap would then read as a small path
-	// Ages the sliding minimum on time rather than on samples: a cap that ballooned takes no
-	// more low-occupancy samples, and a minimum that only ages on samples would keep the
-	// value that ballooned it forever. Empty epochs zero the product, the target falls to
-	// its two-frame headroom, the shrink rule brings the cap down, and the smaller
-	// occupancy is what lets honest samples flow again
-	void CSSLTransport::fp_RollLagEpochs(uint64 _Now)
-	{
-		if (!mp_LagEpochStamp)
-		{
-			mp_LagEpochStamp = _Now;
-			return;
-		}
-
-		uint64 nElapsed = _Now - mp_LagEpochStamp;
-		if (nElapsed < mp_WindowShrinkAfterTicks)
-			return;
-
-		mp_MinReleaseLagTicks[1] = nElapsed >= 2 * mp_WindowShrinkAfterTicks ? 0 : mp_MinReleaseLagTicks[0];
-		mp_MinReleaseLagTicks[0] = 0;
-		mp_LagEpochStamp = _Now;
-	}
-
-	void CSSLTransport::fp_EnsureWindowTicks()
-	{
-		if (mp_WindowQueryIntervalTicks)
-			return;
-
-		uint64 Frequency = uint64(NTime::NPlatform::fg_TimerRaw_PreciseFrequency());
-		mp_WindowQueryIntervalTicks = Frequency / 100;
-		mp_WindowShrinkAfterTicks = Frequency;
-		mp_WindowTicksPerSecond = Frequency;
-	}
-
+	// The cap is binding and more wants out: the shared io send window grows the cap toward
+	// the kernel's delivery rate times the least pin-to-release lag observed, and shrinks it
+	// once the product has stayed low for a second — the same machinery the completion loops
+	// size their in-flight sends with (see fg_ConsiderIoSendWindowGrowth). The transport's own
+	// part is pacing the path query and teaching the window its floor and granularity: a full
+	// generation each, since the outbound cap follows the fragmentation size
 	void CSSLTransport::fp_ConsiderSendWindowGrowth()
 	{
 		if (!mp_pSocket)
 			return;
 
-		// The path is asked at most every 10 ms, and the cap shrinks only once the target has
-		// stayed low for a second
-		fp_EnsureWindowTicks();
+		auto &Io = NSys::fg_IoSubSystem();
 
+		// The path is asked at most every 10 ms
 		uint64 Now = fsp_NowTicks();
-		if (mp_WindowQueryStamp && Now - mp_WindowQueryStamp < mp_WindowQueryIntervalTicks)
+		if (mp_Window.m_QueryStamp && Now - mp_Window.m_QueryStamp < Io.m_nWindowQueryIntervalTicks)
 			return;
-		mp_WindowQueryStamp = Now;
-
-		fp_RollLagEpochs(Now);
+		mp_Window.m_QueryStamp = Now;
 
 		umint nDeliveryRate = 0;
 		bool bAppLimited = false;
 		if (!mp_pSocket->f_QueryPathDeliveryRate(nDeliveryRate, bAppLimited))
 			return;
 
-		// The delivery rate times the least release latency observed is what must stay pinned
-		// for the pipeline to never run dry of it; the least lag rather than the average keeps
-		// the product from chasing its own queue
-		uint64 nLagTicks = mp_MinReleaseLagTicks[0];
-		if (mp_MinReleaseLagTicks[1] && (!nLagTicks || mp_MinReleaseLagTicks[1] < nLagTicks))
-			nLagTicks = mp_MinReleaseLagTicks[1];
+		// The transport's send unit is a full generation and the window starts at one of them;
+		// the outbound cap follows the fragmentation size, so both are refreshed at each ask
+		mp_Window.m_nStartBytes = fg_Min(mp_Window.m_nMaxBytes, mp_nOutboundCap);
+		mp_Window.m_nLargestSendBytes = mp_nOutboundCap;
+		mp_Window.m_nEffectiveBytes = fp_GetEffectiveSendWindow();
 
-		umint nCap = fp_GetEffectiveSendWindow();
-
-		// Without a release that met a low occupancy lately the honest latency is unknown:
-		// the target then decays a quarter per shrink period, and the smaller cap is itself
-		// what lets samples flow again and stop the decay where they say
-		umint nBandwidthDelay = 0;
-		umint nTarget;
-		if (nLagTicks)
-		{
-			nBandwidthDelay = umint(uint64(nDeliveryRate) * nLagTicks / mp_WindowTicksPerSecond);
-			nTarget = fg_Min(nBandwidthDelay + nBandwidthDelay / 4 + 2 * mp_nOutboundCap, mp_nSendWindowBytes);
-		}
-		else
-			nTarget = fg_Max(umint(2 * mp_nOutboundCap), nCap - nCap / 4 - 1);
-		if (nTarget > nCap)
-		{
-			mp_nWindowEffective = fg_Min(nTarget, nCap * 2);
-			mp_WindowShrinkSince = 0;
-		}
-		else if (bAppLimited || nTarget >= nCap - nCap / 4)
-			mp_WindowShrinkSince = 0;
-		else
-		{
-			if (!mp_WindowShrinkSince)
-				mp_WindowShrinkSince = Now;
-			mp_nWindowShrinkTarget = nTarget;
-			if (Now - mp_WindowShrinkSince >= mp_WindowShrinkAfterTicks)
-			{
-				mp_nWindowEffective = mp_nWindowShrinkTarget;
-				mp_WindowShrinkSince = 0;
-			}
-		}
+		NSys::fg_ConsiderIoSendWindowGrowth(mp_Window, nDeliveryRate, bAppLimited, Now, Io.m_nTicksPerSecond, Io.m_nWindowShrinkAfterTicks);
 
 	#if DMibConfig_IoDebug_Enable
 		if (auto *pStats = fg_NetIoStats())
 		{
+			uint64 nLagTicks = mp_Window.m_MinReleaseLagTicks[0];
+			if (mp_Window.m_MinReleaseLagTicks[1] && (!nLagTicks || mp_Window.m_MinReleaseLagTicks[1] < nLagTicks))
+				nLagTicks = mp_Window.m_MinReleaseLagTicks[1];
+
+			umint nBandwidthDelay = umint(uint64(nDeliveryRate) * nLagTicks / Io.m_nTicksPerSecond);
 			umint nNow = fp_GetEffectiveSendWindow();
 			if (nNow > pStats->m_nSslWindowMax.f_Load(NAtomic::gc_MemoryOrder_Relaxed))
 				pStats->m_nSslWindowMax.f_Store(nNow, NAtomic::gc_MemoryOrder_Relaxed);

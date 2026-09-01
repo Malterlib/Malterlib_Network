@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Malterlib_Network_Socket.h"
+#include <Mib/Core/IoLoop>
 #include <Mib/Time/Stopwatch>
 
 typedef struct crypto_ivec_st CRYPTO_IVEC;
@@ -146,8 +147,6 @@ namespace NMib::NNetwork
 		bool fp_IsPinned(umint _iBuffer) const;
 		bool fp_SendWindowFull() const;
 		umint fp_GetEffectiveSendWindow() const;
-		void fp_RollLagEpochs(uint64 _Now);
-		void fp_EnsureWindowTicks();
 		void fp_ConsiderSendWindowGrowth();
 		static uint64 fsp_NowTicks();
 		void fp_EnqueueUnsent(umint _iBuffer);
@@ -197,35 +196,19 @@ namespace NMib::NNetwork
 
 		umint mp_nPinned = 0;
 		umint mp_nPinnedBytes = 0;
-		umint mp_nSendWindowBytes = 0;
 
 		// Unsent bytes over every generation, and over the unpinned ones alone; kept with every
 		// change so asking costs nothing whatever the pool holds
 		umint mp_nPendingWrite = 0;
 		umint mp_nPendingWriteUnpinned = 0;
 
-		// The cap on pinned bytes within the configured window: eight frames to begin with, which
-		// a local path never outgrows, and grown toward the bandwidth-delay product the kernel
-		// reports for the connection — asked only when every buffer is pinned and more wants to go
-		// out, at most every ten milliseconds. A cap the path does not need stays small, so the
-		// pipeline runs dry now and then and the release notifications keep coming promptly. It
-		// shrinks slowly: only once the product has stayed under it for a second, and then by no
-		// longer letting pins above the new cap be replaced as their releases come
-		umint mp_nWindowEffective = 0;
-		umint mp_nWindowShrinkTarget = 0;
-		// The pacing intervals in raw timer ticks, computed from the timer frequency at the first
-		// query; the transport runs on its connection alone, so plain members need no guard
-		uint64 mp_WindowQueryIntervalTicks = 0;
-		uint64 mp_WindowShrinkAfterTicks = 0;
-		uint64 mp_WindowTicksPerSecond = 0;
-		uint64 mp_WindowQueryStamp = 0;
-		uint64 mp_WindowShrinkSince = 0;
-
-		// The release latency's sliding minimum: two epochs of the lowest pin-to-release lag
-		// seen, so the growth target multiplies the delivery rate by the lag a release meets
-		// with no self-queueing ahead of it, and a changed path re-teaches it within two epochs
-		uint64 mp_MinReleaseLagTicks[2] = {};
-		uint64 mp_LagEpochStamp = 0;
+		// The cap on pinned bytes within the configured window: the io layer's shared send
+		// window machinery, the same the completion loops size their in-flight sends with.
+		// m_nMaxBytes is the configured window and the effective bytes grow toward the
+		// delivery rate times the least pin-to-release lag; the floor and the granularity
+		// follow the outbound cap, refreshed at each ask since the cap follows the
+		// fragmentation size. The transport runs on its connection alone, so no guard
+		NSys::CIoSendWindow mp_Window;
 		umint mp_nSendDepth = 1;
 		umint mp_nBytesReceived = 0;
 		umint mp_nBytesSent = 0;
