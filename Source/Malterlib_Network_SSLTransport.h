@@ -162,6 +162,10 @@ namespace NMib::NNetwork
 
 		CSocket *mp_pSocket = nullptr;
 
+		// The io subsystem the window pacing reads its tick constants from, cached at
+		// construction like the other consumers cache it
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		// The generations: a pool that grows by one only when a seal finds every entry pinned,
 		// so a connection holds what its window has actually needed. Freed entries are a list
 		// through the entries, newest first, so the memory the kernel just let go of is what the

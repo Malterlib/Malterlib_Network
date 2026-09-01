@@ -743,7 +743,7 @@ namespace NMib::NNetwork
 		if (Buffer.m_PinStamp)
 		{
 			uint64 Now = fsp_NowTicks();
-			NSys::fg_SampleIoSendReleaseLag(mp_Window, Now - Buffer.m_PinStamp, Now, NSys::fg_IoSubSystem().m_nWindowShrinkAfterTicks);
+			NSys::fg_SampleIoSendReleaseLag(mp_Window, Now - Buffer.m_PinStamp, Now, mp_pIo->m_nWindowShrinkAfterTicks);
 
 			Buffer.m_PinStamp = 0;
 		}
@@ -803,7 +803,7 @@ namespace NMib::NNetwork
 		if (!mp_pSocket)
 			return;
 
-		auto &Io = NSys::fg_IoSubSystem();
+		auto &Io = *mp_pIo;
 
 		// The path is asked at most every 10 ms
 		uint64 Now = fsp_NowTicks();
