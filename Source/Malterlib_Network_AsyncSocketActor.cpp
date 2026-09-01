@@ -87,9 +87,6 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketActor::CInternal
 	{
-		// The io subsystem, cached since each access through the getter is an atomic operation
-		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
-
 		// What each operation in flight took, addressed rather than ordered because operations
 		// do not always report in submission order. A zero byte count is a free entry, and the
 		// free list threads through the entries the way the TLS transport’s generations do
@@ -169,6 +166,10 @@ namespace NMib::NNetwork
 
 		CAsyncSocketActor *m_pThis = nullptr;
 		NStorage::TCUniquePointer<NNetwork::ICSocket> m_pSocket;
+
+		// The io subsystem, cached since each access through the getter is an atomic operation
+		NMib::NSys::CIoSubSystem *m_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		NMib::NNetwork::CNetAddress m_PeerAddress;
 
 		EState m_State = EState_None;
@@ -1139,7 +1140,7 @@ namespace NMib::NNetwork
 		// release that crosses the resume threshold reschedules through this actor
 		umint nBufferBytes = pCompletionIo->f_GetReceiveBufferBytes();
 		auto pBackpressure = NStorage::TCSharedPointer<NSys::CIoStreamBackpressure>(fg_Construct());
-		pBackpressure->m_nLimitBytes = NNetwork::fg_GetReceiveWindowBytes(*Internal.mp_pIo, nBufferBytes);
+		pBackpressure->m_nLimitBytes = NNetwork::fg_GetReceiveWindowBytes(*Internal.m_pIo, nBufferBytes);
 		pBackpressure->m_nResumeBytes = pBackpressure->m_nLimitBytes / 2;
 		pBackpressure->m_fResume = [WeakThis = fg_ThisActor(this).f_Weak()]() mutable
 			{

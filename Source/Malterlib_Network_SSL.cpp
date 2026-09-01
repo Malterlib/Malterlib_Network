@@ -1009,10 +1009,6 @@ namespace NMib::NNetwork
 	class CSSLConnection::CInternal
 	{
 	public:
-
-		// The io subsystem, cached since each access through the getter is an atomic operation
-		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
-
 		CInternal
 			(
 				CSSLConnection *_pSSL
@@ -1653,10 +1649,18 @@ namespace NMib::NNetwork
 			return mp_pContext->f_GetVerificationFlags();
 		}
 
+		NMib::NSys::CIoSubSystem *f_GetIo() const
+		{
+			return mp_pIo;
+		}
+
 	protected:
 
 		CSSLConnection* mp_pSSL;
 		NStorage::TCSharedPointer<CSSLContext> mp_pContext;
+
+		// The io subsystem, cached since each access through the getter is an atomic operation
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
 		NStr::CStr mp_Hostname;
 		NStr::CStr mp_LastError;
@@ -2075,7 +2079,7 @@ namespace NMib::NNetwork
 
 	bool CSSLConnection::f_SupportsZeroCopy() const
 	{
-		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo);
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo());
 	}
 
 	umint CSSLConnection::f_GetSendDepth() const
@@ -2095,12 +2099,12 @@ namespace NMib::NNetwork
 
 	bool CSSLConnection::f_SupportsCompletionIoSend() const
 	{
-		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo) && fg_CompletionIoSendEnabled(mp_pInternal->mp_pIo);
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo()) && fg_CompletionIoSendEnabled(mp_pInternal->f_GetIo());
 	}
 
 	bool CSSLConnection::f_SupportsCompletionIoReceive() const
 	{
-		return fg_ZeroCopyEnabled(mp_pInternal->mp_pIo) && fg_CompletionIoReceiveEnabled(mp_pInternal->mp_pIo);
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo()) && fg_CompletionIoReceiveEnabled(mp_pInternal->f_GetIo());
 	}
 
 	bool CSSLConnection::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
