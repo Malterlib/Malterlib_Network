@@ -85,7 +85,7 @@ namespace NMib::NNetwork
 
 		struct CInternal;
 
-		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
+		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
@@ -226,6 +226,9 @@ namespace NMib::NNetwork
 		// soon as it becomes readable. That is what keeps the path copy free, so it is up to the
 		// caller to keep this proportional to the number of connections it expects
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
+		// Default send window for new connections — the adaptive window’s ceiling; 0 keeps
+		// the eight frame start as the ceiling too
+		void f_SetDefaultSendWindow(umint _nBytes);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
@@ -263,6 +266,7 @@ namespace NMib::NNetwork
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;
 		umint mp_MaxMessageSize;
 		umint mp_FragmentationSize;
+		umint mp_SendWindowBytes = 0;
 		fp64 mp_Timeout;
 		FAsyncSocketUpgradeCheckFactory mp_fCheckUpgradeFactory;
 	};
@@ -313,6 +317,9 @@ namespace NMib::NNetwork
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
 		// Also sizes the per-connection receive buffer; see CAsyncSocketClientActor
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
+		// Default send window for new connections — the adaptive window’s ceiling; 0 keeps
+		// the eight frame start as the ceiling too
+		void f_SetDefaultSendWindow(umint _nBytes);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 

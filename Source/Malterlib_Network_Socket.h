@@ -57,6 +57,11 @@ namespace NMib::NNetwork
 	// one transfer and one buffer instead of spilling a tiny tail into the next
 	inline constexpr umint gc_SocketFramingMargin = 1024;
 
+	// The most a send window can be configured to. It bounds the reservations a connection
+	// keeps for the sends in flight within it, sized for the whole window from the start, and
+	// with the fragmentation size bounded the same way every gather stays inside 32 bits
+	inline constexpr umint gc_SocketMaxSendWindowBytes = umint(1) << 30;
+
 	// Completion transfers. Sends follow the NSys completion entry points: several may be
 	// submitted ahead of their completions, which are reported one at a time in submission order,
 	// each completion functor run exactly once, the buffers untouched until the released functor

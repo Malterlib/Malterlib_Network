@@ -90,10 +90,15 @@ namespace NMib::NNetwork
 		// What each operation in flight took, addressed rather than ordered because operations
 		// do not always report in submission order. A zero byte count is a free entry, and the
 		// free list threads through the entries the way the TLS transport’s generations do
+		// One send in flight: the bytes it reserved from the queue, and the free list through the
+		// entries not in use. A gather is bounded by the fragmentation size and the pool by the
+		// window, both of which are bounded to 30 bits, so 32 bits hold either
 		struct CSendReservation
 		{
-			umint m_nBytes = 0;
-			smint m_iNextFree = -1;
+			static constexpr uint32 mc_iNone = TCLimitsInt<uint32>::mc_Max;
+
+			uint32 m_nBytes = 0;
+			uint32 m_iNextFree = mc_iNone;
 		};
 
 		CInternal
@@ -102,6 +107,7 @@ namespace NMib::NNetwork
 				, bool _bClient
 				, umint _MaxMessageSize
 				, umint _FragmentationSize
+				, umint _SendWindowBytes
 				, fp64 _Timeout
 				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
 			)
@@ -116,6 +122,7 @@ namespace NMib::NNetwork
 			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30))
 			, m_Timeout(_Timeout)
 		{
+			m_nSendWindowBytes = fg_Min(_SendWindowBytes, gc_SocketMaxSendWindowBytes);
 			f_SizeSendReservations();
 		}
 
@@ -176,6 +183,7 @@ namespace NMib::NNetwork
 		NMib::NNetwork::CNetAddress m_PeerAddress;
 
 		EState m_State = EState_None;
+		uint32 m_iFreeSendReservation = CSendReservation::mc_iNone;
 
 		NContainer::CPagedByteVector m_IncomingData;
 		NContainer::CPagedByteVector m_UpgradeCheckData;
@@ -240,12 +248,11 @@ namespace NMib::NNetwork
 		// A continuation carries no reservation of its own
 		static constexpr umint mc_iNoReservation = umint(-1);
 
-		// Grown one at a time as the send window actually admits more, never scanned per entry:
-		// the free entries thread an intrusive index list. A staging socket bounds its own pipeline and keeps
-		// the historical eight; a plain socket’s pipeline is bounded by the send window in bytes,
-		// so the slots only need to never be the binding constraint
+		// Sized for the whole send window at once, never scanned per entry: the free entries
+		// thread an intrusive index list from m_iFreeSendReservation. A staging socket bounds its
+		// own pipeline and keeps the historical eight; a plain socket’s pipeline is bounded by the
+		// send window in bytes, so the slots only need to never be the binding constraint
 		NContainer::TCVector<CSendReservation> m_SendReservations;
-		smint m_iFreeSendReservation = -1;
 		umint m_nSendReservationsInUse = 0;
 		umint m_nMaxSendReservations = 8;
 
@@ -292,8 +299,8 @@ namespace NMib::NNetwork
 #endif
 	};
 
-	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
-		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout, fg_Move(_fCheckUpgrade)))
+	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _SendWindowBytes, _Timeout, fg_Move(_fCheckUpgrade)))
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.f_SetupTimeout();
@@ -388,27 +395,38 @@ namespace NMib::NNetwork
 	}
 
 	// The pool’s ceiling, from the send window: enough entries for the whole window in typical
-	// gathers, never fewer than eight. Computed once when the window is known. The vector
-	// reserves a typical depth up front and grows on demand past it — entries are reached by
-	// index, so growth is free to reallocate — since a window in the terabytes would otherwise
-	// reserve gigabytes of entries per connection before a byte is sent
+	// gathers, never fewer than eight. The pool holds every entry from the start — the window
+	// bounds it and the window is bounded — so a send never grows it; a window raised later adds
+	// the entries it needs here, once, onto the free list
 	void CAsyncSocketActor::CInternal::f_SizeSendReservations()
 	{
 		umint nFrameBytes = f_SendWindowStartBytes();
 		m_nMaxSendReservations = fg_Max(umint(8), f_SendWindowBytes() / nFrameBytes + 2);
-		m_SendReservations.f_Reserve(fg_Min(m_nMaxSendReservations, umint(64)));
+		umint nEntries = m_SendReservations.f_GetLen();
+		if (nEntries >= m_nMaxSendReservations)
+			return;
+
+		m_SendReservations.f_SetLen(m_nMaxSendReservations);
+		CSendReservation *pReservations = m_SendReservations.f_GetArray();
+		for (CSendReservation *pReservation = pReservations + nEntries, *pEnd = pReservations + m_nMaxSendReservations; pReservation != pEnd; ++pReservation)
+		{
+			pReservation->m_iNextFree = m_iFreeSendReservation;
+			m_iFreeSendReservation = uint32(pReservation - pReservations);
+		}
 	}
 
 	// Tearing the connection down gives every reservation back at once; operations still in
 	// flight then find their own already accounted for
 	void CAsyncSocketActor::CInternal::f_ResetSendReservations()
 	{
-		m_iFreeSendReservation = -1;
-		for (umint iSlot = m_SendReservations.f_GetLen(); iSlot-- > 0;)
+		m_iFreeSendReservation = CSendReservation::mc_iNone;
+		CSendReservation *pReservations = m_SendReservations.f_GetArray();
+		for (CSendReservation *pReservation = pReservations + m_SendReservations.f_GetLen(); pReservation != pReservations;)
 		{
-			m_SendReservations[iSlot].m_nBytes = 0;
-			m_SendReservations[iSlot].m_iNextFree = m_iFreeSendReservation;
-			m_iFreeSendReservation = smint(iSlot);
+			--pReservation;
+			pReservation->m_nBytes = 0;
+			pReservation->m_iNextFree = m_iFreeSendReservation;
+			m_iFreeSendReservation = uint32(pReservation - pReservations);
 		}
 
 		m_nSendReservationsInUse = 0;
@@ -1240,7 +1258,7 @@ namespace NMib::NNetwork
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
 				Reservation.m_nBytes = 0;
 				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
-				Internal.m_iFreeSendReservation = smint(iReservation);
+				Internal.m_iFreeSendReservation = uint32(iReservation);
 				--Internal.m_nSendReservationsInUse;
 			}
 		;
@@ -1329,20 +1347,14 @@ namespace NMib::NNetwork
 		// reports
 		if (!_bContinue)
 		{
-			if (Internal.m_iFreeSendReservation >= 0)
-			{
-				iReservation = umint(Internal.m_iFreeSendReservation);
-				Internal.m_iFreeSendReservation = Internal.m_SendReservations[iReservation].m_iNextFree;
-			}
-			else
-			{
-				iReservation = Internal.m_SendReservations.f_GetLen();
-				Internal.m_SendReservations.f_InsertLast(CInternal::CSendReservation());
-			}
+			// The pool holds an entry for every send the window admits, so one is free here
+			DMibFastCheck(Internal.m_iFreeSendReservation != CInternal::CSendReservation::mc_iNone);
+			iReservation = umint(Internal.m_iFreeSendReservation);
+			Internal.m_iFreeSendReservation = Internal.m_SendReservations[iReservation].m_iNextFree;
 
 			++Internal.m_nSendReservationsInUse;
 
-			Internal.m_SendReservations[iReservation].m_nBytes = nGatheredBytes;
+			Internal.m_SendReservations[iReservation].m_nBytes = uint32(nGatheredBytes);
 			Internal.m_nOutgoingSubmitted += nGatheredBytes;
 		}
 
@@ -1672,7 +1684,7 @@ namespace NMib::NNetwork
 				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
 				Reservation.m_nBytes = 0;
 				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
-				Internal.m_iFreeSendReservation = smint(_iReservation);
+				Internal.m_iFreeSendReservation = uint32(_iReservation);
 				--Internal.m_nSendReservationsInUse;
 			}
 		;
@@ -2308,7 +2320,7 @@ namespace NMib::NNetwork
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetSendWindow(umint _nBytes)
 	{
 		auto &Internal = *mp_pInternal;
-		Internal.m_nSendWindowBytes = _nBytes;
+		Internal.m_nSendWindowBytes = fg_Min(_nBytes, gc_SocketMaxSendWindowBytes);
 		Internal.f_SizeSendReservations();
 		if (Internal.m_pSocket)
 			Internal.m_pSocket->f_SetSendWindow(Internal.f_SendWindowBytes(), _nBytes != 0);
