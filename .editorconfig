@@ -1,0 +1,68 @@
+# Copyright © Unbroken AB
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+root = true
+
+[*]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+max_line_length = 190
+
+# Markdown tables and prose may need long lines.
+[*.md]
+max_line_length = unset
+
+# YAML indentation must use spaces, including clang configuration files.
+[{*.yaml,*.yml,.clangd,.clang-format}]
+indent_style = space
+indent_size = 2
+tab_width = 2
+
+# Generated CMake import caches (including the shortened Windows cache path).
+[**/{ImportCache,IC}/**]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
+
+# Imported build headers follow project indentation, without a line-length limit.
+[**/{ImportCache,IC}/**.MHeader]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# Canonical license texts retain their original formatting.
+[**/LICENSES/**]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
+
+# License notices may also live alongside vendored sources.
+[{LICENSE,LICENSE.*,COPYING,COPYING.*}]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
+
+# Patch context and prefixes must be preserved exactly.
+[*.{patch,diff}]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
+
+# npm writes dependency lockfiles using its own formatting.
+[package-lock.json]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
+
+# Generated license metadata retains the generator's formatting.
+[REUSE.toml]
+indent_style = unset
+indent_size = unset
+tab_width = unset
+max_line_length = unset
