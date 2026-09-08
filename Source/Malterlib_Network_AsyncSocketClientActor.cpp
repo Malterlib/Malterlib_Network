@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <Mib/Concurrency/ConcurrencyManager>
+#include <Mib/Concurrency/LogError>
 #include <Mib/Concurrency/WeakActor>
 #include <Mib/Network/Sockets/TCP>
 #include <Mib/Cryptography/Exception>
@@ -225,7 +226,13 @@ namespace NMib::NNetwork
 									// Use the connection actor's manager to avoid starting another manager and crossing pools on every completion.
 									auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise, pManager = &f_ConcurrencyManager()]() mutable
 										{
-											ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket)).f_DiscardResult();
+											DMibLogWarningOrDiscardResult
+												(
+													ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket))
+													, "Mib/Network"
+													, "Handing the connected socket to the connection actor failed"
+												)
+											;
 
 											(
 												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
@@ -263,7 +270,13 @@ namespace NMib::NNetwork
 												auto ConnectionActor = WeakConnectionActor.f_Lock();
 												if (!ConnectionActor)
 													return;
-												ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
+												DMibLogWarningOrDiscardResult
+													(
+														ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded)
+														, "Mib/Network"
+														, "Reporting the socket state to the connection actor failed"
+													)
+												;
 											}
 										)
 									;

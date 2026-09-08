@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <Mib/Concurrency/ConcurrencyManager>
+#include <Mib/Concurrency/LogError>
 
 #include "Malterlib_Network_AsyncSocket.h"
 #include "Malterlib_Network_AsyncSocketServerActor_Internal_Listen.h"
@@ -101,7 +102,15 @@ namespace NMib::NNetwork::NAsyncSocket
 							{
 								auto ConnectionActor = WeakConnectionActor.f_Lock();
 								if (ConnectionActor)
-									ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
+								{
+									DMibLogWarningOrDiscardResult
+										(
+											ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded)
+											, "Mib/Network"
+											, "Reporting the socket state to the connection actor failed"
+										)
+									;
+								}
 							}
 						)
 					;
@@ -113,17 +122,30 @@ namespace NMib::NNetwork::NAsyncSocket
 					if (mp_pCheckUpgradeFactory && *mp_pCheckUpgradeFactory)
 						fCheckUpgrade = (*mp_pCheckUpgradeFactory)();
 
-					ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocketAndUpgradeCheck>(fg_Move(pAcceptedSocket), fg_Move(fCheckUpgrade)).f_DiscardResult();
+					DMibLogWarningOrDiscardResult
+						(
+							ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocketAndUpgradeCheck>(fg_Move(pAcceptedSocket), fg_Move(fCheckUpgrade))
+							, "Mib/Network"
+							, "Handing the accepted socket to the connection actor failed"
+						)
+					;
 
 					auto Server = mp_Server.f_Lock();
 
 					if (!Server)
 						return;
 
-					Server.f_Bind<&CAsyncSocketServerActor::fp_AddConnection>(fg_Move(ConnectionActor), mp_ListenID).f_DiscardResult();
+					DMibLogWarningOrDiscardResult
+						(
+							Server.f_Bind<&CAsyncSocketServerActor::fp_AddConnection>(fg_Move(ConnectionActor), mp_ListenID)
+							, "Mib/Network"
+							, "Adding the accepted connection to the server failed"
+						)
+					;
 				}
-				catch (NException::CException const &)
+				catch (NException::CException const &_Exception)
 				{
+					DMibLogWithCategory(Mib/Network, Warning, "Accepting a connection failed: {}", _Exception);
 				}
 			}
 		}
