@@ -677,7 +677,7 @@ namespace NMib::NNetwork
 					auto This = WeakThis.f_Lock();
 					if (!This)
 						return;
-					This.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
+					DMibLogWarningOrDiscardResult(This.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded), "Mib/Network", "Reporting the socket state to the connection actor failed");
 				}
 			)
 		;
