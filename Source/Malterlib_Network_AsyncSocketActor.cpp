@@ -228,6 +228,7 @@ namespace NMib::NNetwork
 		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
 		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
 		NNetwork::ENetTCPState m_DeferredCloseStates = NNetwork::ENetTCPState_None; // Held until earlier stream bytes, including peer close frames, have been delivered.
+		NNetwork::ENetTCPState m_StateBeforeSocket = NNetwork::ENetTCPState_None; // Latch reports queued during accept before socket handover, including terminal handshake failures.
 
 		bool m_bClient = false;
 		bool m_bInProcessState = false;
@@ -805,6 +806,13 @@ namespace NMib::NNetwork
 
 	void CAsyncSocketActor::fp_StateAdded(NNetwork::ENetTCPState _StateAdded)
 	{
+		auto &Internal = *mp_pInternal;
+		if (!Internal.m_pSocket)
+		{
+			Internal.m_StateBeforeSocket = Internal.m_StateBeforeSocket | _StateAdded;
+			return;
+		}
+
 		fp_ProcessState(_StateAdded);
 	}
 
@@ -2204,6 +2212,9 @@ namespace NMib::NNetwork
 			}
 			State = Internal.m_pSocket->f_GetState();
 		}
+
+		State = State | Internal.m_StateBeforeSocket;
+		Internal.m_StateBeforeSocket = NNetwork::ENetTCPState_None;
 
 		fp_ProcessState(State);
 	}
