@@ -63,6 +63,30 @@ enum ENetFlag
 
 ## Usage Patterns
 
+### Name Resolution
+
+`CResolveActor::f_Resolve` and `f_ResolveHost` return cancellable lookups. Keep the
+lookup's `m_Cancel` subscription alive while awaiting its `m_Result`, a vector of
+`CNetAddress` values. Cancellation stops delivery immediately; a query already
+sent through c-ares may finish internally.
+
+`f_Resolve` and `f_ResolveHost` use an actor-owned c-ares channel with socket readiness and timers
+provided by the I/O loop. It does not enable c-ares' event thread. Channel setup
+and hosts-file cache preparation run on a sequenced blocking actor. The optional
+constructor name-server address overrides the system DNS servers for that actor.
+
+`f_Resolve` shares `fg_PrepareResolveAddress` with the synchronous platform
+resolver. Preparation handles endpoint syntax, local addresses, numeric addresses
+(including IPv6 scopes), and service names without DNS, on a sequenced blocking
+actor. Hostnames then use c-ares, trying IPv4 before IPv6 when no family is
+specified. Ordering within a family follows c-ares. Empty input produces one
+empty address. Scoped IPv6 host strings passed directly to `f_ResolveHost`,
+custom blocking providers, and platforms without an I/O loop use the sequenced
+blocking backend.
+
+Resolver destruction cancels outstanding results, destroys the c-ares channel,
+and awaits socket deregistration acknowledgements before releasing its state.
+
 ### Basic TCP Socket Connection
 
 ```cpp
