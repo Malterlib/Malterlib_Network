@@ -37,6 +37,7 @@
 */
 
 #include <Mib/Core/Core>
+#include <Mib/File/File>
 #include <Mib/Time/Timeout>
 #include <Mib/Test/Exception>
 
@@ -851,6 +852,43 @@ public:
 			{
 				DMibTestPath("AsyncConnectReportTo_TCPv6");
 				f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+			}
+		};
+
+		DMibTestSuite("Unix Listener Replacement")
+		{
+			CStr Path = fg_GetSafeUnixSocketPath(NFile::CFile::fs_GetProgramDirectory() / "ListenerReplacement.socket");
+			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
+
+			CSocket First;
+			First.f_Listen(Address, nullptr, ENetFlag_None);
+			{
+				DMibTestPath("Predecessor listens");
+				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+			}
+
+			CSocket Second;
+			Second.f_Listen(Address, nullptr, ENetFlag_None);
+			{
+				DMibTestPath("Successor listens");
+				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+			}
+
+			First.f_Close();
+			{
+				DMibTestPath("Predecessor closed");
+				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+
+				CSocket Client;
+				Client.f_Connect(Address);
+				DMibExpectTrue(Client.f_IsValid());
+				Client.f_Close();
+			}
+
+			Second.f_Close();
+			{
+				DMibTestPath("Successor closed");
+				DMibExpectFalse(NFile::CFile::fs_FileExists(Path));
 			}
 		};
 	}
