@@ -359,16 +359,22 @@ namespace NMib::NSys::NNetwork
 	CAddress fg_DuplicateAddress(CAddress _Address);
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
+	uint32 fg_GetAddressScopeID(CAddress _Address);
 	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
 	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
 
 	CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
+
+	NContainer::TCVector<CAddress> fg_ResolveAddresses(NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType);
+
+	NContainer::TCVector<CAddress> fg_ResolveHost(NStr::CStr const &_Host, ::NMib::NNetwork::ENetAddressType _PreferType);
 
 	umint fg_GetMaxUnixSocketNameLength();
 
 	void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
 	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
 	void fg_AsyncResolveAddress_Close(void *_pResolver);
+	void fg_AsyncResolveAddress_CloseAsync(void *_pResolver, NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
 	int fg_CompareAddresses(CAddress _pFirst, CAddress _pSecond);
 
@@ -645,6 +651,8 @@ namespace NMib::NNetwork
 			return mp_Address ? NMib::NSys::NNetwork::fg_GetAddressType(mp_Address) : ENetAddressType_None;
 		}
 
+		uint32 f_GetScopeID() const;
+
 		template<typename t_CAddress>
 		bool f_Get(t_CAddress& _oAddress) const
 		{
@@ -763,84 +771,33 @@ namespace NMib::NNetwork
 		}
 	};
 
-	class CAsyncResolver
+	struct CAsyncResolver
 	{
+	private:
 		void *mp_pResolver;
-		void fp_CheckValid() const
-		{
-			if (!mp_pResolver)
-				DMibErrorNet("Resolver is not valid");
-		}
+		void fp_CheckValid() const;
 	public:
 
 		CAsyncResolver(CAsyncResolver const &) = delete;
 		CAsyncResolver &operator = (CAsyncResolver const &) = delete;
 
-		CAsyncResolver(CAsyncResolver &&_Other)
-			: mp_pResolver(_Other.mp_pResolver)
-		{
-			_Other.mp_pResolver = nullptr;
-		}
+		CAsyncResolver(CAsyncResolver &&_Other);
 
-		CAsyncResolver &operator = (CAsyncResolver &&_Other)
-		{
-			f_Close();
-			mp_pResolver = _Other.mp_pResolver;
-			_Other.mp_pResolver = nullptr;
+		CAsyncResolver &operator = (CAsyncResolver &&_Other);
 
-			return *this;
-		}
+		CAsyncResolver();
 
-		CAsyncResolver()
-		{
-			mp_pResolver = nullptr;
-		}
+		~CAsyncResolver();
 
-		~CAsyncResolver()
-		{
-			f_Close();
-		}
+		void f_Close();
 
-		void f_Close()
-		{
-			if (mp_pResolver)
-				NMib::NSys::NNetwork::fg_AsyncResolveAddress_Close(mp_pResolver);
-			mp_pResolver = nullptr;
-		}
+		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
-		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish)
-		{
-			f_Close();
-			mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open(_Address, _PreferType, fg_Move(_fOnFinish));
-		}
+		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
 
-		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			f_Close();
-			mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open
-				(
-					_Address
-					, _PreferType
-					, [_pReportTo]()
-					{
-						_pReportTo->f_Signal();
-					}
-				)
-			;
-		}
+		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
-		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error)
-		{
-			fp_CheckValid();
-			NMib::NSys::NNetwork::CAddress Address;
-			if (NMib::NSys::NNetwork::fg_AsyncResolveAddress_GetResult(mp_pResolver, Address, _Error))
-			{
-				_Address = NMib::NNetwork::CNetAddress(Address);
-				return true;
-			}
-			else
-				return false;
-		}
+		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error);
 	};
 
 	struct CSocketOperationResult
@@ -1262,10 +1219,17 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GetListenPort(mp_pSocket);
 		}
 
+		static NContainer::TCVector<CNetAddress> fs_ResolveAddresses(NStr::CStr const &_Address, ENetAddressType _PreferType = ENetAddressType_None);
+
+		static NContainer::TCVector<CNetAddress> fs_ResolveHost(NStr::CStr const &_Host, ENetAddressType _PreferType = ENetAddressType_None);
+
 		static NMib::NNetwork::CNetAddress fs_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None)
 		{
 			return fg_Move(CNetAddress(NMib::NSys::NNetwork::fg_ResolveAddress(_Address, _PreferType)));
 		}
+
+	private:
+		static NContainer::TCVector<CNetAddress> fsp_AdoptAddresses(NContainer::TCVector<NMib::NSys::NNetwork::CAddress> &&_Addresses);
 
 	};
 
@@ -1276,3 +1240,5 @@ namespace NMib::NNetwork
 #ifndef DMibPNoShortCuts
 	using namespace NMib::NNetwork;
 #endif
+
+#include "Malterlib_Network_Resolve.hpp"

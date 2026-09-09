@@ -73,12 +73,22 @@ namespace NMib::NNetwork
 		if (!mp_AddressResolver)
 			mp_AddressResolver = NConcurrency::fg_ConstructActor<NNetwork::CResolveActor>();
 
-		auto [ConnectToAddress, BindToAddress] = co_await
+		auto [ConnectLookup, BindLookup] = co_await
 			(
 				mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _ConnectToAddress, _PreferAddress)
 				+ mp_AddressResolver(&NNetwork::CResolveActor::f_Resolve, _BindToAddress, _PreferAddress)
 			)
 		;
+
+		auto [ConnectAddresses, BindAddresses] = co_await
+			(
+				fg_Move(ConnectLookup.m_Result)
+				+ fg_Move(BindLookup.m_Result)
+			)
+		;
+
+		auto ConnectToAddress = fg_Move(ConnectAddresses[0]);
+		auto BindToAddress = fg_Move(BindAddresses[0]);
 
 		if (_Port)
 			ConnectToAddress.f_SetPort(_Port);
