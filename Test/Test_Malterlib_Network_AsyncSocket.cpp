@@ -9,7 +9,14 @@
 #include <Mib/Cryptography/Certificate>
 #include <Mib/Cryptography/RandomID>
 #include <Mib/Concurrency/Actor/Timer>
+#include <Mib/Time/Timeout>
 #include <Mib/Concurrency/DistributedActorTestHelpers>
+
+#if defined(DPlatformFamily_Windows)
+	#include <winsock2.h>
+#else
+	#include <sys/socket.h>
+#endif
 
 using namespace NMib::NNetwork;
 using namespace NMib;
@@ -25,8 +32,32 @@ using namespace NMib::NCryptography;
 namespace
 {
 	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
+
+	}
 	char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
 	fp64 g_Timeout = 30.0 * gc_TimeoutMultiplier;
+
+	// Writes to the operating system socket under a TLS socket, past its record layer: what a
+	// peer sends when its record layer has gone wrong
+	void fg_SendBeneathRecordLayer(void *_pOSSocket, uint8 const *_pData, umint _nBytes)
+	{
+		NTime::CTimeout Timeout(g_Timeout);
+		while (_nBytes && !Timeout.f_TimedOut())
+		{
+#if defined(DPlatformFamily_Windows)
+			int nSent = ::send((SOCKET)(umint)_pOSSocket, (char const *)_pData, int(_nBytes), 0);
+#else
+			auto nSent = ::send(int((umint)_pOSSocket), _pData, _nBytes, 0);
+#endif
+			if (nSent <= 0)
+			{
+				NSys::fg_Thread_Sleep(0.002f);
+				continue;
+			}
+
+			_pData += nSent;
+			_nBytes -= umint(nSent);
+		}
 }
 
 class CAsyncSocket_Tests : public CTest
@@ -1222,6 +1253,187 @@ public:
 		};
 	}
 
+	// A record the peer corrupts after the handshake breaks the record layer, and the connection
+	// must end there: the peer keeps the transport open, so the end cannot come from the
+	// kernel, and the actor's close must not wait for it
+	void fp_TestCorruptRecordEndsStream()
+	{
+		DMibTestPath("Corrupt Record Ends Stream");
+
+		CActorRunLoopTestHelper RunLoopHelper;
+
+		CSSLSettings ServerSettings;
+		CCertificateOptions Options;
+		Options.m_CommonName = "Malterlib test Corrupt Record";
+		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+		Options.m_KeySetting = gc_TestTestKeySetting;
+		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+		TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+		CSSLSettings ClientSettings;
+		ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+		struct CState
+		{
+			CMutual m_Lock;
+			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+			CStr m_ServerCloseReason;
+			EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
+			bool m_bServerReceived = false;
+			bool m_bServerClosed = false;
+		};
+
+		TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+		TCWeakPointer<CState> pStateWeak = pState;
+
+		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto fWaitForCondition = [&](auto const &_fCondition)
+			{
+				NTime::CStopwatch Stopwatch;
+				Stopwatch.f_Start();
+				while (true)
+				{
+					if (_fCondition())
+						return false;
+
+					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+					if (Stopwatch.f_GetTime() > g_Timeout)
+						return true;
+				}
+			}
+		;
+		auto CleanupServer = g_OnScopeExit / [&]
+			{
+				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			}
+		;
+
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				CAsyncSocketCallbacks SocketCallbacks;
+				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+					{
+						if (auto pState = pStateWeak.f_Lock())
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_ServerCloseStatus = _Status;
+							pState->m_ServerCloseReason = fg_Move(_Message);
+							pState->m_bServerClosed = true;
+						}
+						co_return {};
+					}
+				;
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+					{
+						if (auto pState = pStateWeak.f_Lock())
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_bServerReceived = true;
+						}
+						co_return {};
+					}
+				;
+				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+				if (auto pState = pStateWeak.f_Lock())
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_ServerSocket = fg_Move(Socket);
+				}
+				co_return {};
+			}
+		;
+		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+			{
+				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+			}
+		;
+
+		CNetAddressTCPv4 ListenAddress;
+		ListenAddress.f_SetLocalhost();
+		ListenAddress.m_Port = 0;
+		auto ListenResult = ServerActor
+			(
+				&CAsyncSocketServerActor::f_StartListenAddress
+				, fg_CreateVector<CNetAddress>(ListenAddress)
+				, ENetFlag_None
+				, fg_Move(ServerCallbacks)
+				, CSocket_SSL::fs_GetFactory(pServerContext)
+			)
+			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+		;
+		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+		auto CleanupListen = g_OnScopeExit / [&]
+			{
+				ListenResult.m_Subscription.f_Clear();
+			}
+		;
+
+		// A synchronous client whose transport the test can reach below the record layer
+		CNetAddressTCPv4 ConnectAddress;
+		ConnectAddress.f_SetLocalhost();
+		ConnectAddress.m_Port = ListenResult.m_ListenPorts[0];
+		TCUniquePointer<ICSocket> pClient = CSocket_SSL::fs_GetFactory(pClientContext)("");
+		pClient->f_Connect(CNetAddress(ConnectAddress), [](ENetTCPState){}, CNetAddress());
+		DMibExpectTrue(pClient->f_IsValid())(NTest::ETest_FailAndStop);
+
+		// One message through the record layer proves the handshake done on both sides
+		{
+			NTime::CTimeout Timeout(g_Timeout);
+			uint8 const Hello[] = "hello";
+			umint nSent = 0;
+			while (nSent < sizeof(Hello) && !Timeout.f_TimedOut())
+			{
+				nSent += pClient->f_Send(Hello + nSent, sizeof(Hello) - nSent).m_nBytes;
+				if (nSent < sizeof(Hello))
+					NSys::fg_Thread_Sleep(0.002f);
+			}
+			DMibExpect(nSent, ==, umint(sizeof(Hello)));
+		}
+		bool bTimedOut = fWaitForCondition
+			(
+				[&]
+				{
+					DMibLock(pState->m_Lock);
+					return pState->m_bServerReceived;
+				}
+			)
+		;
+		DMibExpectFalse(bTimedOut)(NTest::ETest_FailAndStop);
+
+		// Bytes that are no TLS record at all, written beneath the record layer, and the
+		// transport kept open after them
+		{
+			uint8 Garbage[64];
+			for (umint i = 0; i < sizeof(Garbage); ++i)
+				Garbage[i] = uint8(0xA5 ^ i);
+			fg_SendBeneathRecordLayer(pClient->f_GetOSSocket(), Garbage, sizeof(Garbage));
+		}
+
+		bTimedOut = fWaitForCondition
+			(
+				[&]
+				{
+					DMibLock(pState->m_Lock);
+					return pState->m_bServerClosed;
+				}
+			)
+		;
+		{
+			DMibTestPath("Server closes on the corrupt record");
+			DMibExpectFalse(bTimedOut);
+			DMibLock(pState->m_Lock);
+			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_AbnormalClosure);
+		}
+
+		pClient->f_Close();
+	}
+
 	void fp_TestUpgradeToSSL()
 	{
 		DMibTestPath("Upgrade To SSL");
@@ -1678,6 +1890,7 @@ public:
 			fp_TestUpgradeCheckRemoteCloseFlush();
 			fp_TestDeferredBytesBeforeAcceptClose();
 			fp_TestUpgradeToSSL();
+			fp_TestCorruptRecordEndsStream();
 			{
 				DMibTestPath("SSL Client Certificate");
 				fp_Test
