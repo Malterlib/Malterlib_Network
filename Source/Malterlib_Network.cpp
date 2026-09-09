@@ -8,6 +8,20 @@ namespace NMib::NNetwork
 {
 	DMibImpErrorClassImplement(CExceptionNet);
 
+	// Keep these throws out of precompiled headers: Clang's Windows ABI can lose
+	// exception copy-constructor metadata when deserializing them (LLVM #53486).
+	void CSocket::fp_CheckSocket() const
+	{
+		if (!mp_pSocket)
+			DMibErrorNet("Socket is not valid");
+	}
+
+	void CAsyncResolver::fp_CheckValid() const
+	{
+		if (!mp_pResolver)
+			DMibErrorNet("Resolver is not valid");
+	}
+
 	template <bool tf_bLowerCase>
 	bool fg_IsValidHostnameImpl(NStr::CStr const &_String, ch8 const *_pSeparatorChars, ch8 const *_pLabelChars)
 	{
