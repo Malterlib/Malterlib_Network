@@ -1250,6 +1250,140 @@ public:
 	}
 
 	// Keep TCP open after corrupting a record so only protocol termination can finish the receive stream.
+	static constexpr umint gc_RetainedDeliveriesMessageBytes = 4 * 1024 * 1024;
+
+	// A consumer that keeps every delivery until a message is whole must still get the whole message
+	void fp_TestRetainedDeliveries()
+	{
+		DMibTestPath("Retained Deliveries");
+
+		CActorRunLoopTestHelper RunLoopHelper;
+
+		struct CState
+		{
+			CMutual m_Lock;
+			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+			TCVector<CSharedByteVector> m_Chunks;
+			umint m_nReceived = 0;
+		};
+
+		TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+		TCWeakPointer<CState> pStateWeak = pState;
+
+		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto fWaitForCondition = [&](auto const &_fCondition)
+			{
+				NTime::CStopwatch Stopwatch;
+				Stopwatch.f_Start();
+				while (true)
+				{
+					if (_fCondition())
+						return false;
+
+					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+					if (Stopwatch.f_GetTime() > g_Timeout)
+						return true;
+				}
+			}
+		;
+		auto Cleanup = g_OnScopeExit / [&]
+			{
+				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			}
+		;
+
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				CAsyncSocketCallbacks SocketCallbacks;
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+					{
+						if (auto pState = pStateWeak.f_Lock())
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_nReceived += _Data.f_GetLen();
+							pState->m_Chunks.f_Insert(fg_Move(_Data));
+							if (pState->m_nReceived >= gc_RetainedDeliveriesMessageBytes)
+								pState->m_Chunks.f_Clear();
+						}
+						co_return {};
+					}
+				;
+				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+				if (auto pState = pStateWeak.f_Lock())
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_ServerSocket = fg_Move(Socket);
+				}
+				co_return {};
+			}
+		;
+		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+			{
+				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+			}
+		;
+
+		CNetAddressTCPv4 ListenAddress;
+		ListenAddress.f_SetLocalhost();
+		ListenAddress.m_Port = 0;
+		auto ListenResult = ServerActor
+			(
+				&CAsyncSocketServerActor::f_StartListenAddress
+				, fg_CreateVector<CNetAddress>(ListenAddress)
+				, ENetFlag_None
+				, fg_Move(ServerCallbacks)
+				, CSocket_TCP::fs_GetFactory()
+			)
+			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+		;
+		auto CleanupListen = g_OnScopeExit / [&]
+			{
+				ListenResult.m_Subscription.f_Clear();
+			}
+		;
+		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+
+		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+			(
+				&CAsyncSocketClientActor::f_Connect
+				, CStr("localhost")
+				, CStr()
+				, ENetAddressType_TCPv4
+				, ListenResult.m_ListenPorts[0]
+				, CSocket_TCP::fs_GetFactory()
+			)
+			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+		;
+		pState->m_ClientSocket = NewClientConnection.f_Accept(CAsyncSocketCallbacks()).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		CIOByteVector Message;
+		Message.f_SetLen(gc_RetainedDeliveriesMessageBytes);
+		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, CSharedByteVector(fg_Move(Message)), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+		bool bTimedOut = fWaitForCondition
+			(
+				[&]
+				{
+					DMibLock(pState->m_Lock);
+					return pState->m_nReceived >= gc_RetainedDeliveriesMessageBytes;
+				}
+			)
+		;
+		DMibExpectFalse(bTimedOut);
+		{
+			DMibLock(pState->m_Lock);
+			DMibExpect(pState->m_nReceived, ==, gc_RetainedDeliveriesMessageBytes);
+		}
+	}
+
 	void fp_TestCorruptRecordEndsStream()
 	{
 		DMibTestPath("Corrupt Record Ends Stream");
@@ -1881,6 +2015,7 @@ public:
 			fp_TestDeferredBytesBeforeAcceptClose();
 			fp_TestUpgradeToSSL();
 			fp_TestCorruptRecordEndsStream();
+			fp_TestRetainedDeliveries();
 			{
 				DMibTestPath("SSL Client Certificate");
 				fp_Test
