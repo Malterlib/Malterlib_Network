@@ -1,0 +1,10 @@
+src/lib/Makefile.inc.cmake
+../../../../External/c-ares/CMakeLists.txt
+../../../../External/c-ares/cmake/EnableWarnings.cmake
+../../../../External/c-ares/docs/CMakeLists.txt
+../../../../External/c-ares/include/CMakeLists.txt
+../../../../External/c-ares/include/ares_build.h.cmake
+../../../../External/c-ares/src/CMakeLists.txt
+../../../../External/c-ares/src/lib/CMakeLists.txt
+../../../../External/c-ares/src/lib/ares_config.h.cmake
+../../../../External/c-ares/src/tools/CMakeLists.txt

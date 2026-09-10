@@ -1,0 +1,134 @@
+GeneratorVersion: 40
+Import.CMake_FullRebuildVersion: 5-9
+Import.CMake_CacheExcludePatterns: [
+	*/CMakeFiles/*,
+	*/cmake.tmp/*,
+	*/cmake_install.cmake,
+	*/CPackConfig.cmake,
+	*/CPackSourceConfig.cmake,
+	*/CTestTestfile.cmake,
+	*.ninja,
+	*/CMakeCache.txt,
+	*/MalterlibFullRebuildVersion,
+	*/.NoDartCoverage,
+	*/compile_commands.json
+]
+
+Import.CMake_CacheReplaceContents: [
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": ,
+		"Replace": "MToolCMake"
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": ,
+		"Replace": "MToolCMake"
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": "/opt/local/bin/",
+		"Replace": ""
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": "/usr/bin/",
+		"Replace": ""
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": "/opt/homebrew/bin/",
+		"Replace": ""
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": "/usr/local/go/bin/",
+		"Replace": ""
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": "/usr/local/bin/",
+		"Replace": ""
+	}
+]
+Import.CMake_Environment: {}
+Import.CMake_CacheIgnoreInputs: [
+]
+
+Import.CMake_Languages: [
+	{
+		"CMakeLanguage": "C",
+		"MalterlibLanguage": "C"
+	},
+	{
+		"CMakeLanguage": "CXX",
+		"MalterlibLanguage": "C++"
+	},
+	{
+		"CMakeLanguage": "OBJCXX",
+		"MalterlibLanguage": "ObjC++"
+	},
+	{
+		"CMakeLanguage": "ASM",
+		"MalterlibLanguage": "Assembler"
+	}
+]
+Import.CMake_Config: Release
+Import.CMake_Variables: [
+	CMAKE_TRY_COMPILE_PLATFORM_VARIABLES=CMAKE_EXE_LINKER_FLAGS_INIT;CMAKE_STATIC_LINKER_FLAGS_INIT;CMAKE_MODULE_LINKER_FLAGS_INIT;CMAKE_SHARED_LINKER_FLAGS_INIT;CMAKE_RANLIB;CMAKE_AR;CMAKE_C_COMPILER;CMAKE_CXX_COMPILER;CMAKE_CXX_COMPILER_TARGET;CMAKE_C_COMPILER_TARGET;CMAKE_TOOLCHAIN_NO_PREFIX;CMAKE_FIND_ROOT_PATH;CMAKE_SYSROOT;CMAKE_C_COMPILER_EXTERNAL_TOOLCHAIN;CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN;CMAKE_SYSTEM_NAME;CMAKE_SYSTEM_PROCESSOR;CMAKE_LINKER;CMAKE_OSX_SYSROOT,
+	CMAKE_OBJECT_PATH_MAX=4096,
+	CMAKE_EXE_LINKER_FLAGS_INIT= -stdlib=libc++ -Wno-unused-command-line-argument,
+	CMAKE_MODULE_LINKER_FLAGS_INIT= -stdlib=libc++ -Wno-unused-command-line-argument,
+	CMAKE_SHARED_LINKER_FLAGS_INIT= -stdlib=libc++ -Wno-unused-command-line-argument,
+	CMAKE_CXX_FLAGS_INIT=-stdlib=libc++,
+	CMAKE_LINKER=ld,
+	CMAKE_INSTALL_NAME_TOOL=llvm-install-name-tool,
+	CMAKE_NM=llvm-nm,
+	CMAKE_OBJDUMP=llvm-objdump,
+	CMAKE_STRIP=llvm-strip,
+	CMAKE_RANLIB=llvm-ranlib,
+	CMAKE_AR=llvm-ar,
+	,
+	CMAKE_OSX_SYSROOT=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk,
+	CMAKE_OSX_ARCHITECTURES=x86_64,
+	,
+	OPENSSL_ROOT_DIR=/External/boringssl,
+	OPENSSL_INCLUDE_DIR=/External/boringssl/include,
+	OPENSSL_LIBRARIES=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.B.tbd,
+	OPENSSL_CRYPTO_LIBRARY=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.B.tbd,
+	OPENSSL_CRYPTO_LIBRARIES=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.B.tbd,
+	OPENSSL_SSL_LIBRARY=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.B.tbd,
+	OPENSSL_SSL_LIBRARIES=Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.B.tbd,
+	OPENSSL_USE_STATIC_LIBS=TRUE,
+	OPENSSL_MSVC_STATIC_RT=TRUE,
+	OPENSSL_FOUND=TRUE,
+	OpenSSL_FOUND=TRUE,
+	DISABLE_OPENSSL_WINDOWS=TRUE,
+	CARES_STATIC=ON,
+	CARES_SHARED=OFF,
+	CARES_STATIC_PIC=ON,
+	CARES_THREADS=ON,
+	CARES_BUILD_TOOLS=OFF,
+	CARES_BUILD_TESTS=OFF,
+	CARES_BUILD_CONTAINER_TESTS=OFF,
+	CARES_INSTALL=OFF
+]
+
+Import.CMake_IncludeInHash: [
+]
+
+Import.CMake_IntermediateName: External_c-ares
