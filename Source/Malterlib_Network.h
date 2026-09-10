@@ -356,12 +356,22 @@ namespace NMib::NSys::NNetwork
 	using CAddress = void *;
 
 	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, umint _nDataBytes);
+	CAddress fg_CreateAddressFromNative(void const *_pAddress, umint _Size);
 	CAddress fg_DuplicateAddress(CAddress _Address);
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
 	uint32 fg_GetAddressScopeID(CAddress _Address);
 	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
 	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
+
+	struct CResolveAddressParameters
+	{
+		NStr::CStr m_Host;
+		::NMib::NNetwork::ENetAddressType m_PreferType = ::NMib::NNetwork::ENetAddressType_None;
+		uint32 m_Port = 0;
+	};
+
+	CAddress fg_PrepareResolveAddress(NStr::CStr const &_Address, CResolveAddressParameters &o_Parameters);
 
 	CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 

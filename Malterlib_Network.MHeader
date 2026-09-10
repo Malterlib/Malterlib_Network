@@ -3,6 +3,61 @@
 
 Import "../Core/Lib_Malterlib.MTarget"
 
+%Repository "c-ares"
+{
+	Repository
+	{
+		Type "External"
+		DefaultUpstreamBranch "main"
+		Remotes =+ {Name: "upstream", URL: "https://github.com/c-ares/c-ares.git"}
+		{
+			!!MalterlibAddUpstreams true
+		}
+	}
+}
+
+Property
+{
+	CaresIncludePath: string = GetProperty(&Import.CMake_CacheDirectory, "Workspace:*.Group:External.Group:c-ares.Target:Lib_c-ares_c-ares.Import:*")
+}
+
+%Group "{Lib_c-ares_c-ares}/{TargetInjection}"
+{
+	Compile
+	{
+		&
+		{
+			LanguageFamily "Native"
+			CompileDialect "C"
+		}
+
+		SearchPath += ["../../External/c-ares/include"->MakeAbsolute(), CaresIncludePath]
+		PreprocessorDefines += "CARES_STATICLIB"
+	}
+}
+
+%Import "../../External/c-ares/CMakeLists.txt"
+{
+	Import.CMake_Variables =+ [
+		"CARES_STATIC=ON"
+		, "CARES_SHARED=OFF"
+		, "CARES_STATIC_PIC=ON"
+		, "CARES_THREADS=ON"
+		, "CARES_BUILD_TOOLS=OFF"
+		, "CARES_BUILD_TESTS=OFF"
+		, "CARES_BUILD_CONTAINER_TESTS=OFF"
+		, "CARES_INSTALL=OFF"
+	]
+
+	%Target "Lib_c-ares_c-ares"
+	{
+		Target.DependencyInjectionGroups =+ "{Lib_c-ares_c-ares}/{TargetInjection}"
+		{
+			!DocumentationEnabled true
+		}
+	}
+}
+
 %Group "{Malterlib}/{Lib_Malterlib_Network}"
 {
 	%Group "Network"
@@ -27,6 +82,12 @@ Import "../Core/Lib_Malterlib.MTarget"
 	}
 	%Dependency "Lib_Malterlib_Concurrency"
 	{
+		Dependency.Indirect true
+	}
+	%Dependency "Lib_c-ares_c-ares"
+	{
+		!DocumentationEnabled true
+
 		Dependency.Indirect true
 	}
 }

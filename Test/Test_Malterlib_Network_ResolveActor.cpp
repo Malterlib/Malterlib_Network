@@ -57,6 +57,12 @@ namespace
 				DMibExpect(Scoped[0].f_GetScopeID(), ==, 1u);
 				DMibExpect(Scoped[0].f_GetType(), ==, ENetAddressType_TCPv6);
 
+				auto ScopedLookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("fe80::1%1"), ENetAddressType_TCPv6);
+				auto ScopedResults = co_await fg_Move(ScopedLookup.m_Result);
+
+				DMibAssertFalse(ScopedResults.f_IsEmpty());
+				DMibExpect(ScopedResults[0].f_GetScopeID(), ==, 1u);
+
 				CNetAddress ScopedCopy = Scoped[0];
 				Scoped.f_Clear();
 
@@ -83,7 +89,7 @@ namespace
 				co_return {};
 			};
 
-			DMibTestSuite("AddressOrdering") -> TCFuture<void>
+			DMibTestSuite("EndpointCompatibility") -> TCFuture<void>
 			{
 				auto Resolver = fg_ConstructActor<CResolveActor>();
 				auto BlockingActorCheckout = fg_BlockingActor();
@@ -93,12 +99,12 @@ namespace
 					auto const *pAddress :
 					{
 						"127.0.0.1:1234"
-						, "localhost:1234"
-						, "IPv4:localhost:1234"
+						, "IPv4:127.0.0.1:http"
 						, "IPv6:[::1]:1234"
 						, "IPv6:[fe80::1%1]:1234"
 						, "UNIX:resolver-vector.socket"
 						, "UNIX(0700):resolver-vector-mode.socket"
+						, "127.0.0.1:not-a-service"
 						, "UNIX("
 					}
 				)
