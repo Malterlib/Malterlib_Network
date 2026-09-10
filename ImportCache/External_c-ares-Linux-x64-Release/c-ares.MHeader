@@ -1,0 +1,427 @@
+Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolute()
+%Target "Lib_c-ares_c-ares"
+{
+	Compile
+	{
+		!!Compile.Type "C"
+		SearchPath += [
+			`@('.'->MakeAbsolute())`->MakeAbsolute(),
+			`@('../../../../External/c-ares'->MakeAbsolute())`->MakeAbsolute(),
+			`@('../../../../External/c-ares'->MakeAbsolute())/include`->MakeAbsolute(),
+			`@('../../../../External/c-ares'->MakeAbsolute())/src/lib`->MakeAbsolute(),
+			`@('../../../../External/c-ares'->MakeAbsolute())/src/lib/include`->MakeAbsolute()
+		]
+		PreprocessorDefines += [
+			"CARES_BUILDING_LIBRARY",
+			"HAVE_CONFIG_H=1",
+			"_GNU_SOURCE",
+			"_POSIX_C_SOURCE=200809L",
+			"_XOPEN_SOURCE=700"
+		]
+	}
+	Property.MalterlibTargetNameType "Normal"
+	Compile.AllowNonExisting true
+	Target.Group "External/c-ares"
+	{
+		!!Target.Group undefined
+	}
+	Target.Type "StaticLibrary"
+	Target.BaseName "c-ares_c-ares"
+	Target.BaseFileName "c-ares"
+	%Group "src"
+	{
+		%Group "lib"
+		{
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_addrinfo2hostent.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_addrinfo_localhost.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_android.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_cancel.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_close_sockets.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_conn.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_cookie.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_data.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_destroy.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_free_hostent.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_free_string.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_freeaddrinfo.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_getaddrinfo.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_getenv.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_gethostbyaddr.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_gethostbyname.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_getnameinfo.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_hosts_file.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_init.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_library_init.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_metrics.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_options.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_parse_into_addrinfo.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_process.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_qcache.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_query.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_search.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_send.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_set_socket_functions.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_socket.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sortaddrinfo.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_strerror.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_files.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_mac.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_win.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_timeout.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_update_servers.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_version.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/inet_net_pton.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/inet_ntop.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/windows_port.c`
+			{
+				Compile.Type "C"
+			}
+			%Group "dsa"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_array.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_asvp.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_dict.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_strvp.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_szvp.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_vpstr.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_htable_vpvp.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_llist.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/dsa/ares_slist.c`
+				{
+					Compile.Type "C"
+				}
+			}
+			%Group "event"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_configchg.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_epoll.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_kqueue.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_poll.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_select.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_thread.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_wake_pipe.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/event/ares_event_win32.c`
+				{
+					Compile.Type "C"
+				}
+			}
+			%Group "legacy"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_create_query.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_expand_name.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_expand_string.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_fds.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_getsock.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_a_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_aaaa_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_caa_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_mx_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_naptr_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_ns_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_ptr_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_soa_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_srv_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_txt_reply.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/legacy/ares_parse_uri_reply.c`
+				{
+					Compile.Type "C"
+				}
+			}
+			%Group "record"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_mapping.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_multistring.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_name.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_parse.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_record.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/record/ares_dns_write.c`
+				{
+					Compile.Type "C"
+				}
+			}
+			%Group "str"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/str/ares_buf.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/str/ares_idnamap.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/str/ares_str.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/str/ares_strsplit.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/str/ares_punycode.c`
+				{
+					Compile.Type "C"
+				}
+			}
+			%Group "util"
+			{
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_iface_ips.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_threads.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_timeval.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_math.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_rand.c`
+				{
+					Compile.Type "C"
+				}
+				%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/util/ares_uri.c`
+				{
+					Compile.Type "C"
+				}
+			}
+		}
+	}
+}
