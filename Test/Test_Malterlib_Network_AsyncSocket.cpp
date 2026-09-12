@@ -33,6 +33,171 @@ namespace
 {
 	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
 
+	// Hold the actor's handshake transition until a readiness read also returns application data.
+	struct CHandshakeWithDataSocket : ICSocket
+	{
+		explicit CHandshakeWithDataSocket(TCUniquePointer<ICSocket> &&_pSocket)
+			: m_pSocket(fg_Move(_pSocket))
+		{
+		}
+
+		bool f_IsValid() const override
+		{
+			return m_pSocket->f_IsValid();
+		}
+
+		bool f_HandshakeDone() const override
+		{
+			return m_bReceivedData && m_pSocket->f_HandshakeDone();
+		}
+
+		void f_Close() override
+		{
+			m_pSocket->f_Close();
+		}
+
+		void f_CloseAsync(NFunction::TCFunctionMovable<void ()> &&_fOnClosed) override
+		{
+			m_pSocket->f_CloseAsync(fg_Move(_fOnClosed));
+		}
+
+		void f_Shutdown() override
+		{
+			m_pSocket->f_Shutdown();
+		}
+
+		void f_SetAbortOnClose() override
+		{
+			m_pSocket->f_SetAbortOnClose();
+		}
+
+		void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
+		{
+			m_pSocket->f_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+		}
+
+		void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
+		{
+			m_pSocket->f_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+		}
+
+		void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, ENetFlag _Flags) override
+		{
+			m_pSocket->f_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+		}
+
+		void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, ENetFlag _Flags) override
+		{
+			m_pSocket->f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
+		}
+
+		TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		{
+			return m_pSocket->f_Accept(fg_Move(_fOnStateChange));
+		}
+
+		void f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		{
+			m_pSocket->f_InheritHandle(_pHandle, fg_Move(_fOnStateChange));
+		}
+
+		void *f_GiveUpForInherit() override
+		{
+			return m_pSocket->f_GiveUpForInherit();
+		}
+
+		void *f_GetOSSocket() override
+		{
+			return m_pSocket->f_GetOSSocket();
+		}
+
+		void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		{
+			m_pSocket->f_SetOnStateChange(fg_Move(_fOnStateChange));
+		}
+
+		ENetTCPState f_GetState() override
+		{
+			return m_pSocket->f_GetState();
+		}
+
+		CStr f_GetCloseReason() override
+		{
+			return m_pSocket->f_GetCloseReason();
+		}
+
+		CSocketOperationResult f_Receive(void *_pData, umint _nBytes) override
+		{
+			auto Result = m_pSocket->f_Receive(_pData, _nBytes);
+			m_bReceivedData |= Result.m_nBytes != 0;
+
+			return Result;
+		}
+
+		CSocketOperationResult f_Send(void const *_pData, umint _nBytes) override
+		{
+			return m_pSocket->f_Send(_pData, _nBytes);
+		}
+
+		CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override
+		{
+			return m_pSocket->f_SendVectored(_pSpans, _nSpans);
+		}
+
+		umint f_SendDatagram(CNetAddress const &_Address, void const *_pData, umint _nBytes) override
+		{
+			return m_pSocket->f_SendDatagram(_Address, _pData, _nBytes);
+		}
+
+		umint f_ReceiveDatagram(CNetAddress &_Address, void *_pData, umint _nBytes) override
+		{
+			return m_pSocket->f_ReceiveDatagram(_Address, _pData, _nBytes);
+		}
+
+		CNetAddress f_GetPeerAddress() const override
+		{
+			return m_pSocket->f_GetPeerAddress();
+		}
+
+		uint32 f_GetListenPort() const override
+		{
+			return m_pSocket->f_GetListenPort();
+		}
+
+		TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override
+		{
+			return m_pSocket->f_GetConnectionInfo();
+		}
+
+		void f_SetTransferSizeHint(umint _nBytes) override
+		{
+			m_pSocket->f_SetTransferSizeHint(_nBytes);
+		}
+
+		void f_SetSendWindow(umint _nBytes, bool _bConfigured) override
+		{
+			m_pSocket->f_SetSendWindow(_nBytes, _bConfigured);
+		}
+
+		void f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		{
+			m_pSocket->f_AdoptSocket(fg_Move(_Socket), fg_Move(_fOnStateChange));
+		}
+
+		ICSocketCompletionIo *f_GetCompletionIo() override
+		{
+			return m_pSocket->f_GetCompletionIo();
+		}
+
+		NSys::ICIoLoop *f_GetOwningIoLoop() override
+		{
+			return m_pSocket->f_GetOwningIoLoop();
+		}
+
+		TCUniquePointer<ICSocket> m_pSocket;
+		bool m_bReceivedData = false;
+	};
+
 	}
 	char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
 	fp64 g_Timeout = 30.0 * gc_TimeoutMultiplier;
@@ -1558,9 +1723,9 @@ public:
 		pClient->f_Close();
 	}
 
-	void fp_TestUpgradeToSSL()
+	void fp_TestUpgradeToSSL(bool _bHandshakeWithData = false)
 	{
-		DMibTestPath("Upgrade To SSL");
+		DMibTestPath(_bHandshakeWithData ? "Upgrade To SSL With Handshake Data" : "Upgrade To SSL");
 
 		CActorRunLoopTestHelper RunLoopHelper;
 
@@ -1579,6 +1744,14 @@ public:
 
 		FVirtualSocketFactory ServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
 		FVirtualSocketFactory ClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+		if (_bHandshakeWithData)
+		{
+			ServerSSLFactory = [fFactory = fg_Move(ServerSSLFactory)](CStr const &_Hostname) -> TCUniquePointer<ICSocket>
+				{
+					return fg_Construct<CHandshakeWithDataSocket>(fFactory(_Hostname));
+				}
+			;
+		}
 
 		struct CUpgradeState
 		{
@@ -2014,6 +2187,7 @@ public:
 			fp_TestUpgradeCheckRemoteCloseFlush();
 			fp_TestDeferredBytesBeforeAcceptClose();
 			fp_TestUpgradeToSSL();
+			fp_TestUpgradeToSSL(true);
 			fp_TestCorruptRecordEndsStream();
 			fp_TestRetainedDeliveries();
 			{
