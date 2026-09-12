@@ -143,6 +143,17 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
+	CSocketOperationResult CSocket_TCP::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
+	{
+		if (!_nSpans)
+			return {};
+		CSocketOperationResult Result;
+		Result.m_nBytes = mp_Socket.f_SendVectored(_pSpans, _nSpans);
+		if (Result.m_nBytes != 0)
+			Result.m_bSentNetwork = true;
+		return Result;
+	}
+
 	umint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
 	{
 		return mp_Socket.f_SendDatagram(_Address, _pData, _DataLen);
