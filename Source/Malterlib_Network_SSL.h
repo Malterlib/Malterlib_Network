@@ -8,6 +8,23 @@
 #include "Malterlib_Network_Exception.h"
 #include <Mib/Memory/Allocators/Secure>
 
+
+#ifndef DMibConfig_SSLCompletionIoSend
+	#define DMibConfig_SSLCompletionIoSend 1
+#endif
+
+#ifndef DMibConfig_SSLCompletionIoReceive
+	#define DMibConfig_SSLCompletionIoReceive 1
+#endif
+
+#ifndef DMibConfig_SSLZeroCopy
+	#define DMibConfig_SSLZeroCopy 1
+#endif
+
+#ifndef DMibConfig_SSLSendBatching
+	#define DMibConfig_SSLSendBatching 1
+#endif
+
 namespace NMib::NNetwork
 {
 	struct CSSLSettings
@@ -206,6 +223,21 @@ namespace NMib::NNetwork
 		using FAuthenticationResultCallback = NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)>;
 		using FUserTrustDecisionCallback = NFunction::TCFunction<void (CSSLConnectionResult const &_ConnectionResult)>;
 
+		// The batch owner must flush held records; the library considers them delivered once passed to the transport.
+		struct CSendBatch
+		{
+			CSendBatch(CSSLConnection &_Connection);
+			~CSendBatch();
+
+			CSendBatch(CSendBatch const &) = delete;
+			CSendBatch &operator = (CSendBatch const &) = delete;
+
+		protected:
+			CSSLConnection &mp_Connection;
+		};
+
+		static constexpr umint mc_nMaxRecordSize = 17 * 1024; // Capacity for a complete framed TLS record.
+
 		CSSLConnection
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
@@ -216,9 +248,47 @@ namespace NMib::NNetwork
 		;
 		~CSSLConnection();
 
-		bool f_GiveSocket(void *_pSocket);
-		void *f_GetSocket() const;
+		void f_GiveSocket(CSocket *_pSocket);
 		bool f_HasSocket() const;
+
+		CSocketOperationResult f_FlushPending();
+		void f_SetSendBatching(bool _bBatching);
+		void f_SetTransferSizeHint(umint _nBytes);
+
+		bool f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result);
+		bool f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result);
+
+		bool f_SupportsZeroCopy() const;
+		umint f_GetSendDepth() const;
+		void f_SetSendDepth(umint _nDepth);
+		void f_SetSendWindow(umint _nBytes);
+		bool f_SupportsCompletionIoSend() const;
+		bool f_SupportsCompletionIoReceive() const;
+		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);
+		bool f_IsSendPinned() const;
+		bool f_CanBeginSend() const;
+		void f_ConsiderSendWindowGrowth();
+		smint f_NextBeginSend() const;
+		umint f_GetPendingSend() const;
+		umint f_GetPendingSendUnpinned() const;
+		void f_SetCompletionSend(bool _bCompletionSend);
+		bool f_IsCompletionSend() const;
+		void f_SetCompletionReceive(bool _bCompletionReceive);
+		umint f_GetInboundBufferSize() const;
+		void f_FailSend(NStr::CStr _Error);
+		void f_FailReceive(NStr::CStr _Error);
+		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const;
+		void f_SendCompleted(umint _iBuffer, umint _nBytes);
+		umint f_GetFillBuffer() const;
+		void f_ReleaseSendBuffer(umint _iBuffer);
+		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner);
+		void f_ClearCipherQueue();
+		void f_CompactCipherIfStalled();
+
+		void f_AbortSend(umint _iBuffer);
+		bool f_OpenHeld(void *_pData, umint _nLen, CSocketOperationResult &o_Result);
+
+		bool f_IsSendBufferFull() const;
 
 		void f_SetHostname(NStr::CStr const &_Hostname);
 		NStr::CStr f_GetHostname() const;
@@ -226,6 +296,7 @@ namespace NMib::NNetwork
 
 		NStr::CStr f_GetLastError() const;
 		bool f_BrokenState() const;
+		bool f_ReceivedShutdown() const;
 		bool f_Connected() const;
 
 		bool f_Connect();

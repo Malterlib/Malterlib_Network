@@ -28,10 +28,15 @@ namespace NMib::NNetwork
 		mp_pInternal->m_MaxMessageSize = _MaxMessageSize;
 	}
 
-	// Also sets per-connection receive allocation size; choose it in proportion to expected connection count.
 	void CAsyncSocketServerActor::f_SetDefaultFragmentationSize(umint _FragmentationSize)
 	{
 		mp_pInternal->m_FragmentationSize = _FragmentationSize;
+	}
+
+	// Default adaptive send ceiling for new connections; zero uses eight initial frames.
+	void CAsyncSocketServerActor::f_SetDefaultSendWindow(umint _nBytes)
+	{
+		mp_pInternal->m_SendWindowBytes = _nBytes;
 	}
 
 	void CAsyncSocketServerActor::f_SetDefaultTimeout(fp64 _Timeout)
@@ -115,6 +120,7 @@ namespace NMib::NNetwork
 							fg_ThisActor(this)
 							, mp_pInternal->m_MaxMessageSize
 							, mp_pInternal->m_FragmentationSize
+							, mp_pInternal->m_SendWindowBytes
 							, mp_pInternal->m_Timeout
 							, mp_pInternal->m_pCheckUpgradeFactory
 							, ListenID
@@ -122,10 +128,16 @@ namespace NMib::NNetwork
 					)
 				;
 
+				// Seed the listen actor on its socket's loop queue so the first accept runs locally.
+				auto Binding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+				if (Binding.m_pLoop)
+					ListenActor->f_SetInitialQueue(Binding.m_iQueue);
+
 				NConcurrency::TCWeakActor<CListenActor> WeakListenActor = ListenActor;
 
 				NStorage::TCUniquePointer<NNetwork::ICSocket> pListenSocket = SocketFactory("");
 				NException::CDisableExceptionTraceScope DisableExceptionTrace;
+				NConcurrency::CIoLoopCreateScope IoLoopScope(Binding);
 				pListenSocket->f_Listen
 					(
 						Address

@@ -13,11 +13,14 @@ namespace NMib::NNetwork::NAsyncSocket
 	class CListenActor : public NConcurrency::CActor
 	{
 	public:
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep accept work on the connection actors' pool.
+
 		CListenActor
 			(
 				NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
 				, umint _MaxMesageSize
 				, umint _FragmentationSize
+				, umint _SendWindowBytes
 				, fp64 _Timeout
 				, NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> const &_pCheckUpgradeFactory
 				, umint _ListenID
@@ -38,6 +41,7 @@ namespace NMib::NNetwork::NAsyncSocket
 		NConcurrency::TCWeakActor<CAsyncSocketServerActor> mp_Server;
 		umint mp_MaxMessageSize;
 		umint mp_FragmentationSize;
+		umint mp_SendWindowBytes;
 		NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> mp_pCheckUpgradeFactory;
 		umint mp_ListenID;
 	};

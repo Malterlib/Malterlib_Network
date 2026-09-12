@@ -586,7 +586,7 @@ public:
 
 
 	template<typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestInherit(CStr _Address, uint16 _Port)
+	void f_TestInherit(CStr _Address, uint16 _Port, bool _bInheritable)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -607,6 +607,8 @@ public:
 		CEventAutoReset SocketEvent;
 
 		CSocket Socket;
+		if (_bInheritable)
+			Socket.f_SetInheritable();
 		Socket.f_Connect(Address);
 
 		DMibExpectTrue(Socket.f_IsValid());
@@ -833,7 +835,14 @@ public:
 			}
 			{
 				DMibTestPath("Inherit");
-				f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+				{
+					DMibTestPath("Bound");
+					f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, false);
+				}
+				{
+					DMibTestPath("Inheritable");
+					f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, true);
+				}
 			}
 			{
 				DMibTestPath("AsyncConnectReportTo_TCPv4");

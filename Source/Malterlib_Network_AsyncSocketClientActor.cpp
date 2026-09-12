@@ -32,6 +32,12 @@ namespace NMib::NNetwork
 		mp_FragmentationSize = _FragmentationSize;
 	}
 
+	// Default adaptive send ceiling for new connections; zero uses eight initial frames.
+	void CAsyncSocketClientActor::f_SetDefaultSendWindow(umint _nBytes)
+	{
+		mp_SendWindowBytes = _nBytes;
+	}
+
 	void CAsyncSocketClientActor::f_SetDefaultTimeout(fp64 _Timeout)
 	{
 		mp_Timeout = _Timeout;
@@ -95,10 +101,14 @@ namespace NMib::NNetwork
 		if (_ConnectToAddress.f_IsEmpty())
 			co_return DMibErrorInstance("Connect to address cannot be empty");
 
+		// Use this actor's manager so loop ownership and shutdown share its lifetime.
+		NConcurrency::CIoLoopBinding IoBinding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+
 		CPendingConnection *pPending;
 		{
 			CPendingConnection &Pending = mp_PendingConnects.f_Insert();
 			pPending = &Pending;
+			Pending.m_IoBinding = IoBinding;
 			Pending.m_pSocket = _SocketFactory(_Hostname);
 		}
 
@@ -116,25 +126,60 @@ namespace NMib::NNetwork
 
 		NException::CDisableExceptionTraceScope DisableExceptionTrace;
 		auto pReplied = NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>>(fg_Construct(false));
-		pPending->m_pSocket->f_AsyncConnect
-			(
-				_ConnectToAddress
-				,
-				[
-					pReplied
-					, pPending
-					, pPendingDeleted = pPending->m_pDeleted
-					, WeakThis = fg_ThisActor(this).f_Weak()
-					, Promise = fg_Move(Promise.m_Promise)
-					, this
-					, CleanupPending = fg_Move(CleanupPending)
-				]
-				(::NMib::NNetwork::ENetTCPState _StateAdded) mutable
-				{
-					if (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed))
+		{
+			NConcurrency::CIoLoopCreateScope IoLoopScope(IoBinding);
+
+			pPending->m_pSocket->f_AsyncConnect
+				(
+					_ConnectToAddress
+					,
+					[
+						pReplied
+						, pPending
+						, pPendingDeleted = pPending->m_pDeleted
+						, WeakThis = fg_ThisActor(this).f_Weak()
+						, Promise = fg_Move(Promise.m_Promise)
+						, this
+						, CleanupPending = fg_Move(CleanupPending)
+					]
+					(::NMib::NNetwork::ENetTCPState _StateAdded) mutable
 					{
-						if (!pReplied->f_Exchange(true))
+						if (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed))
 						{
+							if (!pReplied->f_Exchange(true))
+							{
+								auto pCleanupPromise = g_OnScopeExitShared / [Promise]
+									{
+										if (!Promise.f_IsSet())
+											Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
+									}
+								;
+
+								auto This = WeakThis.f_Lock();
+								if (This)
+								{
+									NConcurrency::g_Dispatch(This) / [pPendingDeleted, pPending, Promise, pCleanupPromise, CleanupPending]
+										{
+											NStr::CStr Error;
+											if (!pPendingDeleted->f_Load())
+												Error = pPending->m_pSocket->f_GetCloseReason();
+											else
+												Error = "Client connection actor was deleted";
+
+											Promise.f_SetException(DMibErrorInstance(Error));
+										}
+										> NConcurrency::g_DiscardResult
+									;
+								}
+							}
+
+							CleanupPending.f_Clear();
+						}
+						else if (_StateAdded & NNetwork::ENetTCPState_Connected)
+						{
+							if (pReplied->f_Exchange(true))
+								return (void)CleanupPending.f_Clear();
+
 							auto pCleanupPromise = g_OnScopeExitShared / [Promise]
 								{
 									if (!Promise.f_IsSet())
@@ -143,121 +188,96 @@ namespace NMib::NNetwork
 							;
 
 							auto This = WeakThis.f_Lock();
-							if (This)
-							{
-								NConcurrency::g_Dispatch(This) / [pPendingDeleted, pPending, Promise, pCleanupPromise, CleanupPending]
-									{
-										NStr::CStr Error;
-										if (!pPendingDeleted->f_Load())
-											Error = pPending->m_pSocket->f_GetCloseReason();
-										else
-											Error = "Client connection actor was deleted";
+							if (!This || pPendingDeleted->f_Load())
+								return (void)pCleanupPromise.f_Clear();
 
-										Promise.f_SetException(DMibErrorInstance(Error));
-									}
-									> NConcurrency::g_DiscardResult
-								;
-							}
-						}
+							NConcurrency::g_Dispatch(This) /
+								[
+									this
+									, pPendingDeleted
+									, pPending
+									, Promise
+									, pCleanupPromise
+									, CleanupPending = fg_Move(CleanupPending)
+								]() mutable
+								{
+									if (pPendingDeleted->f_Load())
+										return (void)pCleanupPromise.f_Clear();
 
-						CleanupPending.f_Clear();
-					}
-					else if (_StateAdded & NNetwork::ENetTCPState_Connected)
-					{
-						if (pReplied->f_Exchange(true))
-							return (void)CleanupPending.f_Clear();
+									NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = fg_Move(pPending->m_pSocket);
+									CleanupPending.f_Clear();
 
-						auto pCleanupPromise = g_OnScopeExitShared / [Promise]
-							{
-								if (!Promise.f_IsSet())
-									Promise.f_SetException(DMibErrorInstance("Client connection actor was deleted"));
-							}
-						;
+									FAsyncSocketUpgradeCheck fCheckUpgrade;
+									if (mp_fCheckUpgradeFactory)
+										fCheckUpgrade = mp_fCheckUpgradeFactory();
 
-						auto This = WeakThis.f_Lock();
-						if (!This || pPendingDeleted->f_Load())
-							return (void)pCleanupPromise.f_Clear();
-
-						NConcurrency::g_Dispatch(This) /
-							[
-								this
-								, pPendingDeleted
-								, pPending
-								, Promise
-								, pCleanupPromise
-								, CleanupPending = fg_Move(CleanupPending)
-							]() mutable
-							{
-								if (pPendingDeleted->f_Load())
-									return (void)pCleanupPromise.f_Clear();
-
-								NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = fg_Move(pPending->m_pSocket);
-								CleanupPending.f_Clear();
-
-								FAsyncSocketUpgradeCheck fCheckUpgrade;
-								if (mp_fCheckUpgradeFactory)
-									fCheckUpgrade = mp_fCheckUpgradeFactory();
-
-								NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor
-									= f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fCheckUpgrade)))
-								;
-
-								auto *pManager = &f_ConcurrencyManager();
-
-								auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise, pManager]() mutable
-									{
-										ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket)).f_DiscardResult();
-
+									// The connection actor must share its loop's manager or manager shutdown can free a loop still referenced by the socket.
+									NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor
 										(
-											NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
-											/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
+											fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_SendWindowBytes, mp_Timeout, fg_Move(fCheckUpgrade))
+										)
+									;
+
+									// Seed first-job placement on the bound loop queue without pinning later scheduling.
+									if (pPending->m_IoBinding.m_pLoop)
+										ConnectionActor->f_SetInitialQueue(pPending->m_IoBinding.m_iQueue);
+
+									// Use the connection actor's manager to avoid starting another manager and crossing pools on every completion.
+									auto fFinishConnection = [&ConnectionActor, &pNewSocket, Promise, pCleanupPromise, pManager = &f_ConcurrencyManager()]() mutable
+										{
+											ConnectionActor.f_Bind<&CAsyncSocketActor::fp_SetSocket>(fg_Move(pNewSocket)).f_DiscardResult();
+
+											(
+												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
+												/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
+												{
+													auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
+
+													if (ConnectionResult.m_Result == CAsyncSocketActor::EFinishConnectionResult_Error)
+														co_return DMibErrorInstance(ConnectionResult.m_ConnectionInfo.m_Error);
+
+													co_return CAsyncSocketNewClientConnection
+														(
+															fg_Move(ConnectionActor)
+															, fg_Move(ConnectionResult.m_ConnectionInfo.m_pSocketInfo)
+															, ConnectionResult.m_ConnectionInfo.m_PeerAddress
+														)
+													;
+												}
+											)
+											.f_OnResultSet
+											(
+												[Promise, pCleanupPromise](NConcurrency::TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
+												{
+													Promise.f_SetResult(fg_Move(_Result));
+												}
+											);
+										}
+									;
+
+									// Lambda will be destroyed when this is called, this is why we capture everything in fFinishConnection
+									pNewSocket->f_SetOnStateChange
+										(
+											[WeakConnectionActor = ConnectionActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
 											{
-												auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
-
-												if (ConnectionResult.m_Result == CAsyncSocketActor::EFinishConnectionResult_Error)
-													co_return DMibErrorInstance(ConnectionResult.m_ConnectionInfo.m_Error);
-
-												co_return CAsyncSocketNewClientConnection
-													(
-														fg_Move(ConnectionActor)
-														, fg_Move(ConnectionResult.m_ConnectionInfo.m_pSocketInfo)
-														, ConnectionResult.m_ConnectionInfo.m_PeerAddress
-													)
-												;
+												auto ConnectionActor = WeakConnectionActor.f_Lock();
+												if (!ConnectionActor)
+													return;
+												ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
 											}
 										)
-										.f_OnResultSet
-										(
-											[Promise, pCleanupPromise](NConcurrency::TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
-											{
-												Promise.f_SetResult(fg_Move(_Result));
-											}
-										);
-									}
-								;
+									;
 
-								// Lambda will be destroyed when this is called, this is why we capture everything in fFinishConnection
-								pNewSocket->f_SetOnStateChange
-									(
-										[WeakConnectionActor = ConnectionActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
-										{
-											auto ConnectionActor = WeakConnectionActor.f_Lock();
-											if (!ConnectionActor)
-												return;
-											ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded).f_DiscardResult();
-										}
-									)
-								;
-
-								fFinishConnection();
-							}
-							> NConcurrency::g_DiscardResult
-						;
+									fFinishConnection();
+								}
+								> NConcurrency::g_DiscardResult
+							;
+						}
 					}
-				}
-				, _BindAddress
-			)
-		;
+					, _BindAddress
+				)
+			;
+		}
 		pReplied.f_Clear();
 
 		co_return co_await fg_Move(Promise.m_Future);

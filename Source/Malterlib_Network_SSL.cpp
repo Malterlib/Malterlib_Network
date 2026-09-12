@@ -2,34 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Network_SSL.h"
+#include "Malterlib_Network_SSLTransport.h"
+#include "Malterlib_Network_Socket.h"
+#include <Mib/Core/IoSubSystem>
 
 #include <Mib/Cryptography/BoringSSL>
 #include <Mib/Encoding/Base64>
 
 #include "Malterlib_Network_SSL_DHParams.hpp"
-
-#if defined(DPlatformFamily_Windows)
-	#include <Mib/Core/PlatformSpecific/WindowsError>
-
-	static NMib::NStr::CStr fg_GetLastSystemError()
-	{
-		return NMib::NPlatform::fg_Win32_GetLastErrorStr();
-	}
-
-#else
-	// Unix
-	#include <Mib/Core/PlatformSpecific/PosixErrNo>
-	#include <errno.h>
-
-	static NMib::NStr::CStr fg_GetLastSystemError()
-	{
-		int Error = errno;
-		if (Error == 0)
-			return "End of file encountered";
-		else
-			return NMib::NPlatform::fg_ErrnoString<NMib::NStr::CStr>(Error);
-	}
-#endif
 
 namespace NMib::NNetwork
 {
@@ -49,6 +29,48 @@ namespace NMib::NNetwork
 
 		constinit NStorage::TCAggregate<CSSLLowLevelDataIndex> g_SSLLowLevelDataIndex = {DAggregateInit};
 
+#if DMibConfig_IoDebug_Enable
+		bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *_pIo)
+		{
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslSendBatching(), DMibConfig_SSLSendBatching != 0);
+		}
+
+		bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *_pIo)
+		{
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslZeroCopy(), DMibConfig_SSLZeroCopy != 0);
+		}
+
+		bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *_pIo)
+		{
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslCompletionIoSend(), DMibConfig_SSLCompletionIoSend != 0);
+		}
+
+		bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *_pIo)
+		{
+			return NSys::fg_ResolveIoKnob(_pIo->f_SslCompletionIoReceive(), DMibConfig_SSLCompletionIoReceive != 0);
+		}
+#else
+		constexpr bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *)
+		{
+			return DMibConfig_SSLSendBatching != 0;
+		}
+
+		constexpr bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *)
+		{
+			return DMibConfig_SSLZeroCopy != 0;
+		}
+
+		constexpr bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *)
+		{
+			return DMibConfig_SSLCompletionIoSend != 0;
+		}
+
+		constexpr bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *)
+		{
+			return DMibConfig_SSLCompletionIoReceive != 0;
+		}
+#endif
+
 		SSL_CTX *fg_CreateSSLContext(SSL_METHOD const *_pMethod)
 		{
 			return SSL_CTX_new(_pMethod);
@@ -58,6 +80,115 @@ namespace NMib::NNetwork
 		{
 			return g_SSLLowLevelDataIndex->m_ExDataIndex;
 		}
+
+
+		int fg_SSLTransportBioRead(BIO *_pBio, char *_pData, int _nBytes)
+		{
+			BIO_clear_retry_flags(_pBio);
+
+			auto *pTransport = (CSSLTransport *)BIO_get_data(_pBio);
+			if (!pTransport || _nBytes <= 0)
+				return 0;
+
+			umint nRead = 0;
+			switch (pTransport->f_Read(_pData, (umint)_nBytes, nRead))
+			{
+			case CSSLTransport::ETransferResult::mc_Data:
+				return (int)nRead;
+			case CSSLTransport::ETransferResult::mc_WouldBlock:
+				BIO_set_retry_read(_pBio);
+				return -1;
+			case CSSLTransport::ETransferResult::mc_EndOfStream:
+				return 0;
+			case CSSLTransport::ETransferResult::mc_Failed:
+				return -1;
+			}
+
+			DMibNeverGetHere;
+			return -1;
+		}
+
+		int fg_SSLTransportBioWrite(BIO *_pBio, char const *_pData, int _nBytes)
+		{
+			BIO_clear_retry_flags(_pBio);
+
+			auto *pTransport = (CSSLTransport *)BIO_get_data(_pBio);
+			if (!pTransport || _nBytes <= 0)
+				return 0;
+
+			umint nWritten = 0;
+			switch (pTransport->f_Write(_pData, (umint)_nBytes, nWritten))
+			{
+			case CSSLTransport::ETransferResult::mc_Data:
+				return (int)nWritten;
+			case CSSLTransport::ETransferResult::mc_WouldBlock:
+				BIO_set_retry_write(_pBio);
+				return -1;
+			case CSSLTransport::ETransferResult::mc_EndOfStream:
+			case CSSLTransport::ETransferResult::mc_Failed:
+				return -1;
+			}
+
+			DMibNeverGetHere;
+			return -1;
+		}
+
+		long fg_SSLTransportBioCtrl(BIO *_pBio, int _Command, long _Argument, void *_pParameter)
+		{
+			auto *pTransport = (CSSLTransport *)BIO_get_data(_pBio);
+			if (!pTransport)
+				return 0;
+
+			switch (_Command)
+			{
+			case BIO_CTRL_FLUSH:
+				{
+					BIO_clear_retry_flags(_pBio);
+
+					CSSLTransport::ETransferResult Result = pTransport->f_Flush();
+					if (Result == CSSLTransport::ETransferResult::mc_WouldBlock)
+						BIO_set_retry_write(_pBio);
+
+					return Result == CSSLTransport::ETransferResult::mc_Data ? 1 : -1;
+				}
+			case BIO_CTRL_PENDING:
+				return (long)pTransport->f_GetPendingRead();
+			case BIO_CTRL_WPENDING:
+				return (long)pTransport->f_GetPendingWrite();
+			case BIO_CTRL_EOF:
+				return pTransport->f_IsEndOfStream() ? 1 : 0;
+			case BIO_CTRL_GET_CLOSE:
+				return 0; // The transport is owned by the socket, never by the BIO
+			case BIO_CTRL_SET_CLOSE:
+				return 1;
+			}
+
+			return 0;
+		}
+
+		// BIOs retain this process-wide method through actors, which are destroyed before aggregate teardown frees it.
+		struct CSSLTransportBioMethod
+		{
+			CSSLTransportBioMethod()
+			{
+				m_pMethod = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "Malterlib socket transport");
+				if (!m_pMethod)
+					DMibErrorCryptography("Could not create the TLS transport method");
+
+				BIO_meth_set_read(m_pMethod, fg_SSLTransportBioRead);
+				BIO_meth_set_write(m_pMethod, fg_SSLTransportBioWrite);
+				BIO_meth_set_ctrl(m_pMethod, fg_SSLTransportBioCtrl);
+			}
+
+			~CSSLTransportBioMethod()
+			{
+				BIO_meth_free(m_pMethod);
+			}
+
+			BIO_METHOD *m_pMethod = nullptr;
+		};
+
+		constinit NStorage::TCAggregate<CSSLTransportBioMethod> g_SSLTransportBioMethod = {DAggregateInit};
 	}
 
 	// CSSLContext::CSession methods.
@@ -147,6 +278,7 @@ namespace NMib::NNetwork
 						}
 
 						SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
+						// Quiet shutdown sends no close_notify, so a Malterlib peer sees plain EOF; both receive paths treat that as truncation
 						SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
 						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
 							SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1);
@@ -867,7 +999,6 @@ namespace NMib::NNetwork
 	class CSSLConnection::CInternal
 	{
 	public:
-
 		CInternal
 			(
 				CSSLConnection *_pSSL
@@ -887,6 +1018,8 @@ namespace NMib::NNetwork
 			, mp_bHandshakeInProgress(false)
 			, mp_bUsingTrustDecision(false)
 		{
+			fp_AttachTransport();
+
 			if (_Hostname)
 			{
 				ERR_clear_error();
@@ -897,6 +1030,8 @@ namespace NMib::NNetwork
 
 		~CInternal()
 		{
+			// The library's hold on the transport goes first: the BIO reaches into this object, and
+			// freeing the session is what releases it
 			mp_pSession.f_Clear();
 		}
 
@@ -915,6 +1050,13 @@ namespace NMib::NNetwork
 			mp_State = _State;
 		}
 
+		// Whether the peer's close_notify has been opened (or a mutual shutdown completed):
+		// only then is an end of the TCP stream an authenticated end of the TLS stream
+		bool f_ReceivedShutdown() const
+		{
+			return mp_State == EState_ConnectionShutdown;
+		}
+
 		bool f_Connected() const
 		{
 			return mp_bConnected;
@@ -926,22 +1068,42 @@ namespace NMib::NNetwork
 			mp_ExpectedResultCallback = _ExpectedResult;
 		}
 
-		bool f_GiveSocket(void *_pSocket)
+		void f_GiveSocket(CSocket *_pSocket)
 		{
-			if (!SSL_set_fd(f_GetSSL(), (int)(umint)_pSocket))
-				return false;
-
-			return true;
+			mp_Transport.f_SetSocket(_pSocket);
 		}
 
 		bool f_HasSocket() const
 		{
-			return SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL()) >= 0;
+			return mp_Transport.f_HasSocket();
 		}
 
-		void* f_GetSocket() const
+		// Batch only sends; library read and shutdown paths can wait on the peer without flushing.
+		void f_SetSendBatching(bool _bBatching)
 		{
-			return (void*)(umint)SSL_get_fd(fg_RemoveQualifiers(*this).f_GetSSL());
+			mp_Transport.f_SetDeferFlush(_bBatching && fg_SendBatchingEnabled(mp_pIo));
+		}
+
+		bool f_IsSendBufferFull() const
+		{
+			return mp_Transport.f_IsFull();
+		}
+
+		// Retry transport-held records after write readiness; the library will not offer them again.
+		CSocketOperationResult f_FlushPending()
+		{
+			CSocketOperationResult Result;
+
+			if (!mp_Transport.f_GetPendingWrite())
+				return Result;
+
+			umint nSentBefore = mp_Transport.f_GetBytesSent();
+			mp_Transport.f_Flush();
+			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
+
+			fp_CheckTransportError(EState_WriteFailed);
+
+			return Result;
 		}
 
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest()
@@ -972,6 +1134,12 @@ namespace NMib::NNetwork
 		{
 			ERR_clear_error();
 			auto Ret = SSL_shutdown(f_GetSSL());
+
+			// The library does not flush warning close_notify alerts. Flush explicitly before waiting for the peer,
+			// or let the completion-send drain carry the alert when it is the sole writer.
+			if (!mp_Transport.f_IsCompletionSend())
+				mp_Transport.f_Flush();
+
 			if (Ret == 1)
 				return true;
 			else if (Ret == -1)
@@ -981,17 +1149,10 @@ namespace NMib::NNetwork
 					f_SetState(EState_ConnectionShutdown);
 				else if (Error == SSL_ERROR_SYSCALL)
 				{
-	#if defined(DPlatformFamily_Windows)
-					int Error = WSAGetLastError();
-					DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL, windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
-	#else
-					// Unix
-					int Error = errno;
-					if (Error == 0)
-						DMibErrorNet("SSL_shutdown: End of file encountered");
-					else
-						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("SSL_shutdown", Error));
-	#endif
+					if (fp_CheckTransportError(EState_ShutdownFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL: {}") << mp_LastError).f_GetStr());
+
+					DMibErrorNet("SSL_shutdown: End of file encountered");
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 				{
@@ -1000,6 +1161,200 @@ namespace NMib::NNetwork
 				}
 			}
 			return false;
+		}
+
+		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+		{
+			return mp_Transport.f_BeginSend(o_pData, o_nBytes, o_iBuffer);
+		}
+
+		bool f_IsSendPinned() const
+		{
+			return mp_Transport.f_IsSendPinned();
+		}
+
+		bool f_CanBeginSend() const
+		{
+			return mp_Transport.f_CanBeginSend();
+		}
+
+		void f_ConsiderSendWindowGrowth()
+		{
+			mp_Transport.f_ConsiderSendWindowGrowth();
+		}
+
+		smint f_NextBeginSend() const
+		{
+			return mp_Transport.f_NextBeginSend();
+		}
+
+		umint f_GetPendingSend() const
+		{
+			return mp_Transport.f_GetPendingWrite();
+		}
+
+		umint f_GetPendingSendUnpinned() const
+		{
+			return mp_Transport.f_GetPendingWriteUnpinned();
+		}
+
+		// Sealed records that cannot be sent leave the connection with a gap in its record
+		// numbering, which the peer cannot recover from, so it is failed rather than continued
+		void f_FailSend(NStr::CStr _Error)
+		{
+			mp_LastError = fg_Move(_Error);
+			f_SetState(EState_WriteFailed);
+		}
+
+		void f_FailReceive(NStr::CStr _Error)
+		{
+			mp_LastError = fg_Move(_Error);
+			f_SetState(EState_ReadFailed);
+		}
+
+		umint f_GetSendDepth() const
+		{
+			return mp_Transport.f_GetSendDepth();
+		}
+
+		void f_SetSendDepth(umint _nDepth)
+		{
+			mp_Transport.f_SetSendDepth(_nDepth);
+		}
+
+		void f_SetSendWindow(umint _nBytes)
+		{
+			mp_Transport.f_SetSendWindow(_nBytes);
+		}
+
+		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const
+		{
+			return mp_Transport.f_GetPinnedKeepAlive(_iBuffer);
+		}
+
+		void f_SetCompletionSend(bool _bCompletionSend)
+		{
+			mp_Transport.f_SetCompletionSend(_bCompletionSend);
+		}
+
+		bool f_IsCompletionSend() const
+		{
+			return mp_Transport.f_IsCompletionSend();
+		}
+
+		void f_SetCompletionReceive(bool _bCompletionReceive)
+		{
+			mp_Transport.f_SetCompletionReceive(_bCompletionReceive);
+		}
+
+		void f_AbortSend(umint _iBuffer)
+		{
+			mp_Transport.f_AbortSend(_iBuffer);
+		}
+
+		void f_SendCompleted(umint _iBuffer, umint _nBytes)
+		{
+			mp_Transport.f_SendCompleted(_iBuffer, _nBytes);
+		}
+
+		umint f_GetFillBuffer() const
+		{
+			return mp_Transport.f_GetFillBuffer();
+		}
+
+		void f_ReleaseSendBuffer(umint _iBuffer)
+		{
+			mp_Transport.f_ReleaseSendBuffer(_iBuffer);
+		}
+
+		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner)
+		{
+			mp_Transport.f_AppendCipherSegment(_pData, _nBytes, fg_Move(_pOwner));
+		}
+
+		void f_ClearCipherQueue()
+		{
+			mp_Transport.f_ClearCipherQueue();
+		}
+
+		void f_CompactCipherIfStalled()
+		{
+			mp_Transport.f_CompactCipherIfStalled();
+		}
+
+		umint f_GetInboundBufferSize() const
+		{
+			return fg_Max(mp_nTransferSizeHint, CSSLTransport::mc_nInboundBufferSize);
+		}
+
+		void f_SetTransferSizeHint(umint _nBytes)
+		{
+			mp_nTransferSizeHint = _nBytes;
+			mp_Transport.f_SetOutboundCap(_nBytes);
+			mp_Transport.f_SetInboundSize(_nBytes);
+		}
+
+		// Seals gathered plaintext into transport-owned ciphertext. False means unchanged state and permits fallback; only post-handshake steady state supports it.
+		bool f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result)
+		{
+			DMibRequire(mp_bConnected);
+			DMibRequire(!mp_bHandshakeInProgress);
+			DMibRequire(mp_State == EState_None);
+
+			if (!fg_ZeroCopyEnabled(mp_pIo))
+				return false;
+
+			// The spans as fragments. Zero length ones are dropped so they cannot spend a record's
+			// fragment budget
+			CRYPTO_IVEC Fragments[NSys::gc_IoLoopMaxSubmitSpans];
+			umint nFragments = 0;
+			umint nPlaintext = 0;
+
+			for (umint iSpan = 0; iSpan < _nSpans && nFragments < fg_ArraySize(Fragments); ++iSpan)
+			{
+				if (!_pSpans[iSpan].m_nBytes)
+					continue;
+
+				Fragments[nFragments].in = (uint8 const *)_pSpans[iSpan].m_pData;
+				Fragments[nFragments].len = _pSpans[iSpan].m_nBytes;
+				++nFragments;
+				nPlaintext += _pSpans[iSpan].m_nBytes;
+			}
+
+			if (!nFragments)
+				return true;
+
+			ERR_clear_error();
+			auto pSSL = f_GetSSL();
+
+			// Room for the plaintext and one record's framing for each record it will take, plus a record's worth of slack for post handshake output that goes out ahead of it
+			umint nRecords = nPlaintext / SSL3_RT_MAX_PLAIN_LENGTH + 1;
+			umint nWanted = nPlaintext + (nRecords + 1) * SSL_max_seal_overhead(pSSL) + SSL3_RT_MAX_PLAIN_LENGTH;
+
+			umint nRoom = 0;
+			uint8 *pOut = mp_Transport.f_BeginSeal(nWanted, nRoom);
+
+			size_t nWritten = 0;
+			size_t nConsumed = 0;
+			auto Ret = SSL_seal_app_datav(pSSL, pOut, &nWritten, nRoom, Fragments, nFragments, &nConsumed);
+
+			// Refusal permits fallback; failure may already have consumed control output or sequence numbers, so retain produced records and fail the connection.
+			if (Ret == ssl_seal_v_refused)
+			{
+				ERR_clear_error();
+				return false;
+			}
+
+			mp_Transport.f_CommitSeal(nWritten);
+			o_Result.m_nBytes += nConsumed;
+
+			if (Ret == ssl_seal_v_error)
+			{
+				mp_LastError = fg_GetErrors();
+				f_SetState(EState_WriteFailed);
+			}
+
+			return true;
 		}
 
 		CSocketOperationResult f_Send(const void *_pData, umint _nLen)
@@ -1012,15 +1367,11 @@ namespace NMib::NNetwork
 			CSocketOperationResult Result;
 			ERR_clear_error();
 			auto pSSL = f_GetSSL();
-			auto pReadBio = SSL_get_rbio(pSSL);
-			auto pWriteBio = SSL_get_wbio(pSSL);
-			auto SocketNumRead = BIO_number_read(pReadBio);
-			auto SocketNumWrite = BIO_number_written(pWriteBio);
+			umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
+			umint nSentBefore = mp_Transport.f_GetBytesSent();
 			int Ret = SSL_write(pSSL, _pData, (int)_nLen);
-			if (BIO_number_read(pReadBio) != SocketNumRead)
-				Result.m_bReceivedNetwork = true;
-			if (BIO_number_written(pReadBio) != SocketNumWrite)
-				Result.m_bSentNetwork = true;
+			Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
+			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
 			if (Ret <= 0)
 			{
 				// Write did not succeed.
@@ -1032,17 +1383,10 @@ namespace NMib::NNetwork
 				}
 				else if (Error == SSL_ERROR_SYSCALL)
 				{
-	#if defined(DPlatformFamily_Windows)
-					int Error = WSAGetLastError();
-					DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
-	#else
-					// Unix
-					int Error = errno;
-					if (Error == 0)
-						DMibErrorNet("send (write to SSL socket): End of file encountered");
-					else
-						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("send (write to SSL socket)", Error));
-	#endif
+					if (fp_CheckTransportError(EState_WriteFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL): {}") << mp_LastError).f_GetStr());
+
+					DMibErrorNet("send (write to SSL socket): End of file encountered");
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 				{
@@ -1060,6 +1404,183 @@ namespace NMib::NNetwork
 			return Result;
 		}
 
+		// Opens directly into caller storage; false permits fallback without consuming input.
+		bool f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
+		{
+			DMibRequire(mp_bConnected);
+			DMibRequire(!mp_bHandshakeInProgress);
+			DMibRequire(mp_State == EState_None);
+
+			if (!fg_ZeroCopyEnabled(mp_pIo))
+				return false;
+
+			ERR_clear_error();
+			auto pSSL = f_GetSSL();
+
+			if (mp_Transport.f_GetHeld())
+			{
+				o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
+
+				// The close alert or failure that came in behind the held record takes effect
+				// once the hold has drained
+				if (!mp_Transport.f_GetHeld())
+				{
+					if (mp_bShutdownAfterHeld)
+					{
+						mp_bShutdownAfterHeld = false;
+						f_SetState(EState_ConnectionShutdown);
+					}
+					else if (mp_bReadFailedAfterHeld)
+					{
+						mp_bReadFailedAfterHeld = false;
+						f_SetState(EState_ReadFailed);
+					}
+				}
+
+				return true;
+			}
+
+			CRYPTO_IOVEC Destination{(uint8 *)_pData, nullptr, _nLen};
+
+			// Capture the thread-local error now, but deliver authenticated held plaintext before entering failed state.
+			auto fReadFailed = [&]
+				{
+					if (fp_CheckTransportError(EState_ReadFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
+
+					mp_LastError = fg_GetErrors();
+					if (mp_Transport.f_GetHeld())
+						mp_bReadFailedAfterHeld = true;
+					else
+						f_SetState(EState_ReadFailed);
+				}
+			;
+
+			// Remember close_notify after its ciphertext is consumed, but enter shutdown only after held plaintext drains.
+			auto fShutdown = [&]
+				{
+					if (mp_Transport.f_GetHeld())
+						mp_bShutdownAfterHeld = true;
+					else
+						f_SetState(EState_ConnectionShutdown);
+				}
+			;
+
+			for (;;)
+			{
+				CRYPTO_IVEC Fragments[CSSLTransport::mc_nMaxCipherFragments];
+				umint nFragments = mp_Transport.f_GetCipherFragments(Fragments);
+
+				if (nFragments)
+				{
+					size_t nProduced = 0;
+					size_t nConsumed = 0;
+					auto Ret = SSL_open_app_datav(pSSL, &Destination, 1, &nProduced, &nConsumed, Fragments, nFragments);
+
+					mp_Transport.f_ConsumeCipher(nConsumed);
+
+					if (Ret == ssl_open_v_refused)
+					{
+						// Refusal consumed no input; clear errors before fallback.
+						ERR_clear_error();
+						return false;
+					}
+
+					// Deliver opened plaintext even on a later error; its record sequence numbers cannot be replayed.
+					if (nProduced)
+					{
+						o_Result.m_nBytes += nProduced;
+						o_Result.m_bReceivedNetwork = true;
+					}
+
+					if (Ret == ssl_open_v_error)
+					{
+						fReadFailed();
+						return true;
+					}
+
+					if (Ret == ssl_open_v_close_notify)
+					{
+						fShutdown();
+						return true;
+					}
+
+					if (nProduced)
+						return true;
+
+					if (nConsumed)
+						continue;
+
+					// Use holdover storage when caller capacity cannot fit a record body or reads could stop making progress.
+					if (mp_Transport.f_GetCipherPending() > SSL3_RT_HEADER_LENGTH)
+					{
+						umint nRoom = 0;
+						uint8 *pHold = mp_Transport.f_BeginHold(nRoom);
+
+						CRYPTO_IOVEC Held{pHold, nullptr, nRoom};
+						size_t nHeld = 0;
+						size_t nHeldConsumed = 0;
+						auto HeldRet = SSL_open_app_datav(pSSL, &Held, 1, &nHeld, &nHeldConsumed, Fragments, nFragments);
+
+						mp_Transport.f_ConsumeCipher(nHeldConsumed);
+
+						if (nHeld)
+						{
+							mp_Transport.f_CommitHold(nHeld);
+							o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
+							o_Result.m_bReceivedNetwork = true;
+						}
+
+						if (HeldRet == ssl_open_v_error)
+						{
+							fReadFailed();
+							return true;
+						}
+
+						if (HeldRet == ssl_open_v_close_notify)
+						{
+							fShutdown();
+							return true;
+						}
+
+						if (nHeld)
+							return true;
+
+						if (nHeldConsumed)
+							continue;
+					}
+				}
+
+				// Only synchronous mode may fill ciphertext here; completion mode has a standing kernel reader.
+				auto Fill = mp_Transport.f_FillCipher();
+
+				if (Fill == CSSLTransport::ETransferResult::mc_Data)
+				{
+					o_Result.m_bReceivedNetwork = true;
+					continue;
+				}
+
+				if (Fill == CSSLTransport::ETransferResult::mc_EndOfStream)
+				{
+					// Transport EOF without close_notify is unauthenticated truncation.
+					if (fp_CheckTransportError(EState_ReadFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
+
+					DMibErrorNet("recv (read from SSL socket): End of file encountered");
+				}
+
+				if (Fill == CSSLTransport::ETransferResult::mc_Failed)
+				{
+					if (fp_CheckTransportError(EState_ReadFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
+
+					return true;
+				}
+
+				return true;
+			}
+		}
+
 		CSocketOperationResult f_Receive(void *_pData, umint _nLen)
 		{
 			DMibRequire(_nLen > 0);
@@ -1070,19 +1591,18 @@ namespace NMib::NNetwork
 			CSocketOperationResult Result;
 			ERR_clear_error();
 			auto pSSL = f_GetSSL();
-			auto pReadBio = SSL_get_rbio(pSSL);
-			auto pWriteBio = SSL_get_wbio(pSSL);
-			auto SocketNumRead = BIO_number_read(pReadBio);
-			auto SocketNumWrite = BIO_number_written(pWriteBio);
+			umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
+			umint nSentBefore = mp_Transport.f_GetBytesSent();
+
+			// Flush transport-generated output before reads wait on the peer. Include it in activity counters so a drain cannot mistake progress for idle.
+			mp_Transport.f_Flush();
+
 			int Ret = SSL_read(pSSL, _pData, _nLen);
-			if (BIO_number_read(pReadBio) != SocketNumRead)
-				Result.m_bReceivedNetwork = true;
-			if (BIO_number_written(pReadBio) != SocketNumWrite)
-				Result.m_bSentNetwork = true;
+			Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
+			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
 
 			if (Ret <= 0)
 			{
-				// Read did not succeed.
 				int Error = SSL_get_error(pSSL, Ret);
 				if (Error == SSL_ERROR_ZERO_RETURN)
 				{
@@ -1090,17 +1610,10 @@ namespace NMib::NNetwork
 				}
 				else if (Error == SSL_ERROR_SYSCALL)
 				{
-	#if defined(DPlatformFamily_Windows)
-					int Error = WSAGetLastError();
-					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL), windows returned: {}") << NMib::NPlatform::fg_Win32_GetLastErrorStr(Error)).f_GetStr());
-	#else
-					// Unix
-					int Error = errno;
-					if (Error == 0)
-						DMibErrorNet("recv (read from SSL socket): End of file encountered");
-					else
-						DMibErrorNet(NMib::NPlatform::fg_FormatErrno("recv (read from SSL socket)", Error));
-	#endif
+					if (fp_CheckTransportError(EState_ReadFailed))
+						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
+
+					DMibErrorNet("recv (read from SSL socket): End of file encountered");
 				}
 				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
 				{
@@ -1111,7 +1624,6 @@ namespace NMib::NNetwork
 			}
 			else
 			{
-				// Read succeeded, return the number of bytes read.
 				Result.m_nBytes = (umint)Ret;
 			}
 
@@ -1143,10 +1655,16 @@ namespace NMib::NNetwork
 			return mp_pContext->f_GetVerificationFlags();
 		}
 
+		NMib::NSys::CIoSubSystem *f_GetIo() const
+		{
+			return mp_pIo;
+		}
+
 	protected:
 
 		CSSLConnection* mp_pSSL;
 		NStorage::TCSharedPointer<CSSLContext> mp_pContext;
+		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
 		NStr::CStr mp_Hostname;
 		NStr::CStr mp_LastError;
@@ -1156,10 +1674,45 @@ namespace NMib::NNetwork
 
 		CSSLConnectionResult mp_ExpectedResultCallback;
 		NStorage::TCUniquePointer<CSSLContext::CSession> mp_pSession;
+		CSSLTransport mp_Transport;
+		umint mp_nTransferSizeHint = 0;
+
+		bool mp_bShutdownAfterHeld = false; // Defer terminal state until previously authenticated held plaintext drains.
+		bool mp_bReadFailedAfterHeld = false;
 
 		bool mp_bConnected;
 		bool mp_bHandshakeInProgress;
 		bool mp_bUsingTrustDecision;
+
+		void fp_AttachTransport()
+		{
+			BIO *pBio = BIO_new(g_SSLTransportBioMethod->m_pMethod);
+			if (!pBio)
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to create the TLS transport"));
+
+			BIO_set_data(pBio, &mp_Transport);
+			BIO_set_init(pBio, 1);
+
+			// Both directions are the same transport, and each side takes a reference of its own
+			BIO_up_ref(pBio);
+			SSL_set0_rbio(f_GetSSL(), pBio);
+			SSL_set0_wbio(f_GetSSL(), pBio);
+
+			// Retries can use a newly gathered address. Keep partial writes disabled or a short success could wait for a nonexistent would-block edge.
+			SSL_set_mode(f_GetSSL(), SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+		}
+
+		// Carry transport failures out of library frames through return values; throw only after the library call returns.
+		bool fp_CheckTransportError(EState _State)
+		{
+			if (!mp_Transport.f_GetTransportError())
+				return false;
+
+			mp_LastError = mp_Transport.f_GetTransportError();
+			f_SetState(_State);
+
+			return true;
+		}
 
 		bool fp_Process(bool _bAccept)
 		{
@@ -1333,7 +1886,12 @@ namespace NMib::NNetwork
 				if (Error == SSL_ERROR_SYSCALL)
 				{
 					_Result = EAuthenticationResult_Failure;
-					_SystemErrors = fg_GetLastSystemError();
+
+					// The transport reports its own failure; a handshake that ends without one ended because the peer stopped talking
+					_SystemErrors = mp_Transport.f_GetTransportError();
+					if (!_SystemErrors)
+						_SystemErrors = "End of file encountered";
+
 					return true;
 				}
 				else if (Error != SSL_ERROR_WANT_WRITE && Error != SSL_ERROR_WANT_READ)
@@ -1349,6 +1907,17 @@ namespace NMib::NNetwork
 		}
 
 	};
+
+	CSSLConnection::CSendBatch::CSendBatch(CSSLConnection &_Connection)
+		: mp_Connection(_Connection)
+	{
+		mp_Connection.f_SetSendBatching(true);
+	}
+
+	CSSLConnection::CSendBatch::~CSendBatch()
+	{
+		mp_Connection.f_SetSendBatching(false);
+	}
 
 	CSSLConnection::CSSLConnection
 		(
@@ -1396,6 +1965,11 @@ namespace NMib::NNetwork
 				}
 			)
 		;
+	}
+
+	bool CSSLConnection::f_ReceivedShutdown() const
+	{
+		return mp_pInternal->f_ReceivedShutdown();
 	}
 
 	NStr::CStr CSSLConnection::f_GetLastError() const
@@ -1446,25 +2020,338 @@ namespace NMib::NNetwork
 		;
 	}
 
-	bool CSSLConnection::f_GiveSocket(void *_pSocket)
+	// The caller owns the transport socket and must keep it alive until the connection releases it.
+	void CSSLConnection::f_GiveSocket(CSocket *_pSocket)
 	{
-		return fg_RunProtectRegisters
+		fg_RunProtectRegisters
 			(
 				[&]() -> decltype(auto)
 				{
-					return mp_pInternal->f_GiveSocket(_pSocket);
+					mp_pInternal->f_GiveSocket(_pSocket);
 				}
 			)
 		;
 	}
 
-	void* CSSLConnection::f_GetSocket() const
+	// Batch sends only; finish with f_FlushPending because the library considers held records delivered.
+	void CSSLConnection::f_SetSendBatching(bool _bBatching)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_SetSendBatching(_bBatching);
+				}
+			)
+		;
+	}
+
+	void CSSLConnection::f_SetTransferSizeHint(umint _nBytes)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_SetTransferSizeHint(_nBytes);
+				}
+			)
+		;
+	}
+
+	// False permits fallback without consuming plaintext.
+	bool CSSLConnection::f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result)
 	{
 		return fg_RunProtectRegisters
 			(
 				[&]() -> decltype(auto)
 				{
-					return mp_pInternal->f_GetSocket();
+					return mp_pInternal->f_TrySealVectored(_pSpans, _nSpans, o_Result);
+				}
+			)
+		;
+	}
+
+	// False permits fallback without consuming ciphertext.
+	bool CSSLConnection::f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_TryOpenInto(_pData, _nLen, o_Result);
+				}
+			)
+		;
+	}
+
+	bool CSSLConnection::f_SupportsZeroCopy() const
+	{
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo());
+	}
+
+	umint CSSLConnection::f_GetSendDepth() const
+	{
+		return mp_pInternal->f_GetSendDepth();
+	}
+
+	void CSSLConnection::f_SetSendDepth(umint _nDepth)
+	{
+		mp_pInternal->f_SetSendDepth(_nDepth);
+	}
+
+	// Bounds ciphertext retained by late-release sends and sizes the generation ring.
+	void CSSLConnection::f_SetSendWindow(umint _nBytes)
+	{
+		mp_pInternal->f_SetSendWindow(_nBytes);
+	}
+
+	bool CSSLConnection::f_SupportsCompletionIoSend() const
+	{
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo()) && fg_CompletionIoSendEnabled(mp_pInternal->f_GetIo());
+	}
+
+	bool CSSLConnection::f_SupportsCompletionIoReceive() const
+	{
+		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo()) && fg_CompletionIoReceiveEnabled(mp_pInternal->f_GetIo());
+	}
+
+	bool CSSLConnection::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_BeginSend(o_pData, o_nBytes, o_iBuffer);
+				}
+			)
+		;
+	}
+
+	// False while buffer-release notifications block every generation.
+	bool CSSLConnection::f_CanBeginSend() const
+	{
+		return mp_pInternal->f_CanBeginSend();
+	}
+
+	// Ask on a full staging window with more data pending; growth follows measured path capacity.
+	void CSSLConnection::f_ConsiderSendWindowGrowth()
+	{
+		mp_pInternal->f_ConsiderSendWindowGrowth();
+	}
+
+	smint CSSLConnection::f_NextBeginSend() const
+	{
+		return mp_pInternal->f_NextBeginSend();
+	}
+
+	bool CSSLConnection::f_IsSendPinned() const
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_IsSendPinned();
+				}
+			)
+		;
+	}
+
+	umint CSSLConnection::f_GetPendingSendUnpinned() const
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_GetPendingSendUnpinned();
+				}
+			)
+		;
+	}
+
+	umint CSSLConnection::f_GetPendingSend() const
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_GetPendingSend();
+				}
+			)
+		;
+	}
+
+	// Return an unaccepted send buffer without consuming its bytes.
+	void CSSLConnection::f_AbortSend(umint _iBuffer)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_AbortSend(_iBuffer);
+				}
+			)
+		;
+	}
+
+	// Release only after kernel references end; the generation may then be filled again.
+	void CSSLConnection::f_ReleaseSendBuffer(umint _iBuffer)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_ReleaseSendBuffer(_iBuffer);
+				}
+			)
+		;
+	}
+
+	void CSSLConnection::f_SendCompleted(umint _iBuffer, umint _nBytes)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_SendCompleted(_iBuffer, _nBytes);
+				}
+			)
+		;
+	}
+
+	umint CSSLConnection::f_GetFillBuffer() const
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_GetFillBuffer();
+				}
+			)
+		;
+	}
+
+	// Append in stream order, retaining the supplied owner until consumption.
+	void CSSLConnection::f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_AppendCipherSegment(_pData, _nBytes, fg_Move(_pOwner));
+				}
+			)
+		;
+	}
+
+	void CSSLConnection::f_ClearCipherQueue()
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_ClearCipherQueue();
+				}
+			)
+		;
+	}
+
+	// Copy stalled partial records out of charged stream buffers so backpressure can admit their remaining bytes.
+	void CSSLConnection::f_CompactCipherIfStalled()
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_CompactCipherIfStalled();
+				}
+			)
+		;
+	}
+
+	bool CSSLConnection::f_OpenHeld(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_TryOpenInto(_pData, _nLen, o_Result);
+				}
+			)
+		;
+	}
+
+	// Retains kernel-referenced memory independently of the socket, which can die before completion.
+	NStorage::TCSharedPointer<NContainer::CByteVector> CSSLConnection::f_GetPinnedKeepAlive(umint _iBuffer) const
+	{
+		return mp_pInternal->f_GetPinnedKeepAlive(_iBuffer);
+	}
+
+	umint CSSLConnection::f_GetInboundBufferSize() const
+	{
+		return mp_pInternal->f_GetInboundBufferSize();
+	}
+
+	// Once active, submitted sends are the sole writer; synchronous transport flushing must stop.
+	void CSSLConnection::f_SetCompletionSend(bool _bCompletionSend)
+	{
+		mp_pInternal->f_SetCompletionSend(_bCompletionSend);
+	}
+
+	bool CSSLConnection::f_IsCompletionSend() const
+	{
+		return mp_pInternal->f_IsCompletionSend();
+	}
+
+	// Once active, the standing receive stream is the sole reader; synchronous fills must stop.
+	void CSSLConnection::f_SetCompletionReceive(bool _bCompletionReceive)
+	{
+		mp_pInternal->f_SetCompletionReceive(_bCompletionReceive);
+	}
+
+	void CSSLConnection::f_FailReceive(NStr::CStr _Error)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_FailReceive(fg_Move(_Error));
+				}
+			)
+		;
+	}
+
+	void CSSLConnection::f_FailSend(NStr::CStr _Error)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pInternal->f_FailSend(fg_Move(_Error));
+				}
+			)
+		;
+	}
+
+	bool CSSLConnection::f_IsSendBufferFull() const
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_IsSendBufferFull();
+				}
+			)
+		;
+	}
+
+	// Flush records retained after a stalled send; the library will not offer them again.
+	CSocketOperationResult CSSLConnection::f_FlushPending()
+	{
+		return fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					return mp_pInternal->f_FlushPending();
 				}
 			)
 		;

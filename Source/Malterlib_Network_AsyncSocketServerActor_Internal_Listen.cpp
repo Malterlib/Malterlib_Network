@@ -13,6 +13,7 @@ namespace NMib::NNetwork::NAsyncSocket
 			NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
 			, umint _MaxMesageSize
 			, umint _FragmentationSize
+			, umint _SendWindowBytes
 			, fp64 _Timeout
 			, NStorage::TCSharedPointer<FAsyncSocketUpgradeCheckFactory> const &_pCheckUpgradeFactory
 			, umint _ListenID
@@ -21,6 +22,7 @@ namespace NMib::NNetwork::NAsyncSocket
 		, mp_Server(_Server)
 		, mp_MaxMessageSize(_MaxMesageSize)
 		, mp_FragmentationSize(_FragmentationSize)
+		, mp_SendWindowBytes(_SendWindowBytes)
 		, mp_pCheckUpgradeFactory(_pCheckUpgradeFactory)
 		, mp_ListenID(_ListenID)
 	{
@@ -39,7 +41,24 @@ namespace NMib::NNetwork::NAsyncSocket
 	NConcurrency::TCFuture<void> CListenActor::fp_Destroy()
 	{
 		if (mp_pSocket)
+		{
+			// Wait for asynchronous deregistration before listener destruction completes.
+			NConcurrency::TCPromise<void> ClosedPromise;
+			auto Closed = ClosedPromise.f_Future();
+
+			mp_pSocket->f_CloseAsync
+				(
+					[ClosedPromise = fg_Move(ClosedPromise)]() mutable
+					{
+						ClosedPromise.f_SetResult();
+					}
+				)
+			;
 			mp_pSocket.f_Clear();
+
+			co_await fg_Move(Closed);
+		}
+
 		co_return {};
 	}
 
@@ -57,15 +76,28 @@ namespace NMib::NNetwork::NAsyncSocket
 		{
 			while (true)
 			{
+				// Bind accepts through the actor's manager so loop and connection lifetimes agree.
+				auto Binding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+
 				try
 				{
+					NConcurrency::CIoLoopCreateScope IoLoopScope(Binding);
+
 					FAsyncSocketUpgradeCheck fEmptyCheckUpgrade;
 
-					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor(fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_Timeout, fg_Move(fEmptyCheckUpgrade)));
-					NConcurrency::TCWeakActor<CAsyncSocketActor> WeakConnectionActor = ConnectionActor;
+					NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor
+						(
+							fg_Construct<CAsyncSocketActor>(false, mp_MaxMessageSize, mp_FragmentationSize, mp_SendWindowBytes, mp_Timeout, fg_Move(fEmptyCheckUpgrade))
+						)
+					;
+
+					// Seed first-job placement on the bound loop queue without pinning later scheduling.
+					if (Binding.m_pLoop)
+						ConnectionActor->f_SetInitialQueue(Binding.m_iQueue);
+
 					NStorage::TCUniquePointer<NNetwork::ICSocket> pAcceptedSocket = mp_pSocket->f_Accept
 						(
-							[WeakConnectionActor](NNetwork::ENetTCPState _StateAdded)
+							[WeakConnectionActor = ConnectionActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
 							{
 								auto ConnectionActor = WeakConnectionActor.f_Lock();
 								if (ConnectionActor)

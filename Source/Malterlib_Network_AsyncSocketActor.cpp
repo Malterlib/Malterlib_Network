@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <Mib/Concurrency/ConcurrencyManager>
+#include <Mib/Concurrency/LogError>
 #include <Mib/Concurrency/Actor/Timer>
 #include <Mib/Concurrency/ActorSubscription>
 #include <Mib/Container/PagedByteVector>
 #include <Mib/Cryptography/Exception>
+#include <Mib/Concurrency/IoCompletionOpTracker>
 
 #include <deque>
 
@@ -28,12 +30,6 @@ namespace NMib::NNetwork
 			EState_None
 			, EState_Connected
 			, EState_Disconnected
-		};
-
-		enum
-		{
-			EIncomingPageSize = 2048
-			, ECopySmallDeliveryThreshold = 1024
 		};
 
 		enum EIncomingDataResult
@@ -83,28 +79,43 @@ namespace NMib::NNetwork
 			NStr::CStr m_Message;
 			EAsyncSocketCloseOrigin m_Origin;
 		};
+
+		constexpr static umint gc_IncomingPageSize = 2048;
+		constexpr static umint gc_CopySmallDeliveryThreshold = 1024;
 	}
 
 	struct CAsyncSocketActor::CInternal
 	{
+		// Indexed send reservations support out-of-order reports. Bounded gathers/windows fit 32-bit counts; free entries form an index list.
+		struct CSendReservation
+		{
+			static constexpr uint32 mc_iNone = TCLimitsInt<uint32>::mc_Max;
+
+			uint32 m_nBytes = 0;
+			uint32 m_iNextFree = mc_iNone;
+		};
+
 		CInternal
 			(
 				CAsyncSocketActor *_pThis
 				, bool _bClient
 				, umint _MaxMessageSize
 				, umint _FragmentationSize
+				, umint _SendWindowBytes
 				, fp64 _Timeout
 				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
 			)
 			: m_pThis(_pThis)
-			, m_IncomingData(EIncomingPageSize)
-			, m_UpgradeCheckData(EIncomingPageSize)
+			, m_IncomingData(gc_IncomingPageSize)
+			, m_UpgradeCheckData(gc_IncomingPageSize)
 			, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
 			, m_bClient(_bClient)
 			, m_MaxMessageSize(_MaxMessageSize)
-			, m_FramentationSize(_FragmentationSize)
+			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30)) // Bounded so every gather size derived from it stays well inside umint, on 32 bit platforms included
 			, m_Timeout(_Timeout)
 		{
+			m_nSendWindowBytes = fg_Min(_SendWindowBytes, gc_SocketMaxSendWindowBytes);
+			f_SizeSendReservations();
 		}
 
 		~CInternal()
@@ -127,8 +138,9 @@ namespace NMib::NNetwork
 
 		void f_ShutdownDone(NStr::CStr const &_Error);
 
-		void f_HandleDataMessage(NStorage::TCSharedPointer<NContainer::CIOByteVector const> &&_pData);
+		void f_HandleDataMessage(NContainer::CSharedByteVector &&_Data);
 		void f_DeliverReceiveBuffer();
+		bool f_HasBufferedReceive() const;
 		EIncomingDataResult f_CheckIncomingData();
 		EIncomingDataResult f_HandleIncomingData(uint8 const *_pData, umint _nBytes);
 		void f_MoveUpgradeCheckDataToIncoming(umint _nBytes);
@@ -138,19 +150,38 @@ namespace NMib::NNetwork
 		COutgoingMessage &f_QueueMessage(NContainer::CSharedByteVector const &_Data, uint32 _Priority);
 		void f_WriteQueuedMessages();
 
+		NNetwork::ICSocketCompletionIo *f_GetCompletionIo();
+		NNetwork::ICSocketCompletionIo *f_GetCompletionIoSend();
+		NNetwork::ICSocketCompletionIo *f_GetCompletionIoReceive();
+
+		umint f_GatherSendSpans(NSys::CIoSpan *o_pSpans, umint &o_nSpans, NContainer::TCVector<NContainer::CSharedByteVector> &o_KeepAlives);
+		void f_ConsumeSentBytes(umint _nSentBytes);
+		void f_ReleaseTransferState();
+		void f_TryReleaseDeferredTransferState();
+
 		void f_NotifyClose(EAsyncSocketStatus _Status, NStr::CStr const &_Message, EAsyncSocketCloseOrigin _Origin);
+
+		umint f_SendWindowStartBytes() const;
+		umint f_SendWindowBytes() const;
+		void f_SizeSendReservations();
+		void f_ResetSendReservations();
+
+		// A continuation carries no reservation of its own
+		static constexpr umint mc_iNoReservation = umint(-1);
 
 		CAsyncSocketActor *m_pThis = nullptr;
 		NStorage::TCUniquePointer<NNetwork::ICSocket> m_pSocket;
+		NMib::NSys::CIoSubSystem *m_pIo = &NMib::NSys::fg_IoSubSystem();
+
 		NMib::NNetwork::CNetAddress m_PeerAddress;
 
 		EState m_State = EState_None;
+		uint32 m_iFreeSendReservation = CSendReservation::mc_iNone;
 
 		NContainer::CPagedByteVector m_IncomingData;
 		NContainer::CPagedByteVector m_UpgradeCheckData;
-
-		NContainer::CIOByteVector m_ReceiveBuffer; // Filled directly and moved to consumers without copying payload.
-		umint m_nReceiveBufferFill = 0;
+		NContainer::CIOByteVector m_ReceiveData; // Actor-thread delivery buffer, separate from kernel-owned receive buffers.
+		umint m_nReceiveFill = 0;
 		FAsyncSocketUpgradeCheck m_fCheckUpgrade;
 		NContainer::TCLinkedList<COutgoingSegment> m_OutgoingSegments;
 		uint64 m_nOutgoingQueuedBytes = 0; // Logical bytes can exceed 32-bit allocation size when the same payload is queued repeatedly.
@@ -164,7 +195,7 @@ namespace NMib::NNetwork
 		NContainer::TCLinkedList<NFunction::TCFunction<void (NStr::CStr const &_Error)>> m_OnShutdown;
 
 		CAsyncSocketCallbacks m_Callbacks;
-		NContainer::TCVector<NStorage::TCSharedPointer<NContainer::CIOByteVector const>> m_DeferredOnReciveData;
+		NContainer::TCVector<NContainer::CSharedByteVector> m_DeferredOnReciveData;
 		CNotifyClose m_DeferredNotifyClose;
 
 		NConcurrency::TCPromise<CFinishConnectionResult> m_FinishConnectionPromise;
@@ -173,8 +204,10 @@ namespace NMib::NNetwork
 		NConcurrency::CActorSubscription m_TimeoutTimerSubscription;
 		NTime::CStopwatch m_TimeoutReceivedData;
 		NTime::CStopwatch m_TimeoutSentData;
-		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
-		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
+		NStorage::TCSharedPointer<NConcurrency::CIoCompletionOpTracker> m_pOpTracker;
+		NNetwork::ICSocketCompletionIo *m_pCompletionIo = nullptr; // Fixed at activation; use it to resolve in-flight work even after new submissions are disabled.
+
+		NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> m_pReceiveBackpressure;
 
 		fp64 m_Timeout = 0.0;
 		umint m_TimeoutTimerSubscriptionSequence = 0;
@@ -183,22 +216,41 @@ namespace NMib::NNetwork
 		umint m_MaxMessageSize = 0;
 		umint m_FramentationSize = 0;
 
+		umint m_nSendOpsInFlight = 0;
+		umint m_nOutgoingSubmitted = 0; // Reserved plaintext excluded from later gathers until completion.
+
+		NContainer::TCVector<CSendReservation> m_SendReservations; // Preallocated for the window; indexed free list avoids per-send scans or growth.
+		umint m_nSendReservationsInUse = 0;
+		umint m_nMaxSendReservations = 8;
+		umint m_nSendBytesUnreleased = 0; // Accepted bytes whose release callback has not run.
+		umint m_nSendWindowBytes = 0; // Zero selects an eight-frame ceiling.
+
+		NNetwork::ENetTCPState m_DeferredTCPState = NNetwork::ENetTCPState_None;
+		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
+		NNetwork::ENetTCPState m_DeferredCloseStates = NNetwork::ENetTCPState_None; // Held until earlier stream bytes, including peer close frames, have been delivered.
+
 		bool m_bClient = false;
 		bool m_bInProcessState = false;
 		bool m_bOnCloseCalled = false;
 		bool m_bDeferringCallbacks = true;
 		bool m_bUpgradeRequired = false;
 		bool m_bShutdownCalled = false;
+		bool m_bCompletionIo = false;
+		bool m_bReceiveStreamActive = false; // Close states wait for the stream's one terminal segment.
+		bool m_bReceiveStreamEnded = false;
+
+		bool m_bDeferredShutdownCleanup = false;
 #if DMibConfig_Tests_Enable
 		bool m_bDebugNoProcessing = false;
+		NContainer::TCVector<NSys::CIoStreamSegment> m_DebugHeldSegments; // Held test segments remain charged to receive backpressure.
 #endif
 #if DMibEnableSafeCheck > 0
 		bool m_bDestroyed = false;
 #endif
 	};
 
-	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
-		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _Timeout, fg_Move(_fCheckUpgrade)))
+	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _SendWindowBytes, _Timeout, fg_Move(_fCheckUpgrade)))
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.f_SetupTimeout();
@@ -206,6 +258,30 @@ namespace NMib::NNetwork
 
 	CAsyncSocketActor::~CAsyncSocketActor()
 	{
+	}
+
+	// Use the cached interface to resolve in-flight work even after new submissions stop.
+	NNetwork::ICSocketCompletionIo *CAsyncSocketActor::CInternal::f_GetCompletionIo()
+	{
+		if (!m_bCompletionIo || !m_pSocket)
+			return nullptr;
+
+		return m_pCompletionIo;
+	}
+
+	// New submissions only; resolve existing operations through the cached interface.
+	NNetwork::ICSocketCompletionIo *CAsyncSocketActor::CInternal::f_GetCompletionIoSend()
+	{
+		auto *pCompletionIo = f_GetCompletionIo();
+
+		return pCompletionIo && pCompletionIo->f_SupportsCompletionSend() ? pCompletionIo : nullptr;
+	}
+
+	NNetwork::ICSocketCompletionIo *CAsyncSocketActor::CInternal::f_GetCompletionIoReceive()
+	{
+		auto *pCompletionIo = f_GetCompletionIo();
+
+		return pCompletionIo && pCompletionIo->f_SupportsCompletionReceive() ? pCompletionIo : nullptr;
 	}
 
 	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueMessage
@@ -252,6 +328,161 @@ namespace NMib::NNetwork
 		}
 	}
 
+	umint CAsyncSocketActor::CInternal::f_SendWindowStartBytes() const
+	{
+		return fg_Max(m_FramentationSize, umint(4096)) + gc_SocketFramingMargin;
+	}
+
+	umint CAsyncSocketActor::CInternal::f_SendWindowBytes() const
+	{
+		// Saturating: eight frames of a fragmentation near a 32 bit umint's limit would wrap
+		return m_nSendWindowBytes ? m_nSendWindowBytes : 8 * fg_Min(f_SendWindowStartBytes(), TCLimitsInt<umint>::mc_Max / 8);
+	}
+
+	// Preallocate the bounded window's reservations so sends never grow the pool; a raised window extends the free list here.
+	void CAsyncSocketActor::CInternal::f_SizeSendReservations()
+	{
+		umint nFrameBytes = f_SendWindowStartBytes();
+		m_nMaxSendReservations = fg_Max(umint(8), f_SendWindowBytes() / nFrameBytes + 2);
+		umint nEntries = m_SendReservations.f_GetLen();
+		if (nEntries >= m_nMaxSendReservations)
+			return;
+
+		m_SendReservations.f_SetLen(m_nMaxSendReservations);
+		CSendReservation *pReservations = m_SendReservations.f_GetArray();
+		for (CSendReservation *pReservation = pReservations + nEntries, *pEnd = pReservations + m_nMaxSendReservations; pReservation != pEnd; ++pReservation)
+		{
+			pReservation->m_iNextFree = m_iFreeSendReservation;
+			m_iFreeSendReservation = uint32(pReservation - pReservations);
+		}
+	}
+
+	// Tearing the connection down gives every reservation back at once; operations still in flight then find their own already accounted for
+	void CAsyncSocketActor::CInternal::f_ResetSendReservations()
+	{
+		m_iFreeSendReservation = CSendReservation::mc_iNone;
+		CSendReservation *pReservations = m_SendReservations.f_GetArray();
+		for (CSendReservation *pReservation = pReservations + m_SendReservations.f_GetLen(); pReservation != pReservations;)
+		{
+			--pReservation;
+			pReservation->m_nBytes = 0;
+			pReservation->m_iNextFree = m_iFreeSendReservation;
+			m_iFreeSendReservation = uint32(pReservation - pReservations);
+		}
+
+		m_nSendReservationsInUse = 0;
+		m_nSendBytesUnreleased = 0;
+	}
+
+	umint CAsyncSocketActor::CInternal::f_GatherSendSpans(NSys::CIoSpan *o_pSpans, umint &o_nSpans, NContainer::TCVector<NContainer::CSharedByteVector> &o_KeepAlives)
+	{
+		umint nSpans = 0;
+		umint nGatheredBytes = 0;
+
+		// Keep one full transport frame in a gather while retaining a useful minimum batch size.
+		umint nMaxGatherBytes = fg_Max(umint(256 * 1024), m_FramentationSize + gc_SocketFramingMargin);
+
+		// Skip bytes reserved by earlier operations so later gathers cannot submit them twice.
+		umint nSkip = m_nOutgoingSubmitted;
+
+		for (auto &Segment : m_OutgoingSegments)
+		{
+			umint nAvailable = Segment.m_Data.f_GetLen() - Segment.m_iSent;
+			if (nSkip >= nAvailable)
+			{
+				nSkip -= nAvailable;
+				continue;
+			}
+
+			umint iStart = Segment.m_iSent + nSkip;
+			nSkip = 0;
+
+			// Bound spans for scalar fallbacks and SSL's signed transfer length.
+			umint nSegmentBytes = fg_Min(Segment.m_Data.f_GetLen() - iStart, nMaxGatherBytes - nGatheredBytes);
+
+			o_pSpans[nSpans].m_pData = Segment.m_Data.f_GetArray() + iStart;
+			o_pSpans[nSpans].m_nBytes = nSegmentBytes;
+			nGatheredBytes += nSegmentBytes;
+			++nSpans;
+
+			// Keep payload owners until buffer release, which can follow completion and queue retirement.
+			o_KeepAlives.f_Insert(Segment.m_Data);
+			if (nSpans >= NNetwork::ICSocket::mc_MaxSendSpans || nGatheredBytes >= nMaxGatherBytes)
+				break;
+		}
+
+		o_nSpans = nSpans;
+
+		return nGatheredBytes;
+	}
+
+	void CAsyncSocketActor::CInternal::f_ConsumeSentBytes(umint _nSentBytes)
+	{
+		uint64 PrevSent = m_nSentBytes;
+		m_nSentBytes += _nSentBytes;
+
+		while (!m_OutgoingDataPromises.empty())
+		{
+			auto &Promise = m_OutgoingDataPromises.front();
+			uint64 Diff = Promise.m_Position - PrevSent;
+			if (Diff <= _nSentBytes)
+			{
+				Promise.m_Promise->f_SetResult();
+				Promise.m_Promise.f_Clear();
+				m_OutgoingDataPromises.pop_front();
+				continue;
+			}
+			break;
+		}
+
+		m_nOutgoingQueuedBytes -= _nSentBytes;
+		umint nConsumed = _nSentBytes;
+		while (nConsumed)
+		{
+			auto &Head = m_OutgoingSegments.f_GetFirst();
+			umint nHeadRemaining = Head.m_Data.f_GetLen() - Head.m_iSent;
+			umint nThis = fg_Min(nConsumed, nHeadRemaining);
+			Head.m_iSent += nThis;
+			nConsumed -= nThis;
+
+			if (Head.m_iSent == Head.m_Data.f_GetLen())
+				m_OutgoingSegments.f_Remove(Head);
+		}
+	}
+
+	void CAsyncSocketActor::CInternal::f_ReleaseTransferState()
+	{
+		m_OutgoingSegments.f_Clear();
+		m_nOutgoingQueuedBytes = 0;
+		m_nOutgoingSubmitted = 0;
+		f_ResetSendReservations();
+		m_ReceiveData.f_Clear();
+		m_nReceiveFill = 0;
+#if DMibConfig_Tests_Enable
+		m_DebugHeldSegments.f_Clear();
+#endif
+	}
+
+	void CAsyncSocketActor::CInternal::f_TryReleaseDeferredTransferState()
+	{
+		if (m_nSendOpsInFlight)
+			return;
+
+		// Take deferred close states before reporting them; reporting can reenter disconnect and must not deliver them twice.
+		NNetwork::ENetTCPState DeferredStates = m_DeferredCloseStates;
+		m_DeferredCloseStates = NNetwork::ENetTCPState_None;
+
+		if (m_bDeferredShutdownCleanup)
+		{
+			m_bDeferredShutdownCleanup = false;
+			f_ReleaseTransferState();
+		}
+
+		// Last, because it can disconnect and leave nothing here worth touching
+		if (DeferredStates)
+			m_pThis->fp_ProcessState(DeferredStates);
+	}
+
 #if DMibConfig_Tests_Enable
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_DebugStopProcessing(fp64 _Timeout)
 	{
@@ -275,45 +506,93 @@ namespace NMib::NNetwork
 		Internal.m_bDestroyed = true;
 #endif
 
+		// Destroy aborts outstanding output so an unresponsive peer cannot hold the buffer-release fence through retransmission timeout.
+		// Callers needing graceful closure must shut down and drain before destruction.
+		if (Internal.m_pSocket)
+			Internal.m_pSocket->f_SetAbortOnClose();
+
+		if (Internal.m_pOpTracker)
+		{
+			// Close cancels kernel work; retain payloads and actor state until the operation tracker drains across this await.
+			Internal.m_pSocket.f_Clear();
+
+			auto &Tracker = *Internal.m_pOpTracker;
+			auto DrainFuture = Tracker.m_DrainPromise.f_CreateNew().f_Future();
+			uint32 Previous = Tracker.m_State.f_FetchOr(NConcurrency::CIoCompletionOpTracker::mc_DrainFlag, NAtomic::gc_MemoryOrder_SequentiallyConsistent);
+			if (!Previous)
+				(*Tracker.m_DrainPromise).f_SetResult();
+
+			co_await fg_Move(DrainFuture);
+		}
+
 		Internal.m_PendingMessages.f_Clear();
 		Internal.m_OutgoingDataPromises.clear();
+		Internal.m_OutgoingSegments.f_Clear();
+		Internal.m_nOutgoingQueuedBytes = 0;
 		if (Internal.m_ClosePromise)
 		{
 			Internal.m_ClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
 			Internal.m_ClosePromise.f_Clear();
 		}
 
-		return g_Void;
+		co_return {};
 	}
 
 	NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname)
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
+
 		if (!_SocketFactory)
 			co_return DMibErrorInstance("Socket upgrade requires a socket factory");
 
 		auto &Internal = *mp_pInternal;
 		if (!Internal.m_pSocket || Internal.m_State != EState_Connected)
 			co_return DMibErrorInstance("Socket upgrade requires a connected socket");
+
 		if (!Internal.m_bUpgradeRequired)
-			co_return DMibErrorInstance("Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return EAsyncSocketUpgradeCheckResult_Upgrade");
-		if (!Internal.m_IncomingData.f_IsEmpty() || !Internal.m_UpgradeCheckData.f_IsEmpty() || Internal.m_nReceiveBufferFill || Internal.m_nOutgoingQueuedBytes || !Internal.m_PendingMessages.f_IsEmpty() || !Internal.m_OutgoingDataPromises.empty())
+		{
+			co_return DMibErrorInstance
+				(
+					"Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or "
+					"CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return EAsyncSocketUpgradeCheckResult_Upgrade"
+				)
+			;
+		}
+
+		if
+		(
+			!Internal.m_IncomingData.f_IsEmpty()
+			|| !Internal.m_UpgradeCheckData.f_IsEmpty()
+			|| Internal.f_HasBufferedReceive()
+			|| Internal.m_nOutgoingQueuedBytes
+			|| !Internal.m_PendingMessages.f_IsEmpty()
+			|| !Internal.m_OutgoingDataPromises.empty()
+		)
+		{
 			co_return DMibErrorInstance("Socket upgrade requires empty incoming and outgoing buffers");
+		}
+
 		if (Internal.m_UpgradeSocketPromise)
 			co_return DMibErrorInstance("Socket upgrade already in progress");
 
 		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _SocketFactory(_Hostname);
 		Internal.m_bUpgradeRequired = false;
-		auto DeferredTCPState = Internal.m_DeferredTCPState;
-		Internal.m_DeferredTCPState = NNetwork::ENetTCPState_None;
-		void *pSocketHandle = Internal.m_pSocket->f_GiveUpForInherit();
+
+		auto DeferredTCPState = fg_Exchange(Internal.m_DeferredTCPState, NNetwork::ENetTCPState_None);
+
+		// Do not activate completion I/O while an upgrade can still replace the transport.
+		DMibFastCheck(!Internal.m_bCompletionIo && !Internal.m_bReceiveStreamActive && !Internal.m_nSendOpsInFlight);
+
+		// Move the platform socket without deregistering; an upgrade retains its loop and needs no inheritable handle.
+		NConcurrency::TCActor<CAsyncSocketActor> ThisActor = fg_ThisActor(this);
+
+		NNetwork::CSocket Socket = Internal.m_pSocket->f_GiveUpSocket();
 		Internal.m_pSocket.f_Clear();
 
-		NConcurrency::TCActor<CAsyncSocketActor> ThisActor = fg_ThisActor(this);
-		pNewSocket->f_InheritHandle
+		pNewSocket->f_AdoptSocket
 			(
-				pSocketHandle
+				fg_Move(Socket)
 				, [WeakThis = ThisActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
 				{
 					auto This = WeakThis.f_Lock();
@@ -325,10 +604,19 @@ namespace NMib::NNetwork
 		;
 
 		Internal.m_pSocket = fg_Move(pNewSocket);
+
+		if (Internal.m_pSocket)
+		{
+			Internal.m_pSocket->f_SetTransferSizeHint(fg_Max(Internal.m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+			Internal.m_pSocket->f_SetSendWindow(Internal.f_SendWindowBytes(), Internal.m_nSendWindowBytes != 0);
+		}
+
 		Internal.m_State = EState_None;
 
 		auto Future = Internal.m_UpgradeSocketPromise.f_CreateNew().f_Future();
+
 		fp_CheckHandshake(Internal);
+
 		if (DeferredTCPState)
 			fp_ProcessState(DeferredTCPState);
 
@@ -369,11 +657,13 @@ namespace NMib::NNetwork
 		m_PendingMessages.f_Clear();
 		m_OutgoingDataPromises.clear();
 
-		// Release retained payloads at disconnect; the actor can remain referenced indefinitely.
-		m_OutgoingSegments.f_Clear();
-		m_nOutgoingQueuedBytes = 0;
-		m_ReceiveBuffer.f_Clear();
-		m_nReceiveBufferFill = 0;
+		// Disconnected actors may remain referenced; release buffers now unless kernel operations still pin them.
+		if (m_nSendOpsInFlight)
+			m_bDeferredShutdownCleanup = true;
+		else
+			f_ReleaseTransferState();
+
+		f_StopTimeout();
 
 		for (auto &fOnShutdown : m_OnShutdown)
 			fOnShutdown(_Error);
@@ -388,7 +678,8 @@ namespace NMib::NNetwork
 		{
 			auto &Internal = *mp_pInternal;
 
-			if (!Internal.m_pSocket || Internal.m_State == EState_Disconnected)
+			// A disconnected socket can still be draining before shutdown or waiting for peer FIN. Destroying it now would reset queued output.
+			if (!Internal.m_pSocket)
 			{
 				CAsyncSocketActor::CCloseInfo CloseInfo;
 				CloseInfo.m_Status = EAsyncSocketStatus_AlreadyClosed;
@@ -540,6 +831,9 @@ namespace NMib::NNetwork
 		{
 			if (_bFatal)
 			{
+				// Fatal closure aborts retransmission so kernel-held pages release promptly.
+				if (Internal.m_pSocket)
+					Internal.m_pSocket->f_SetAbortOnClose();
 				Internal.m_pSocket.f_Clear();
 				Internal.f_ShutdownDone(_Reason);
 			}
@@ -548,7 +842,8 @@ namespace NMib::NNetwork
 
 		if (Internal.m_State == EState_Connected)
 		{
-			if (!_bFatal)
+			// Delay write shutdown until queued and in-flight sends drain.
+			if (!_bFatal && !Internal.m_nOutgoingQueuedBytes && !Internal.m_nSendOpsInFlight)
 				fp_Shutdown();
 			if (_Origin == EAsyncSocketCloseOrigin_Remote)
 			{
@@ -594,6 +889,8 @@ namespace NMib::NNetwork
 			}
 			Internal.f_NotifyClose(_Status, _Reason, _Origin);
 
+			if (Internal.m_pSocket)
+				Internal.m_pSocket->f_SetAbortOnClose();
 			Internal.m_pSocket.f_Clear();
 			Internal.f_ShutdownDone(_Reason);
 		}
@@ -604,7 +901,18 @@ namespace NMib::NNetwork
 			Internal.m_OutgoingDataPromises.clear();
 
 		Internal.m_State = EState_Disconnected;
-		Internal.f_StopTimeout();
+
+		// Keep the timeout while disconnected output drains; a peer that stops reading must not retain backlog promises forever.
+		if (!Internal.m_pSocket || (!Internal.m_nOutgoingQueuedBytes && !Internal.m_nSendOpsInFlight))
+			Internal.f_StopTimeout();
+
+		// Local closure ends stream-based close deferral; route reentry through active state processing.
+		if (Internal.m_DeferredCloseStates)
+		{
+			NNetwork::ENetTCPState DeferredStates = Internal.m_DeferredCloseStates;
+			Internal.m_DeferredCloseStates = NNetwork::ENetTCPState_None;
+			fp_ProcessState(DeferredStates);
+		}
 	}
 
 	void CAsyncSocketActor::fp_Shutdown()
@@ -616,6 +924,9 @@ namespace NMib::NNetwork
 			{
 				Internal.m_pSocket->f_Shutdown();
 				Internal.m_bShutdownCalled = true;
+
+				// A TLS socket under completion sends leaves its close alert for the drain to carry
+				fp_DrainSocketOutput();
 			}
 		}
 		catch (NCryptography::CExceptionCryptography const &_Error)
@@ -644,25 +955,39 @@ namespace NMib::NNetwork
 			return;
 #endif
 
+		// Choose completion I/O per direction; readiness sends still need write edges to finish short transfers.
+		if (auto *pCompletionIoSend = Internal.f_GetCompletionIoSend())
+		{
+			// Staging may accept new sends while earlier work remains in flight; its gate bounds buffering and loop ordering preserves the stream.
+			while (Internal.m_pSocket->f_IsValid() && pCompletionIoSend->f_CanSubmitSend() && Internal.m_nOutgoingQueuedBytes > Internal.m_nOutgoingSubmitted)
+			{
+				umint nBefore = Internal.m_nOutgoingSubmitted;
+				fp_SubmitSendOp();
+				if (Internal.m_nOutgoingSubmitted == nBefore)
+					break;
+
+				if (Internal.m_State == EState_Connected)
+					Internal.f_WriteQueuedMessages();
+			}
+
+			if (Internal.m_State == EState_Disconnected && !Internal.m_nOutgoingQueuedBytes && !Internal.m_nSendOpsInFlight)
+				fp_Shutdown();
+
+			fp_DrainSocketOutput();
+
+			return;
+		}
+
 		bool bDidSend = false;
 		while (Internal.m_nOutgoingQueuedBytes && Internal.m_pSocket->f_IsValid())
 		{
 			NSys::CIoSpan Spans[NNetwork::ICSocket::mc_MaxSendSpans];
 			umint nSpans = 0;
-			umint nGatheredBytes = 0;
-			constexpr umint c_MaxGatherBytes = 256 * 1024;
-			for (auto &Segment : Internal.m_OutgoingSegments)
-			{
-				// Bound each span for scalar fallbacks and SSL's signed transfer length.
-				umint nSegmentBytes = fg_Min(Segment.m_Data.f_GetLen() - Segment.m_iSent, c_MaxGatherBytes - nGatheredBytes);
+			NContainer::TCVector<NContainer::CSharedByteVector> KeepAlives;
 
-				Spans[nSpans].m_pData = Segment.m_Data.f_GetArray() + Segment.m_iSent;
-				Spans[nSpans].m_nBytes = nSegmentBytes;
-				nGatheredBytes += nSegmentBytes;
-				++nSpans;
-				if (nSpans >= NNetwork::ICSocket::mc_MaxSendSpans || nGatheredBytes >= c_MaxGatherBytes)
-					break;
-			}
+			umint nGatheredBytes = Internal.f_GatherSendSpans(Spans, nSpans, KeepAlives);
+			if (!nGatheredBytes)
+				break;
 
 			umint SentBytes = 0;
 			bool bStuffed = false;
@@ -673,6 +998,13 @@ namespace NMib::NNetwork
 				bDidSend = true;
 				NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_SendVectored(Spans, nSpans);
 				DMibLog(DebugVerbose3, " ++++ {} Sending {} resulted in {} sent", !Internal.m_bClient, nGatheredBytes, Result.m_nBytes);
+#if DMibConfig_IoDebug_Enable
+				if (auto *pStats = NNetwork::fg_NetIoStats())
+				{
+					pStats->m_nSendReadinessCalls.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+					pStats->m_nSendReadinessBytes.f_FetchAdd(Result.m_nBytes, NAtomic::gc_MemoryOrder_Relaxed);
+				}
+#endif
 
 				CombinedResults += Result;
 
@@ -690,46 +1022,22 @@ namespace NMib::NNetwork
 				fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket exception: {}", _Error.f_GetErrorStr()), true, EAsyncSocketCloseOrigin_Remote);
 				bDisconnected = true;
 			}
+
 			if (CombinedResults.m_bSentNetwork)
 				Internal.f_OnSentData();
+
 			if (CombinedResults.m_bReceivedNetwork)
 				Internal.f_OnReceivedData();
 
-			uint64 PrevSent = Internal.m_nSentBytes;
-			Internal.m_nSentBytes += SentBytes;
-
-			while (!Internal.m_OutgoingDataPromises.empty())
-			{
-				auto &Promise = Internal.m_OutgoingDataPromises.front();
-				uint64 Diff = Promise.m_Position - PrevSent;
-				if (Diff <= SentBytes)
-				{
-					Promise.m_Promise->f_SetResult();
-					Promise.m_Promise.f_Clear();
-					Internal.m_OutgoingDataPromises.pop_front();
-					continue;
-				}
-				break;
-			}
-
-			Internal.m_nOutgoingQueuedBytes -= SentBytes;
-			umint nConsumed = SentBytes;
-			while (nConsumed)
-			{
-				auto &Head = Internal.m_OutgoingSegments.f_GetFirst();
-				umint nHeadRemaining = Head.m_Data.f_GetLen() - Head.m_iSent;
-				umint nThis = fg_Min(nConsumed, nHeadRemaining);
-				Head.m_iSent += nThis;
-				nConsumed -= nThis;
-
-				if (Head.m_iSent == Head.m_Data.f_GetLen())
-					Internal.m_OutgoingSegments.f_Remove(Head);
-			}
+			if (SentBytes)
+				Internal.f_ConsumeSentBytes(SentBytes);
 
 			if (bDisconnected)
 				break;
+
 			if (bStuffed)
 				break;
+
 			if (Internal.m_State == EState_Connected)
 				Internal.f_WriteQueuedMessages();
 		}
@@ -746,6 +1054,626 @@ namespace NMib::NNetwork
 		if (Internal.m_State == EState_Disconnected && !Internal.m_nOutgoingQueuedBytes)
 			fp_Shutdown();
 	}
+
+	void CAsyncSocketActor::fp_TryActivateCompletionIo()
+	{
+		auto &Internal = *mp_pInternal;
+		if (Internal.m_bCompletionIo)
+			return;
+
+		// Activate only after upgrade sniffing ends; in-flight operations would pin a transport being replaced.
+		if (Internal.m_State != EState_Connected || Internal.m_fCheckUpgrade || Internal.m_bUpgradeRequired)
+			return;
+
+		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+			return;
+
+		auto *pCompletionIo = Internal.m_pSocket->f_GetCompletionIo();
+		if (!pCompletionIo)
+			return;
+
+		Internal.m_pCompletionIo = pCompletionIo;
+		Internal.m_bCompletionIo = true;
+		Internal.m_pOpTracker = fg_Construct();
+
+		// Reject synchronous entry points before submitting the first operation.
+		pCompletionIo->f_OnCompletionActivated();
+
+		DMibLog(DebugVerbose3, " ++++ {} Completion transfers active", !Internal.m_bClient);
+
+		// Start receive delivery at activation even for send-only users; no read readiness will drive it afterwards.
+		fp_StartReceiveStream();
+	}
+
+	void CAsyncSocketActor::fp_StartReceiveStream()
+	{
+		auto &Internal = *mp_pInternal;
+
+		// Never restart after the stream's terminal segment, even if a late readiness edge arrives.
+		if (Internal.m_bReceiveStreamActive || Internal.m_bReceiveStreamEnded)
+			return;
+
+		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+			return;
+
+		// Graceful local close must keep draining reads so the peer can flush before FIN; drop payload while disconnected.
+		if (Internal.m_State != EState_Connected && Internal.m_State != EState_Disconnected)
+			return;
+
+		// Bytes buffered by readiness receives predate anything the stream delivers, so flushing
+		// them first keeps the stream in order
+		if (!Internal.m_IncomingData.f_IsEmpty())
+			fp_ProcessIncoming();
+
+		auto *pCompletionIo = Internal.f_GetCompletionIoReceive();
+		if (!pCompletionIo)
+			return;
+
+		// Charge retained capacity across the pipeline; final buffer release reschedules this actor when backpressure clears.
+		umint nBufferBytes = pCompletionIo->f_GetReceiveBufferBytes();
+		auto pBackpressure = NStorage::TCSharedPointer<NSys::CIoStreamBackpressure>(fg_Construct());
+		pBackpressure->m_nLimitBytes = NNetwork::fg_GetReceiveWindowBytes(*Internal.m_pIo, nBufferBytes);
+		pBackpressure->m_nResumeBytes = pBackpressure->m_nLimitBytes / 2;
+		pBackpressure->m_fResume = [WeakThis = fg_ThisActor(this).f_Weak()]() mutable
+			{
+				if (auto This = WeakThis.f_Lock())
+					DMibLogWarningOrDiscardResult(This.f_Bind<&CAsyncSocketActor::fp_ReceiveWindowResume>(), "Mib/Network", "Resuming the receive window failed");
+			}
+		;
+		Internal.m_pReceiveBackpressure = pBackpressure;
+
+		bool bStarted = pCompletionIo->f_StartReceiveStream
+			(
+				fg_Move(pBackpressure)
+				, [WeakThis = fg_ThisActor(this).f_Weak()](NSys::CIoStreamSegment &&_Segment) mutable
+				{
+					// The queued segment retains its buffer even if teardown drops the job.
+					if (auto This = WeakThis.f_Lock())
+						DMibLogWarningOrDiscardResult(This.f_Bind<&CAsyncSocketActor::fp_ReceiveSegment>(fg_Move(_Segment)), "Mib/Network", "Delivering a received segment failed");
+				}
+			)
+		;
+
+		if (bStarted)
+		{
+			Internal.m_bReceiveStreamActive = true;
+
+			// Drain readiness-held bytes in a later actor job to avoid reentering the processing that started the stream.
+			DMibLogWarningOrDiscardResult(fg_ThisActor(this).f_Bind<&CAsyncSocketActor::fp_DrainHeldInput>(), "Mib/Network", "Draining the input the socket held failed");
+		}
+
+	}
+
+	void CAsyncSocketActor::fp_ReceiveWindowResume()
+	{
+		auto &Internal = *mp_pInternal;
+
+		if (f_IsDestroyed())
+			return;
+
+		if (Internal.m_pSocket && Internal.m_pSocket->f_IsValid() && Internal.m_pCompletionIo)
+			Internal.m_pCompletionIo->f_ResumeReceiveStream();
+	}
+
+	// Completion sends provide no write edge for transport-generated output; explicitly drain pending control records and partial sends.
+	void CAsyncSocketActor::fp_DrainSocketOutput()
+	{
+		auto &Internal = *mp_pInternal;
+
+		auto *pCompletionIo = Internal.f_GetCompletionIoSend();
+		if (!pCompletionIo)
+			return;
+
+		if (!pCompletionIo->f_HasPendingOutput())
+			return;
+
+		fp_SubmitSendOp(true);
+	}
+
+	// A continuation advances transport-held output and may offer no new plaintext.
+	void CAsyncSocketActor::fp_SubmitSendOp(bool _bContinue, umint _iInheritedReservation)
+	{
+		auto &Internal = *mp_pInternal;
+
+		// A continuation inherits its reservation. Release it on every refused path or the queue remains permanently reserved.
+		umint iReservation = _bContinue ? _iInheritedReservation : Internal.mc_iNoReservation;
+
+		auto fReleaseOnFailure = NMib::g_OnScopeExit / [&]
+			{
+				if (iReservation == Internal.mc_iNoReservation)
+					return;
+
+				auto &Reservation = Internal.m_SendReservations[iReservation];
+
+				if (!Reservation.m_nBytes)
+					return;
+
+				DMibFastCheck(Internal.m_nOutgoingSubmitted >= Reservation.m_nBytes);
+
+				Internal.m_nOutgoingSubmitted -= fg_Exchange(Reservation.m_nBytes, 0);
+				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
+				Internal.m_iFreeSendReservation = uint32(iReservation);
+				--Internal.m_nSendReservationsInUse;
+			}
+		;
+
+		if (!Internal.m_nOutgoingQueuedBytes && !_bContinue)
+			return;
+
+		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+			return;
+
+		auto *pCompletionIo = Internal.f_GetCompletionIoSend();
+		if (!pCompletionIo)
+			return;
+
+		// Gate new batches only; buffer release retries when the byte window opens.
+		if (!_bContinue && pCompletionIo->f_IsSendWindowFull(Internal.m_nSendBytesUnreleased, Internal.f_SendWindowStartBytes()))
+		{
+#if DMibConfig_IoDebug_Enable
+			if (auto *pStats = NNetwork::fg_NetIoStats())
+				pStats->m_nSendBlocked.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+#endif
+
+			return;
+		}
+
+		// Never gate continuations on staging capacity: sending held ciphertext is what frees that capacity.
+		if (!_bContinue && !pCompletionIo->f_CanSubmitSend())
+		{
+#if DMibConfig_IoDebug_Enable
+			if (auto *pStats = NNetwork::fg_NetIoStats())
+				pStats->m_nSendBlocked.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+#endif
+
+			return;
+		}
+
+
+		// Reservations outlive transport records until continuation chains settle; retry new batches when a slot is released.
+		if (!_bContinue)
+		{
+			umint nMaxReservations = pCompletionIo->f_SupportsSendStaging() ? umint(8) : Internal.m_nMaxSendReservations;
+			if (Internal.m_nSendReservationsInUse >= nMaxReservations)
+				return;
+
+#if DMibConfig_IoDebug_Enable
+			if (auto *pStats = NNetwork::fg_NetIoStats())
+			{
+				uint64 nOutstanding = Internal.m_nSendReservationsInUse + 1;
+				uint64 nMax = pStats->m_nSendMaxOutstanding.f_Load(NAtomic::gc_MemoryOrder_Relaxed);
+				while (nMax < nOutstanding && !pStats->m_nSendMaxOutstanding.f_CompareExchangeWeak(nMax, nOutstanding, NAtomic::gc_MemoryOrder_Relaxed))
+				{
+				}
+			}
+#endif
+		}
+
+		// Continuations offer no plaintext; the queue still holds bytes already reserved by the original transfer.
+		NSys::CIoSpan Spans[NNetwork::ICSocket::mc_MaxSendSpans];
+		umint nSpans = 0;
+		umint nGatheredBytes = 0;
+		NContainer::TCVector<NContainer::CSharedByteVector> KeepAlives;
+
+		if (!_bContinue)
+		{
+			if (Internal.m_nOutgoingQueuedBytes <= Internal.m_nOutgoingSubmitted)
+				return;
+
+			nGatheredBytes = Internal.f_GatherSendSpans(Spans, nSpans, KeepAlives);
+			if (!nGatheredBytes)
+				return;
+		}
+
+		DMibLog(DebugVerbose3, " ++++ {} Submitting send of {}", !Internal.m_bClient, nGatheredBytes);
+
+		if (!_bContinue)
+		{
+			DMibFastCheck(Internal.m_iFreeSendReservation != CInternal::CSendReservation::mc_iNone);
+			iReservation = umint(Internal.m_iFreeSendReservation);
+			Internal.m_iFreeSendReservation = Internal.m_SendReservations[iReservation].m_iNextFree;
+
+			++Internal.m_nSendReservationsInUse;
+
+			Internal.m_SendReservations[iReservation].m_nBytes = uint32(nGatheredBytes);
+			Internal.m_nOutgoingSubmitted += nGatheredBytes;
+		}
+
+		// Both completion and release functors retain the tracker until destruction, including refusal and exception paths.
+		NSys::FIoCompletion fOnComplete =
+			[
+				Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker)
+				, iReservation
+				, WeakThis = fg_ThisActor(this).f_Weak()
+			]
+			(NSys::CIoCompletion _Result) mutable
+			{
+				if (auto This = WeakThis.f_Lock())
+					DMibLogWarningOrDiscardResult(This.f_Bind<&CAsyncSocketActor::fp_SendCompleted>(_Result, iReservation), "Mib/Network", "Completing a send failed");
+			}
+		;
+
+		NNetwork::FSocketSendReleased fOnReleased =
+			[
+				Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker)
+				, KeepAlives = fg_Move(KeepAlives)
+				, WeakThis = fg_ThisActor(this).f_Weak()
+				, nGatheredBytes
+			]
+			(umint _iTransfer) mutable
+			{
+				KeepAlives.f_Clear();
+
+				if (auto This = WeakThis.f_Lock())
+					DMibLogWarningOrDiscardResult(This.f_Bind<&CAsyncSocketActor::fp_SendBufferReleased>(_iTransfer, nGatheredBytes), "Mib/Network", "Releasing a send buffer failed");
+			}
+		;
+
+		umint nScheduled = 0;
+		bool bSubmitted;
+		if (_bContinue)
+			bSubmitted = pCompletionIo->f_ContinueSend(fg_Move(fOnComplete), fg_Move(fOnReleased));
+		else
+		{
+			nScheduled = pCompletionIo->f_SubmitSendVectored(Spans, nSpans, fg_Move(fOnComplete), fg_Move(fOnReleased));
+			DMibFastCheck(nScheduled <= nGatheredBytes);
+			bSubmitted = nScheduled != 0;
+		}
+
+		if (bSubmitted)
+		{
+			fReleaseOnFailure.f_Clear();
+
+			// Reserve only the accepted prefix; the untaken suffix remains available for the next gather.
+			if (!_bContinue && nScheduled < nGatheredBytes)
+			{
+				Internal.m_nOutgoingSubmitted -= nGatheredBytes - nScheduled;
+				Internal.m_SendReservations[iReservation].m_nBytes = nScheduled;
+			}
+
+			// Release retains the whole gather, including the untaken tail; temporary double-counting only applies backpressure early.
+			Internal.m_nSendBytesUnreleased += nGatheredBytes;
+		}
+		else
+		{
+			// Refusal is terminal; leaving reserved plaintext queued would strand send futures.
+			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, "Socket refused a send", true, EAsyncSocketCloseOrigin_Remote);
+			return;
+		}
+
+#if DMibConfig_IoDebug_Enable
+		if (auto *pStats = NNetwork::fg_NetIoStats())
+		{
+			pStats->m_nSendSubmits.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+			if (_bContinue)
+				pStats->m_nSendContinuations.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+		}
+#endif
+
+		++Internal.m_nSendOpsInFlight;
+
+
+	}
+
+	void CAsyncSocketActor::fp_ReceiveSegment(NSys::CIoStreamSegment &&_Segment)
+	{
+		fp_ReceiveStreamInput(fg_Move(_Segment), false);
+	}
+
+	// Drain readiness-held TLS bytes on activation; the peer may send no further segment to trigger them.
+	void CAsyncSocketActor::fp_DrainHeldInput()
+	{
+		fp_ReceiveStreamInput(NSys::CIoStreamSegment(), true);
+	}
+
+	void CAsyncSocketActor::fp_ReceiveStreamInput(NSys::CIoStreamSegment &&_Segment, bool _bHeldOnly)
+	{
+		auto &Internal = *mp_pInternal;
+
+		if (f_IsDestroyed())
+			return;
+
+		auto &Segment = _Segment;
+		bool bTerminal = !_bHeldOnly && (Segment.m_Status != NSys::EIoCompletionStatus::mc_Done || !Segment.m_nBytes);
+
+		if (bTerminal)
+		{
+			Internal.m_bReceiveStreamActive = false;
+			Internal.m_bReceiveStreamEnded = true;
+		}
+
+#if DMibConfig_Tests_Enable
+		if (Internal.m_bDebugNoProcessing && !bTerminal && !_bHeldOnly)
+		{
+			// Held test segments remain charged and do not reset inactivity timeouts.
+			Internal.m_DebugHeldSegments.f_Insert(fg_Move(_Segment));
+			return;
+		}
+#endif
+
+		bool bSocketUsable = Internal.m_pSocket && Internal.m_pSocket->f_IsValid();
+		if (!bSocketUsable || !Internal.m_pCompletionIo)
+		{
+			Internal.f_TryReleaseDeferredTransferState();
+			return;
+		}
+
+		// Deliver buffered bytes first; shared segments retain their kernel buffer, while disconnected drains drop them.
+		if (!bTerminal && !_bHeldOnly)
+		{
+			NSys::CIoCompletion SharedResult;
+			NContainer::CSharedByteVector SharedData;
+			if (Internal.m_pCompletionIo->f_ResolveReceiveSegmentShared(Segment, SharedData, SharedResult))
+			{
+				if (Internal.m_State != EState_Connected)
+					return;
+
+				Internal.f_DeliverReceiveBuffer();
+				if (!Internal.m_IncomingData.f_IsEmpty())
+					fp_ProcessIncoming();
+
+#if DMibConfig_IoDebug_Enable
+				if (auto *pStats = NNetwork::fg_NetIoStats())
+				{
+					pStats->m_nRecvSharedDeliveries.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+					pStats->m_nRecvSharedBytes.f_FetchAdd(SharedResult.m_nBytes, NAtomic::gc_MemoryOrder_Relaxed);
+				}
+#endif
+
+				// A small delivery is copied into a right sized buffer so the consumer never pins the
+				// full receive buffer. So is any delivery once retained buffers charge half the window:
+				// a consumer that keeps what it is handed, assembling a message, must not park the stream
+				bool bCopy = SharedResult.m_nBytes <= gc_CopySmallDeliveryThreshold;
+				if (!bCopy && Internal.m_pReceiveBackpressure)
+				{
+					auto &Backpressure = *Internal.m_pReceiveBackpressure;
+					bCopy = Backpressure.m_nOutstandingBytes.f_Load(NAtomic::gc_MemoryOrder_Relaxed) >= Backpressure.m_nResumeBytes;
+				}
+
+				if (bCopy)
+				{
+					NContainer::CIOByteVector Data;
+					Data.f_SetLen(SharedResult.m_nBytes, false);
+					NMemory::fg_ObjectCopy(Data.f_GetArray(), SharedData.f_GetArray(), SharedResult.m_nBytes);
+
+					SharedData.f_Clear();
+
+					Internal.f_HandleDataMessage(NContainer::CSharedByteVector(fg_Move(Data)));
+				}
+				else
+					Internal.f_HandleDataMessage(fg_Move(SharedData));
+
+				Internal.f_OnReceivedData();
+
+				if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+				{
+					Internal.f_TryReleaseDeferredTransferState();
+					return;
+				}
+
+				fp_DrainSocketOutput();
+
+				return;
+			}
+		}
+
+		if (Segment.m_Status == NSys::EIoCompletionStatus::mc_Cancelled)
+		{
+			NSys::CIoCompletion Result;
+			Internal.m_pCompletionIo->f_ResolveReceiveSegment(Segment, nullptr, 0, Result);
+			Internal.f_TryReleaseDeferredTransferState();
+			return;
+		}
+
+		// Resolve transport processing on the actor thread, draining held output one delivery buffer at a time.
+		bool bDelivering = Internal.m_State == EState_Connected;
+
+		// Count ciphertext activity even when an incomplete record yields no plaintext.
+		if (bDelivering)
+			Internal.f_OnReceivedData();
+
+		umint DeliverySize = fg_Max(Internal.m_FramentationSize, umint(4096));
+		bool bResolvedSegment = _bHeldOnly;
+		bool bError = false;
+
+		for (;;)
+		{
+			if (Internal.m_ReceiveData.f_IsEmpty())
+			{
+				Internal.m_ReceiveData.f_SetLen(DeliverySize, false);
+				Internal.m_nReceiveFill = 0;
+			}
+
+			umint Capacity = Internal.m_ReceiveData.f_GetLen();
+			if (Internal.m_nReceiveFill >= Capacity)
+			{
+				Internal.f_DeliverReceiveBuffer();
+				continue;
+			}
+
+			NSys::CIoCompletion Result;
+			bool bProduced;
+			if (!bResolvedSegment)
+			{
+				bProduced = Internal.m_pCompletionIo->f_ResolveReceiveSegment
+					(
+						Segment
+						, Internal.m_ReceiveData.f_GetArray() + Internal.m_nReceiveFill
+						, Capacity - Internal.m_nReceiveFill
+						, Result
+					)
+				;
+				bResolvedSegment = true;
+
+				if (bProduced && Result.m_Status == NSys::EIoCompletionStatus::mc_Error)
+				{
+					bError = true;
+					break;
+				}
+			}
+			else
+			{
+				bProduced = Internal.m_pCompletionIo->f_ResolveHeld
+					(
+						Internal.m_ReceiveData.f_GetArray() + Internal.m_nReceiveFill
+						, Capacity - Internal.m_nReceiveFill
+						, Result
+					)
+				;
+			}
+
+			if (!bProduced || !Result.m_nBytes)
+				break;
+
+			DMibLog(DebugVerbose3, " ++++ {} Received stream bytes {}", !Internal.m_bClient, Result.m_nBytes);
+
+			if (bDelivering)
+			{
+				Internal.m_nReceiveFill += Result.m_nBytes;
+
+				Internal.f_OnReceivedData();
+
+				// Readiness leftovers predate this segment's bytes, so they go first
+				if (!Internal.m_IncomingData.f_IsEmpty())
+					fp_ProcessIncoming();
+
+				Internal.f_DeliverReceiveBuffer();
+			}
+			// After the close callback, discard payload but keep draining so the peer can finish.
+
+			if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
+			{
+				Internal.f_TryReleaseDeferredTransferState();
+				return;
+			}
+		}
+
+		// TLS close_notify can end the stream before kernel EOF. Release deferred close state now; the peer may wait for our alert before FIN.
+		if (!bTerminal && Internal.m_pCompletionIo->f_ReceiveStreamEndedByProtocol())
+		{
+			bTerminal = true;
+			Internal.m_bReceiveStreamActive = false;
+			Internal.m_bReceiveStreamEnded = true;
+		}
+
+		if (Segment.m_Status == NSys::EIoCompletionStatus::mc_Error)
+		{
+			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket receive error: {}", fg_FormatSocketIoError(Segment.m_Error)), true, EAsyncSocketCloseOrigin_Remote);
+			return;
+		}
+
+		if (bError)
+		{
+			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, "Socket receive failed", true, EAsyncSocketCloseOrigin_Remote);
+			return;
+		}
+
+		if (bTerminal)
+		{
+			NNetwork::ENetTCPState DeferredStates = Internal.m_DeferredCloseStates;
+			Internal.m_DeferredCloseStates = NNetwork::ENetTCPState_None;
+			if (DeferredStates)
+				fp_ProcessState(DeferredStates);
+
+			Internal.f_TryReleaseDeferredTransferState();
+			return;
+		}
+
+		fp_DrainSocketOutput();
+	}
+
+	void CAsyncSocketActor::fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation)
+	{
+		auto &Internal = *mp_pInternal;
+		DMibFastCheck(Internal.m_nSendOpsInFlight);
+		--Internal.m_nSendOpsInFlight;
+
+		auto fReleaseReservation = [&]()
+			{
+				// Keep the reservation until the transport finishes or the same plaintext can be gathered twice. Continuations reserve no new bytes.
+				if (_iReservation == Internal.mc_iNoReservation)
+					return;
+
+				auto &Reservation = Internal.m_SendReservations[_iReservation];
+
+				if (!Reservation.m_nBytes)
+					return;
+
+				DMibFastCheck(Internal.m_nOutgoingSubmitted >= Reservation.m_nBytes);
+
+				Internal.m_nOutgoingSubmitted -= Reservation.m_nBytes;
+				Reservation.m_nBytes = 0;
+				Reservation.m_iNextFree = Internal.m_iFreeSendReservation;
+				Internal.m_iFreeSendReservation = uint32(_iReservation);
+				--Internal.m_nSendReservationsInUse;
+			}
+		;
+
+		if (f_IsDestroyed())
+			return;
+
+		// Resolve wire bytes to plaintext progress; pending transport records can require a continuation.
+		bool bSocketUsable = Internal.m_pSocket && Internal.m_pSocket->f_IsValid();
+		bool bResolved = true;
+		if (bSocketUsable && Internal.m_pCompletionIo)
+			bResolved = Internal.m_pCompletionIo->f_ResolveSend(_Result);
+
+		if (_Result.m_Status == NSys::EIoCompletionStatus::mc_Cancelled || !bSocketUsable)
+		{
+			Internal.m_nOutgoingSubmitted = 0;
+			Internal.f_ResetSendReservations();
+			Internal.f_TryReleaseDeferredTransferState();
+			return;
+		}
+
+		if (!bResolved)
+		{
+			// The socket still holds these bytes, so the reservation travels to the operation that carries on with them
+			fp_SubmitSendOp(true, _iReservation);
+			return;
+		}
+
+		fReleaseReservation();
+
+		if (_Result.m_Status == NSys::EIoCompletionStatus::mc_Error)
+		{
+			fp_Disconnect(EAsyncSocketStatus_AbnormalClosure, NStr::fg_Format("Socket send error: {}", fg_FormatSocketIoError(_Result.m_Error)), true, EAsyncSocketCloseOrigin_Remote);
+			return;
+		}
+
+		DMibLog(DebugVerbose3, " ++++ {} Send completion {}", !Internal.m_bClient, _Result.m_nBytes);
+
+		if (_Result.m_nBytes)
+		{
+			Internal.f_ConsumeSentBytes(_Result.m_nBytes);
+			Internal.f_OnSentData();
+		}
+
+		fp_UpdateSend();
+	}
+
+	// Buffer release unblocks staging generations and queued plaintext.
+	void CAsyncSocketActor::fp_SendBufferReleased(umint _iTransfer, umint _nBytes)
+	{
+		auto &Internal = *mp_pInternal;
+
+		// The window asks measure against this; a teardown may have zeroed the count already
+		Internal.m_nSendBytesUnreleased -= fg_Min(_nBytes, Internal.m_nSendBytesUnreleased);
+
+		if (f_IsDestroyed())
+			return;
+
+		bool bSocketUsable = Internal.m_pSocket && Internal.m_pSocket->f_IsValid();
+		if (bSocketUsable && Internal.m_pCompletionIo)
+			Internal.m_pCompletionIo->f_ResolveSendRelease(_iTransfer);
+
+		if (!bSocketUsable)
+			return;
+
+		fp_UpdateSend();
+		fp_DrainSocketOutput();
+	}
+
 
 	bool CAsyncSocketActor::fp_ProcessIncomingMessage()
 	{
@@ -769,45 +1697,50 @@ namespace NMib::NNetwork
 
 		Internal.m_IncomingData.f_RemoveFront(Length);
 
-		Internal.f_HandleDataMessage(fg_Construct(fg_Move(Data)));
+		Internal.f_HandleDataMessage(NContainer::CSharedByteVector(fg_Move(Data)));
 
 		return true;
 	}
 
-	void CAsyncSocketActor::CInternal::f_HandleDataMessage(NStorage::TCSharedPointer<NContainer::CIOByteVector const> &&_pData)
+	void CAsyncSocketActor::CInternal::f_HandleDataMessage(NContainer::CSharedByteVector &&_Data)
 	{
 		DMibLog(DebugVerbose3, " ++++ {} call m_OnReceiveData", !m_bClient);
 		if (m_bDeferringCallbacks)
 		{
-			m_DeferredOnReciveData.f_Insert(fg_Move(_pData));
+			m_DeferredOnReciveData.f_Insert(fg_Move(_Data));
 			return;
 		}
 
 		if (m_Callbacks.m_fOnReceiveData)
-			m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(_pData));
+			m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(_Data));
+	}
+
+	bool CAsyncSocketActor::CInternal::f_HasBufferedReceive() const
+	{
+		return m_nReceiveFill != 0;
 	}
 
 	void CAsyncSocketActor::CInternal::f_DeliverReceiveBuffer()
 	{
-		if (!m_nReceiveBufferFill)
+		if (!m_nReceiveFill)
 			return;
 
-		if (m_nReceiveBufferFill <= ECopySmallDeliveryThreshold)
+		if (m_nReceiveFill <= gc_CopySmallDeliveryThreshold)
 		{
 			// A small delivery is copied into a right sized buffer so the consumer never
 			// pins the full receive buffer, which is kept and refilled instead
 			NContainer::CIOByteVector Data;
-			Data.f_SetLen(m_nReceiveBufferFill, false);
-			NMemory::fg_ObjectCopy(Data.f_GetArray(), m_ReceiveBuffer.f_GetArray(), m_nReceiveBufferFill);
-			m_nReceiveBufferFill = 0;
-			f_HandleDataMessage(fg_Construct(fg_Move(Data)));
+			Data.f_SetLen(m_nReceiveFill, false);
+			NMemory::fg_ObjectCopy(Data.f_GetArray(), m_ReceiveData.f_GetArray(), m_nReceiveFill);
+			m_nReceiveFill = 0;
+			f_HandleDataMessage(NContainer::CSharedByteVector(fg_Move(Data)));
 			return;
 		}
 
-		m_ReceiveBuffer.f_SetLen(m_nReceiveBufferFill, false);
-		m_nReceiveBufferFill = 0;
-		f_HandleDataMessage(fg_Construct(fg_Move(m_ReceiveBuffer)));
-		m_ReceiveBuffer.f_Clear();
+		m_ReceiveData.f_SetLen(m_nReceiveFill, false);
+		m_nReceiveFill = 0;
+		f_HandleDataMessage(NContainer::CSharedByteVector(fg_Move(m_ReceiveData)));
+		m_ReceiveData.f_Clear();
 	}
 
 	EIncomingDataResult CAsyncSocketActor::CInternal::f_HandleIncomingData(uint8 const *_pData, umint _nBytes)
@@ -973,6 +1906,8 @@ namespace NMib::NNetwork
 			_Internal.m_FinishConnectionPromise.f_SetResult(fg_Move(Result));
 		}
 
+		fp_TryActivateCompletionIo();
+
 		fp_UpdateSend();
 
 		NNetwork::ENetTCPState State = NNetwork::ENetTCPState_None;
@@ -1045,14 +1980,46 @@ namespace NMib::NNetwork
 
 		if
 		(
+			Internal.m_bReceiveStreamActive && !Internal.m_bReceiveStreamEnded
+			&& Internal.m_State != EState_Disconnected
+			&& (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed))
+		)
+		{
+			// Poll close state can overtake stream bytes; defer until terminal delivery. After local closure, do not wait:
+			// retained consumer buffers may park the stream before its terminal arrives.
+			Internal.m_DeferredCloseStates = Internal.m_DeferredCloseStates | (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed));
+			_StateAdded = _StateAdded & ~(NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed);
+
+			if (!_StateAdded)
+				return;
+		}
+
+		if
+		(
 			(_StateAdded & NNetwork::ENetTCPState_Read)
 #if DMibConfig_Tests_Enable
 			&& !Internal.m_bDebugNoProcessing
 #endif
 		)
 		{
+			// The handshake can start the stream before its final readiness payload is buffered.
+			// Flush that payload even when the stream has already started.
+			auto fLeaveReadinessReceive = [&]
+				{
+					fp_StartReceiveStream();
+					if (!Internal.m_IncomingData.f_IsEmpty())
+						fp_ProcessIncoming();
+				}
+			;
+
 			do
 			{
+				if (Internal.f_GetCompletionIoReceive())
+				{
+					fLeaveReadinessReceive();
+					break;
+				}
+
 				if (Internal.m_State == EState_Connected && Internal.m_bUpgradeRequired)
 				{
 					Internal.m_DeferredTCPState = NNetwork::ENetTCPState_Read;
@@ -1065,25 +2032,28 @@ namespace NMib::NNetwork
 				{
 					while (true)
 					{
+						// Stop the readiness drain immediately when completion I/O activates.
+						fp_TryActivateCompletionIo();
+						if (Internal.f_GetCompletionIoReceive())
+						{
+							fLeaveReadinessReceive();
+							break;
+						}
+
 						if (!Internal.m_fCheckUpgrade && Internal.m_State == EState_Connected && Internal.m_IncomingData.f_IsEmpty())
 						{
 							umint DeliverySize = fg_Max(Internal.m_FramentationSize, umint(4096));
-							auto &Buffer = Internal.m_ReceiveBuffer;
+							auto &Buffer = Internal.m_ReceiveData;
 							if (Buffer.f_IsEmpty())
 							{
 								Buffer.f_SetLen(DeliverySize, false);
-								Internal.m_nReceiveBufferFill = 0;
+								Internal.m_nReceiveFill = 0;
 							}
 
 							umint Capacity = Buffer.f_GetLen();
-							NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive
-								(
-									Buffer.f_GetArray() + Internal.m_nReceiveBufferFill
-									, Capacity - Internal.m_nReceiveBufferFill
-								)
-							;
+							NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive(Buffer.f_GetArray() + Internal.m_nReceiveFill, Capacity - Internal.m_nReceiveFill);
 							CombinedResults += Result;
-							Internal.m_nReceiveBufferFill += Result.m_nBytes;
+							Internal.m_nReceiveFill += Result.m_nBytes;
 
 							if (Result.m_nBytes == 0 && !Result.m_bSentNetwork && !Result.m_bReceivedNetwork)
 							{
@@ -1092,7 +2062,7 @@ namespace NMib::NNetwork
 							}
 							DMibLog(DebugVerbose3, " ++++ {} Received data {}", !Internal.m_bClient, Result.m_nBytes);
 
-							if (Internal.m_nReceiveBufferFill >= Capacity)
+							if (Internal.m_nReceiveFill >= Capacity)
 								Internal.f_DeliverReceiveBuffer();
 
 							if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid())
@@ -1105,6 +2075,13 @@ namespace NMib::NNetwork
 
 						umint Size = Internal.m_fCheckUpgrade ? 1 : 4096;
 						NNetwork::CSocketOperationResult Result = Internal.m_pSocket->f_Receive(Data, Size);
+#if DMibConfig_IoDebug_Enable
+						if (auto *pStats = NNetwork::fg_NetIoStats())
+						{
+							pStats->m_nRecvReadinessCalls.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
+							pStats->m_nRecvReadinessBytes.f_FetchAdd(Result.m_nBytes, NAtomic::gc_MemoryOrder_Relaxed);
+						}
+#endif
 						if (Internal.m_State == EState_None)
 							fp_CheckHandshake(Internal);
 						CombinedResults += Result;
@@ -1205,6 +2182,12 @@ namespace NMib::NNetwork
 		auto &Internal = *mp_pInternal;
 		Internal.m_pSocket = fg_Move(_pSocket);
 
+		if (Internal.m_pSocket)
+		{
+			Internal.m_pSocket->f_SetTransferSizeHint(fg_Max(Internal.m_FramentationSize, umint(4096)) + gc_SocketFramingMargin);
+			Internal.m_pSocket->f_SetSendWindow(Internal.f_SendWindowBytes(), Internal.m_nSendWindowBytes != 0);
+		}
+
 		NNetwork::ENetTCPState State = NNetwork::ENetTCPState_None;
 		if (Internal.m_pSocket->f_IsValid())
 		{
@@ -1237,6 +2220,18 @@ namespace NMib::NNetwork
 	{
 		auto &Internal = *mp_pInternal;
 		co_return co_await Internal.m_FinishConnectionPromise.f_Future();
+	}
+
+	// Sets the adaptive ceiling in bytes; zero uses eight initial frames.
+	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetSendWindow(umint _nBytes)
+	{
+		auto &Internal = *mp_pInternal;
+		Internal.m_nSendWindowBytes = fg_Min(_nBytes, gc_SocketMaxSendWindowBytes);
+		Internal.f_SizeSendReservations();
+		if (Internal.m_pSocket)
+			Internal.m_pSocket->f_SetSendWindow(Internal.f_SendWindowBytes(), _nBytes != 0);
+
+		co_return {};
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketActor::f_SetTimeout(fp64 _Seconds)
@@ -1308,13 +2303,21 @@ namespace NMib::NNetwork
 					m_pThis->fp_Disconnect(EAsyncSocketStatus_Timeout, NStr::fg_Format("Timeout({}) sending data", m_Timeout), true, EAsyncSocketCloseOrigin_Local);
 			}
 		}
-		else if (m_State != EState_Disconnected)
+		// Disconnected output still depends on peer reads and needs a timeout.
+		else if (m_State != EState_Disconnected || m_nOutgoingQueuedBytes || m_nSendOpsInFlight)
 		{
 			NNetwork::ENetTCPState State = NNetwork::ENetTCPState_None;
 			if (m_pSocket && m_pSocket->f_IsValid())
 				State = m_pSocket->f_GetState();
 			if (State)
 				m_pThis->fp_ProcessState(State);
+
+			// A peer may keep writing without reading; disconnected send backlog must time out on send progress alone.
+			if (m_State == EState_Disconnected && m_nOutgoingQueuedBytes && m_TimeoutSentData.f_GetTime() > m_Timeout)
+			{
+				m_pThis->fp_Disconnect(EAsyncSocketStatus_Timeout, NStr::fg_Format("Timeout({}) sending data", m_Timeout), true, EAsyncSocketCloseOrigin_Local);
+				return;
+			}
 
 			if (m_TimeoutReceivedData.f_GetTime() > m_Timeout && m_TimeoutSentData.f_GetTime() > m_Timeout)
 				m_pThis->fp_Disconnect(EAsyncSocketStatus_Timeout, NStr::fg_Format("Timeout({}) in non-connected state", m_Timeout), true, EAsyncSocketCloseOrigin_Local);

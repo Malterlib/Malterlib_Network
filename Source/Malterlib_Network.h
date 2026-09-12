@@ -82,6 +82,7 @@
 #endif
 
 #include <Mib/Core/Platform>
+#include <Mib/Core/IoStream>
 #include "Malterlib_Network_Exception.h"
 
 namespace NMib::NNetwork
@@ -262,6 +263,9 @@ namespace NMib::NNetwork
 
 	class CNetAddress;
 
+	// Runs when send buffers are reusable, carrying the submitter's transfer ID or mc_iTransferNone.
+	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
+
 	bool fg_IsLoopbackAddress(CNetAddress const &_Address);
 	bool fg_IsLoopbackHostString(NStr::CStr const &_Host);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
@@ -334,6 +338,11 @@ namespace NMib::NStream
 	};
 }
 
+namespace NMib::NSys
+{
+	struct ICIoLoop;
+}
+
 namespace NMib::NSys::NNetwork
 {
 // Addresses
@@ -360,11 +369,11 @@ namespace NMib::NSys::NNetwork
 
 	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, NMib::NNetwork::ENetAddressStringFlag _Flags);
 
-// Connection Operations
 
 	// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 	void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
 	void fg_StartSocket(void *_pSocket); // Starts the event loop
+
 
 	// Report to the supplied event when a new connection has arrived
 	void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
@@ -380,6 +389,20 @@ namespace NMib::NSys::NNetwork
 	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen, bool &o_bEndOfStream);
 	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
+
+
+	NMib::NSys::ICIoLoop *fg_GetOwningIoLoop(void *_pSocket);
+	bool fg_SupportsCompletionIo(void *_pSocket);
+	bool fg_SendReleaseIsPrompt(void *_pSocket);
+	bool fg_SupportsReceiveStream(void *_pSocket);
+	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink);
+	void fg_ResumeReceiveStream(void *_pSocket);
+	void fg_SetInheritable(void *_pSocket);
+	void fg_SetSendWindow(void *_pSocket, umint _nBytes, bool _bConfigured);
+	void fg_SetAbortOnClose(void *_pSocket);
+	bool fg_QueryPathDeliveryRate(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
+	bool fg_IsSendWindowFull(void *_pSocket, umint _nUnreleasedBytes, umint _nStartBytes);
+	umint fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
 
@@ -387,12 +410,18 @@ namespace NMib::NSys::NNetwork
 
 	// Report to the supplied event when new data is received or when we are ready to send new data
 	void fg_SetOnStateChange(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	void fg_ReownSocket(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
 	NMib::NNetwork::ENetTCPState fg_GetState(void *_pSocket); // Get the state of data available
 	NMib::NStr::CStr fg_GetCloseReason(void *_pSocket);
 
+	void fg_RequestReadiness(void *_pSocket, bool _bRead, bool _bWrite);
+
 	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 	void *fg_GiveUpForInherit(void *_pSocket);
+	void fg_GiveUpForInheritAsync(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle);
+	void fg_CloseAsync(void *_pSocket, NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
+	void fg_CloseSocketHandle(void *_pSocketHandle);
 	void *fg_GetOSSocket(void *_pSocket);
 
 	CAddress fg_GetPeerAddress(void *_pSocket);
@@ -719,6 +748,22 @@ namespace NMib::NNetwork
 	{
 		void *mp_pSocket;
 
+		umint mp_nSendWindowBytes = 0; // Retained before creation, then applied to the platform socket.
+		bool mp_bSendWindowConfigured = false;
+		bool mp_bInheritable = false;
+
+		void fp_ApplyInheritable()
+		{
+			if (mp_pSocket && mp_bInheritable)
+				NMib::NSys::NNetwork::fg_SetInheritable(mp_pSocket);
+		}
+
+		void fp_ApplySendWindow()
+		{
+			if (mp_pSocket && mp_nSendWindowBytes)
+				NMib::NSys::NNetwork::fg_SetSendWindow(mp_pSocket, mp_nSendWindowBytes, mp_bSendWindowConfigured);
+		}
+
 		void fp_CheckSocket() const
 		{
 			if (!mp_pSocket)
@@ -745,21 +790,27 @@ namespace NMib::NNetwork
 			mp_pSocket = nullptr;
 		}
 
+		// Destruction cannot block on another pool thread's loop; use asynchronous close.
 		~CSocket()
 		{
-			f_Close();
+			f_CloseAsync({});
 		}
 
+		// Move settings even if the platform socket has not been created yet.
 		CSocket(CSocket &&_Other)
+			: mp_pSocket(fg_Exchange(_Other.mp_pSocket, nullptr))
+			, mp_nSendWindowBytes(_Other.mp_nSendWindowBytes)
+			, mp_bSendWindowConfigured(_Other.mp_bSendWindowConfigured)
+			, mp_bInheritable(_Other.mp_bInheritable)
 		{
-			mp_pSocket = _Other.mp_pSocket;
-			_Other.mp_pSocket = nullptr;
 		}
 
 		CSocket & operator =(CSocket &&_Other)
 		{
-			mp_pSocket = _Other.mp_pSocket;
-			_Other.mp_pSocket = nullptr;
+			mp_pSocket = fg_Exchange(_Other.mp_pSocket, nullptr);
+			mp_nSendWindowBytes = _Other.mp_nSendWindowBytes;
+			mp_bSendWindowConfigured = _Other.mp_bSendWindowConfigured;
+			mp_bInheritable = _Other.mp_bInheritable;
 			return *this;
 		}
 
@@ -768,11 +819,24 @@ namespace NMib::NNetwork
 			return mp_pSocket != nullptr;
 		}
 
+		// Synchronous close, complete on return; refuses for a socket on a created loop, where
+		// only the asynchronous form is legal
 		void f_Close()
 		{
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_Close(mp_pSocket);
 			mp_pSocket = nullptr;
+		}
+
+		// Consumes the platform socket; registered sockets finish on the loop thread, unregistered sockets inline.
+		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed)
+		{
+			void *pSocket = mp_pSocket;
+			mp_pSocket = nullptr;
+			if (pSocket)
+				NMib::NSys::NNetwork::fg_CloseAsync(pSocket, fg_Move(_fOnClosed));
+			else if (_fOnClosed)
+				_fOnClosed();
 		}
 
 		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0)
@@ -794,6 +858,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -807,6 +873,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -815,6 +883,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -823,6 +893,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
@@ -844,6 +916,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -853,6 +927,8 @@ namespace NMib::NNetwork
 			f_Close();
 
 			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fg_Move(_fOnStateChange));
+			fp_ApplyInheritable();
+			fp_ApplySendWindow();
 			if (mp_pSocket)
 				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
@@ -873,9 +949,30 @@ namespace NMib::NNetwork
 			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 		}
 
+		// Retains registration and kernel connection state; only the state callback changes owner.
+		void f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+		{
+			f_Close();
+
+			mp_pSocket = _Socket.mp_pSocket;
+			_Socket.mp_pSocket = nullptr;
+			if (mp_pSocket)
+				NMib::NSys::NNetwork::fg_ReownSocket(mp_pSocket, fg_Move(_fOnStateChange));
+		}
+
 		void *f_GiveUpForInherit()
 		{
 			return NMib::NSys::NNetwork::fg_GiveUpForInherit(mp_pSocket);
+		}
+
+		// Empties the wrapper immediately; delivers the handle after removal acknowledgement makes reuse safe.
+		void f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle)
+		{
+			fp_CheckSocket();
+
+			void *pSocket = mp_pSocket;
+			mp_pSocket = nullptr;
+			NMib::NSys::NNetwork::fg_GiveUpForInheritAsync(pSocket, fg_Move(_fOnHandle));
 		}
 
 		void *f_GetOSSocket()
@@ -898,6 +995,12 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_Shutdown(mp_pSocket);
+		}
+
+		void f_SetAbortOnClose()
+		{
+			if (mp_pSocket)
+				NMib::NSys::NNetwork::fg_SetAbortOnClose(mp_pSocket);
 		}
 
 		ENetTCPState f_GetState()
@@ -933,6 +1036,80 @@ namespace NMib::NNetwork
 			fp_CheckSocket();
 
 			return NMib::NSys::NNetwork::fg_SendVectored(mp_pSocket, _pSpans, _nSpans);
+		}
+
+		void f_RequestReadiness(bool _bRead, bool _bWrite)
+		{
+			fp_CheckSocket();
+
+			NMib::NSys::NNetwork::fg_RequestReadiness(mp_pSocket, _bRead, _bWrite);
+		}
+
+		bool f_SupportsCompletionIo() const
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsCompletionIo(mp_pSocket);
+		}
+
+		bool f_SendReleaseIsPrompt() const
+		{
+			return !mp_pSocket || NMib::NSys::NNetwork::fg_SendReleaseIsPrompt(mp_pSocket);
+		}
+
+		NMib::NSys::ICIoLoop *f_GetOwningIoLoop() const
+		{
+			return mp_pSocket ? NMib::NSys::NNetwork::fg_GetOwningIoLoop(mp_pSocket) : nullptr;
+		}
+
+		bool f_SupportsReceiveStream() const
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsReceiveStream(mp_pSocket);
+		}
+
+		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+		{
+			fp_CheckSocket();
+
+			return NMib::NSys::NNetwork::fg_StartReceiveStream(mp_pSocket, _nBufferBytes, fg_Move(_pBackpressure), fg_Move(_fSink));
+		}
+
+		void f_ResumeReceiveStream()
+		{
+			fp_CheckSocket();
+
+			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
+		}
+
+		bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathDeliveryRate(mp_pSocket, o_nBytes, o_bAppLimited);
+		}
+
+		bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
+		{
+			return mp_pSocket && NMib::NSys::NNetwork::fg_IsSendWindowFull(mp_pSocket, _nUnreleasedBytes, _nStartBytes);
+		}
+
+		// Set before connect/listen/accept for a receiver unable to replace completion bindings.
+		void f_SetInheritable()
+		{
+			mp_bInheritable = true;
+			fp_ApplyInheritable();
+		}
+
+		// Before or after the socket exists: a socket in place takes the window now, and one made
+		// later takes it as it is created
+		void f_SetSendWindow(umint _nBytes, bool _bConfigured)
+		{
+			mp_nSendWindowBytes = _nBytes;
+			mp_bSendWindowConfigured = _bConfigured;
+			fp_ApplySendWindow();
+		}
+
+		umint f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NMib::NSys::FIoBufferReleased &&_fOnBufferReleased)
+		{
+			fp_CheckSocket();
+
+			return NMib::NSys::NNetwork::fg_SubmitSendVectored(mp_pSocket, _pSpans, _nSpans, fg_Move(_fOnComplete), fg_Move(_fOnBufferReleased));
 		}
 
 		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)

@@ -59,7 +59,7 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketCallbacks
 	{
-		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NStorage::TCSharedPointer<NContainer::CIOByteVector const> _pMessage)> m_fOnReceiveData;
+		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NContainer::CSharedByteVector _Message)> m_fOnReceiveData;
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
@@ -85,10 +85,11 @@ namespace NMib::NNetwork
 
 		struct CInternal;
 
-		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
+		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
 		~CAsyncSocketActor();
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
+		NConcurrency::TCFuture<void> f_SetSendWindow(umint _nBytes);
 		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname);
 
 		NConcurrency::TCFuture<void> f_SendData(NContainer::CSharedByteVector _Message, uint32 _Priority);
@@ -129,6 +130,16 @@ namespace NMib::NNetwork
 		void fp_ProcessState(NNetwork::ENetTCPState _StateAdded);
 		void fp_ProcessStateNow(NNetwork::ENetTCPState _StateAdded);
 		void fp_UpdateSend();
+		void fp_TryActivateCompletionIo();
+		void fp_StartReceiveStream();
+		void fp_SubmitSendOp(bool _bContinue = false, umint _iInheritedReservation = ~umint(0));
+		void fp_DrainSocketOutput();
+		void fp_ReceiveSegment(NSys::CIoStreamSegment &&_Segment);
+		void fp_DrainHeldInput();
+		void fp_ReceiveStreamInput(NSys::CIoStreamSegment &&_Segment, bool _bHeldOnly);
+		void fp_ReceiveWindowResume();
+		void fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation);
+		void fp_SendBufferReleased(umint _iTransfer, umint _nBytes);
 		void fp_Shutdown();
 		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks);
 		void fp_CheckHandshake(CInternal &_Internal);
@@ -201,12 +212,14 @@ namespace NMib::NNetwork
 	class CAsyncSocketClientActor : public NConcurrency::CActor
 	{
 	public:
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
 		CAsyncSocketClientActor();
 		~CAsyncSocketClientActor();
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
+		void f_SetDefaultSendWindow(umint _nBytes);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
@@ -237,12 +250,14 @@ namespace NMib::NNetwork
 			~CPendingConnection();
 
 			NStorage::TCUniquePointer<NNetwork::ICSocket> m_pSocket;
+			NConcurrency::CIoLoopBinding m_IoBinding;
 			NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>> m_pDeleted = fg_Construct(false);
 		};
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;
 		umint mp_MaxMessageSize;
 		umint mp_FragmentationSize;
+		umint mp_SendWindowBytes = 0;
 		fp64 mp_Timeout;
 		FAsyncSocketUpgradeCheckFactory mp_fCheckUpgradeFactory;
 	};
@@ -257,6 +272,7 @@ namespace NMib::NNetwork
 	{
 		friend class NAsyncSocket::CListenActor;
 	public:
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
 		CAsyncSocketServerActor();
 		~CAsyncSocketServerActor();
@@ -288,6 +304,7 @@ namespace NMib::NNetwork
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
 		void f_SetDefaultFragmentationSize(umint _FragmentationSize);
+		void f_SetDefaultSendWindow(umint _nBytes);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
