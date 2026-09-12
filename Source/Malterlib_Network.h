@@ -375,7 +375,7 @@ namespace NMib::NSys::NNetwork
 
 	void fg_Close(void *_pSocket); // Closes the socket and connection
 
-	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen); // Returns bytes received
+	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen, bool &o_bEndOfStream);
 	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
@@ -912,11 +912,11 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_GetCloseReason(mp_pSocket);
 		}
 
-		umint f_Receive(void *_pData, umint _DataLen)
+		umint f_Receive(void *_pData, umint _DataLen, bool &o_bEndOfStream)
 		{
 			fp_CheckSocket();
 
-			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen);
+			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen, o_bEndOfStream);
 		}
 
 		umint f_Send(const void *_pData, umint _DataLen)

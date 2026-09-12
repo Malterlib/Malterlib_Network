@@ -125,8 +125,11 @@ namespace NMib::NNetwork
 
 	CSocketOperationResult CSocket_TCP::f_Receive(void *_pData, umint _DataLen)
 	{
+		// End of stream is reported through the close event instead
+		bool bEndOfStream = false;
+
 		CSocketOperationResult Result;
-		Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen);
+		Result.m_nBytes = mp_Socket.f_Receive(_pData, _DataLen, bEndOfStream);
 		if (Result.m_nBytes != 0)
 			Result.m_bReceivedNetwork = true;
 		return Result;
