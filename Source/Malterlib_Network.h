@@ -266,6 +266,7 @@ namespace NMib::NNetwork
 	// Runs when send buffers are reusable, carrying the submitter's transfer ID or mc_iTransferNone.
 	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
 
+	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address);
 	bool fg_IsLoopbackAddress(CNetAddress const &_Address);
 	bool fg_IsLoopbackHostString(NStr::CStr const &_Host);
 	NStr::CStr fg_GetSafeUnixSocketPath(NStr::CStr const &_WantedPath);
@@ -426,6 +427,18 @@ namespace NMib::NSys::NNetwork
 
 	CAddress fg_GetPeerAddress(void *_pSocket);
 	uint32 fg_GetListenPort(void *_pSocket);
+
+	// Kernel identity of a Unix endpoint. pidfs device/inode identifies the pinned process across namespaces and PID reuse.
+	// Numeric PIDs are comparable only within one namespace; zero means the peer is invisible here.
+	struct CProcessIdentity
+	{
+		uint64 m_ProcessID = 0;
+		uint64 m_PidFSDevice = 0; // Non-zero only when the kernel serves pidfds from pidfs (Linux 6.9)
+		uint64 m_PidFSInode = 0;
+	};
+
+	bool fg_GetProcessIdentity(void *_pSocket, CProcessIdentity &o_LocalIdentity, CProcessIdentity &o_PeerIdentity);
+	bool fg_HasUnixSocketPeerProcessIdentity();
 }
 
 namespace NMib::NNetwork
@@ -1130,6 +1143,12 @@ namespace NMib::NNetwork
 		{
 			fp_CheckSocket();
 			return CNetAddress(NMib::NSys::NNetwork::fg_GetPeerAddress(mp_pSocket));
+		}
+
+		bool f_GetProcessIdentity(NMib::NSys::NNetwork::CProcessIdentity &o_LocalIdentity, NMib::NSys::NNetwork::CProcessIdentity &o_PeerIdentity) const
+		{
+			fp_CheckSocket();
+			return NMib::NSys::NNetwork::fg_GetProcessIdentity(mp_pSocket, o_LocalIdentity, o_PeerIdentity);
 		}
 
 		uint32 f_GetListenPort() const

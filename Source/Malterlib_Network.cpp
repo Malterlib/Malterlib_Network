@@ -71,6 +71,12 @@ namespace NMib::NNetwork
 		NCryptography::CUniversallyUniqueIdentifier g_HostnameRootUUID("D2C365F0-3F5E-4056-9BBB-0724C411D2FA", NCryptography::EUniversallyUniqueIdentifierFormat_Bare);
 	}
 
+	bool fg_IsUnixSocketAddressString(NStr::CStr const &_Address)
+	{
+		// The prefixes the platform address parsers accept for unix socket paths
+		return _Address.f_StartsWith("UNIX:") || _Address.f_StartsWith("UNIX(");
+	}
+
 	// Recognizes 127/8, ::1 and IPv4-mapped loopback; the host-string form also accepts localhost.
 	bool fg_IsLoopbackAddress(CNetAddress const &_Address)
 	{

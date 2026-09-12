@@ -92,3 +92,11 @@ legal.
 
 Abortive close discards queued output and releases kernel-held pages without waiting for the peer. For
 graceful closure, shut down and drain first.
+
+## fg_GetProcessIdentity
+
+Return the local and immediate peer process identities of a connected Unix socket, or false when unavailable.
+
+## fg_HasUnixSocketPeerProcessIdentity
+
+Whether the kernel can identify a Unix peer process; Windows requires build 17763 or later.

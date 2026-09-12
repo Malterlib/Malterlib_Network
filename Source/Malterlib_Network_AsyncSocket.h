@@ -232,7 +232,6 @@ namespace NMib::NNetwork
 				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 		; // You will receive an exception if connection fails
-
 		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_ConnectAddress
 			(
 				NNetwork::CNetAddress _ConnectToAddress	// The server to connect to
