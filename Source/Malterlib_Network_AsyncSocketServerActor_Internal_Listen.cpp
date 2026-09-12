@@ -151,7 +151,7 @@ namespace NMib::NNetwork::NAsyncSocket
 						)
 					;
 				}
-				catch (NException::CException const &_Exception)
+				catch ([[maybe_unused]] NException::CException const &_Exception)
 				{
 					DMibLogWithCategory(Mib/Network, Warning, "Accepting a connection failed: {}", _Exception);
 				}
