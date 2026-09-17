@@ -855,6 +855,27 @@ public:
 			}
 		};
 
+		DMibTestSuite("Unix socket paths")
+		{
+			using NFile::CFile;
+
+			CStr WantedPath = CFile::fs_GetProgramDirectory();
+			while (WantedPath.f_GetLen() < 200)
+				WantedPath /= "LongDeploymentDirectory";
+			WantedPath /= "Listener.socket";
+
+			CStr Path = fg_GetSafeUnixSocketPath(WantedPath);
+			DMibExpect(Path.f_GetLen(), <=, aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()));
+			DMibExpect(fg_GetSafeUnixSocketPath(WantedPath + "Other"), !=, Path);
+#ifdef DPlatformFamily_Windows
+			DMibExpectFalse(CFile::fs_GetDrive(Path).f_IsEmpty());
+			DMibExpect(Path, ==, CFile::fs_GetExpandedPath(Path));
+			DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, CFile::fs_GetExpandedPath(CStr("/socket.sock")));
+#else
+			DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, "/socket.sock");
+#endif
+		};
+
 		DMibTestSuite("Unix Listener Replacement")
 		{
 			CStr Path = fg_GetSafeUnixSocketPath(NFile::CFile::fs_GetProgramDirectory() / "ListenerReplacement.socket");

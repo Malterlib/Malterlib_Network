@@ -147,18 +147,30 @@ namespace NMib::NNetwork
 	{
 		using namespace NStr;
 
+#ifdef DPlatformFamily_Windows
+		CStr WantedPath = NFile::CFile::fs_GetExpandedPath(_WantedPath);
+#else
+		auto const &WantedPath = _WantedPath;
+#endif
 		umint MaxLength = NSys::NNetwork::fg_GetMaxUnixSocketNameLength();
-		if (_WantedPath.f_GetLen() <= aint(MaxLength))
-			return _WantedPath;
+		if (WantedPath.f_GetLen() <= aint(MaxLength))
+			return WantedPath;
 
-		CStr ConfigHash = fg_GetHashedUuidString(_WantedPath, g_HostnameRootUUID, NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum);
+		CStr ConfigHash = fg_GetHashedUuidString(WantedPath, g_HostnameRootUUID, NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum);
 
 		CStr TempDir = NFile::CFile::fs_GetRawTemporaryDirectory();
+#ifdef DPlatformFamily_Windows
+		TempDir = NFile::CFile::fs_GetExpandedPath(TempDir);
+#endif
 		CStr Path = TempDir / ("{}.sock"_f << ConfigHash);
 		if (Path.f_GetLen() <= aint(MaxLength))
 			return Path;
 
-		return "/tmp/{}.sock"_f << ConfigHash;
+		Path = "/tmp/{}.sock"_f << ConfigHash;
+#ifdef DPlatformFamily_Windows
+		Path = NFile::CFile::fs_GetExpandedPath(Path);
+#endif
+		return Path;
 	}
 
 	CSocketOperationResult &CSocketOperationResult::operator += (CSocketOperationResult const &_Other)
