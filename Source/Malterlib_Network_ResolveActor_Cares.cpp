@@ -232,6 +232,8 @@ namespace NMib::NNetwork
 
 	TCFuture<void> CResolveActor::fp_Initialize()
 	{
+		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
+
 		auto &Internal = *mp_pInternal;
 		if (Internal.m_State == CInternal::EState::mc_Ready)
 			co_return {};

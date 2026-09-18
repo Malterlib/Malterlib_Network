@@ -255,7 +255,7 @@ namespace
 					auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("pending.test"), ENetAddressType_None);
 					co_await pState->Started.f_Future();
 
-					// A timeout releases the backend even if cancellation accidentally waits for it.
+					// Release the backend if cancellation fails to deliver the result.
 					auto Watchdog = co_await fg_OneshotTimerAbortable
 						(
 							5.0
@@ -268,8 +268,9 @@ namespace
 						)
 					;
 
+					TCFuture<void> Destroy;
 					if (bDestroyActor)
-						co_await fg_Move(Resolver).f_Destroy();
+						Destroy = fg_Move(Resolver).f_Destroy();
 					else
 						co_await Lookup.m_Cancel->f_Destroy();
 
@@ -280,6 +281,8 @@ namespace
 
 					pState->Release.f_SetSignaled();
 					co_await pState->Finished.f_Future();
+					if (Destroy.f_IsValid())
+						co_await fg_Move(Destroy);
 					co_await Watchdog->f_Destroy();
 
 					if (Resolver)

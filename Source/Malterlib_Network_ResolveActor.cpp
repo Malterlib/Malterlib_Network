@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Network_ResolveActor_Internal.h"
+#include <Mib/Concurrency/LogError>
 
 namespace NMib::NNetwork
 {
@@ -56,6 +57,8 @@ namespace NMib::NNetwork
 
 	TCFuture<void> CResolveActor::fp_Destroy()
 	{
+		CLogError LogError("Mib/Network/Resolve");
+
 		for (auto &fCancel : mp_Pending)
 			fCancel();
 
@@ -74,7 +77,8 @@ namespace NMib::NNetwork
 		DMibFastCheck(Internal.m_Sockets.f_IsEmpty());
 
 		Internal.m_Drain->f_Release();
-		co_await Internal.m_Drain->m_Done.f_Future();
+		co_await fg_Move(mp_Sequencer).f_Destroy().f_Wrap() > LogError.f_Warning("Failed to destroy resolver sequencer");
+		co_await Internal.m_Drain->m_Done.f_Future().f_Wrap() > LogError.f_Warning("Failed to deregister resolver sockets");
 
 		co_return {};
 	}
