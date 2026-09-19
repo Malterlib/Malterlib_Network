@@ -1258,6 +1258,7 @@ namespace NMib::NNetwork
 	NStorage::TCUniquePointer<ICSocketConnectionInfo> CSocket_SSL::f_GetConnectionInfo() const
 	{
 		NStorage::TCUniquePointer<CSocketConnectionInfo_SSL> pReturn = fg_Construct();
+		pReturn->m_ProtocolVersion = mp_SSLConnection.f_GetProtocolVersion();
 
 		auto &Result = mp_SSLConnection.f_GetConnectionResult();
 		pReturn->m_PeerCertificate = Result.f_GetPeerCertificate();

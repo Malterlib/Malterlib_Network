@@ -51,6 +51,8 @@ namespace NMib::NNetwork
 		{
 			EProtocol_SSL,
 			EProtocol_TLS,
+			EProtocol_TLS_1_2,
+			EProtocol_TLS_1_3,
 		};
 
 		bool operator == (CSSLSettings const &_Other) const noexcept
@@ -311,6 +313,7 @@ namespace NMib::NNetwork
 		CSSLConnectionResult &f_GetConnectionResult() { return mp_Result; }
 		CSSLConnectionResult const &f_GetConnectionResult() const { return mp_Result; }
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest() const;
+		NStr::CStr f_GetProtocolVersion() const;
 
 	protected:
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;

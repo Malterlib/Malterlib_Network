@@ -14,6 +14,7 @@ namespace NMib::NNetwork
 	{
 		NContainer::CByteVector m_PeerCertificate;
 		NContainer::TCVector<NContainer::CByteVector> m_CertificateChain;
+		NStr::CStr m_ProtocolVersion;
 	};
 
 	class CSocket_SSL final : public ICSocket, public ICSocketCompletionIo

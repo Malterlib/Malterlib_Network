@@ -262,12 +262,18 @@ namespace NMib::NNetwork
 							}
 						;
 
-						if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
+						if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_SSL)
 						{
 							if (f_IsClientContext())
-								mp_pContext = fg_CreateSSLContext(TLSv1_2_client_method());
+								mp_pContext = fg_CreateSSLContext(TLS_client_method());
 							else
-								mp_pContext = fg_CreateSSLContext(TLSv1_2_server_method());
+								mp_pContext = fg_CreateSSLContext(TLS_server_method());
+
+							auto MinVersion = mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS_1_3 ? TLS1_3_VERSION : TLS1_2_VERSION;
+							if (!SSL_CTX_set_min_proto_version(mp_pContext, MinVersion))
+								DMibErrorCryptography(fg_GetExceptionStr("Failed to set minimum TLS version"));
+							if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_TLS && !SSL_CTX_set_max_proto_version(mp_pContext, MinVersion))
+								DMibErrorCryptography(fg_GetExceptionStr("Failed to set maximum TLS version"));
 						}
 						else
 						{
@@ -1109,15 +1115,30 @@ namespace NMib::NNetwork
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest()
 		{
 			DMibRequire(mp_bConnected);
+			if (SSL_version(f_GetSSL()) >= TLS1_3_VERSION)
+			{
+				// TLS 1.3 session master keys are resumption secrets, not a shared channel binding.
+				NContainer::CSecureByteVector KeyData;
+				KeyData.f_SetLen(32);
+				constexpr char c_Label[] = "EXPORTER-Malterlib-SessionKeyDigest";
+				if (!SSL_export_keying_material(f_GetSSL(), KeyData.f_GetArray(), KeyData.f_GetLen(), c_Label, sizeof(c_Label) - 1, nullptr, 0, 0))
+					DMibErrorCryptography(fg_GetExceptionStr("Failed to export TLS channel binding"));
+				return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyData.f_GetLen());
+			}
 
 			auto pSession = SSL_get_session(f_GetSSL());
 			DMibRequire(pSession);
 
 			auto KeyLength = SSL_SESSION_get_master_key(pSession, nullptr, 0);
-			NContainer::CByteVector KeyData;
+			NContainer::CSecureByteVector KeyData;
 			KeyData.f_SetLen(KeyLength);
 			SSL_SESSION_get_master_key(pSession, KeyData.f_GetArray(), KeyLength);
 			return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyLength);
+		}
+
+		NStr::CStr f_GetProtocolVersion()
+		{
+			return mp_bConnected ? NStr::CStr(SSL_get_version(f_GetSSL())) : NStr::CStr{};
 		}
 
 		bool f_Connect()
@@ -2463,6 +2484,11 @@ namespace NMib::NNetwork
 				}
 			)
 		;
+	}
+
+	NStr::CStr CSSLConnection::f_GetProtocolVersion() const
+	{
+		return mp_pInternal->f_GetProtocolVersion();
 	}
 
 	NCryptography::CHashDigest_SHA256 CSSLConnection::f_GetSessionKeyDigest() const
