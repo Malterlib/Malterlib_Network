@@ -49,6 +49,15 @@ Property
 		, "CARES_INSTALL=OFF"
 	]
 
+	Compile
+	{
+		!!CompileDialect "C"
+		Warnings_UnusedButSetVariable false
+		{
+			!!Compiler "Clang"
+		}
+	}
+
 	%Target "Lib_c-ares_c-ares"
 	{
 		Target.DependencyInjectionGroups =+ "{Lib_c-ares_c-ares}/{TargetInjection}"
