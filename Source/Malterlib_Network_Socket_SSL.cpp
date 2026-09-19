@@ -230,6 +230,11 @@ namespace NMib::NNetwork
 		if (Ret.f_IsEmpty())
 			Ret = mp_Socket.f_GetCloseReason();
 
+		// TCP can close before the TLS handshake processes the peer's alert.
+		auto Minimum = uint16(mp_pSSLContext->f_GetSettings().m_MinimumCryptoStrength);
+		if (Minimum && !mp_SSLConnection.f_Connected())
+			NStr::fg_AddStrSep(Ret, NStr::fg_Format("Configured TLS minimum: {}-bit equivalent symmetric strength", Minimum), ", ");
+
 		return Ret;
 	}
 
@@ -1258,6 +1263,14 @@ namespace NMib::NNetwork
 	NStorage::TCUniquePointer<ICSocketConnectionInfo> CSocket_SSL::f_GetConnectionInfo() const
 	{
 		NStorage::TCUniquePointer<CSocketConnectionInfo_SSL> pReturn = fg_Construct();
+		pReturn->m_ProtocolVersion = mp_SSLConnection.f_GetProtocolVersion();
+		if (mp_SSLConnection.f_Connected())
+		{
+			pReturn->m_SessionKeyDigest = mp_SSLConnection.f_GetSessionKeyDigest();
+			pReturn->m_CipherStrength = mp_SSLConnection.f_GetCipherStrength();
+			pReturn->m_KeyExchangeStrength = mp_SSLConnection.f_GetKeyExchangeStrength();
+			pReturn->m_bHelloRetryRequest = mp_SSLConnection.f_UsedHelloRetryRequest();
+		}
 
 		auto &Result = mp_SSLConnection.f_GetConnectionResult();
 		pReturn->m_PeerCertificate = Result.f_GetPeerCertificate();

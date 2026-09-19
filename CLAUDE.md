@@ -124,6 +124,20 @@ if (nBytesTransferred > 0)
 pSocket->f_Close();
 ```
 
+### TLS versions and cryptographic strength
+
+`CSSLSettings::m_Protocol` supports TLS 1.3 with TLS 1.2 fallback (`EProtocol_TLS`),
+or a fixed version (`EProtocol_TLS_1_2` / `EProtocol_TLS_1_3`).
+
+`m_MinimumCryptoStrength` defaults to `NCryptography::ECryptoStrength::mc_Compatible`, preferring
+stronger algorithms while allowing weaker supported choices. Opt into a minimum
+with `mc_EquivalentSymmetric128bit`, `mc_EquivalentSymmetric192bit`, or
+`mc_EquivalentSymmetric256bit`; it applies to encryption, key exchange, and
+certificate-chain keys and signatures. The distribution manager defaults to
+`mc_EquivalentSymmetric256bit`. The minimum also selects the initial TLS 1.3 key
+share. Group and signature preferences follow the local certificate's strength,
+or the minimum when no certificate is configured (256-bit preference in compatible mode).
+
 ### SSL/TLS Socket Connection
 
 ```cpp

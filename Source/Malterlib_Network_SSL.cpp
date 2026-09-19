@@ -9,8 +9,6 @@
 #include <Mib/Cryptography/BoringSSL>
 #include <Mib/Encoding/Base64>
 
-#include "Malterlib_Network_SSL_DHParams.hpp"
-
 namespace NMib::NNetwork
 {
 	using namespace NCryptography::NBoringSSL;
@@ -70,6 +68,147 @@ namespace NMib::NNetwork
 			return DMibConfig_SSLCompletionIoReceive != 0;
 		}
 #endif
+
+		uint16 fg_PublicKeyStrength(EVP_PKEY const *_pKey)
+		{
+			if (!_pKey)
+				return 0;
+
+			auto Bits = EVP_PKEY_bits(_pKey);
+			switch (EVP_PKEY_id(_pKey))
+			{
+			case EVP_PKEY_RSA:
+			case EVP_PKEY_RSA_PSS:
+				// Lenstra / Verheul: keylength.com symmetric-key comparison, standard factoring column and default parameters.
+				if (Bits >= 49979)
+					return 256;
+				if (Bits >= 22089)
+					return 192;
+				if (Bits >= 6790)
+					return 128;
+				if (Bits >= 4509)
+					return 112;
+
+				return 0;
+
+			case EVP_PKEY_EC:
+				if (Bits >= 512)
+					return 256;
+				if (Bits >= 384)
+					return 192;
+				if (Bits >= 256)
+					return 128;
+				if (Bits >= 224)
+					return 112;
+
+				return 0;
+
+			case EVP_PKEY_ED25519: return 128;
+			default: return 0;
+			}
+		}
+
+		uint16 fg_DigestSignatureStrength(int _DigestNID)
+		{
+			auto *pDigest = EVP_get_digestbynid(_DigestNID);
+
+			return pDigest ? uint16(EVP_MD_size(pDigest) * 4) : 0;
+		}
+
+		uint16 fg_AlgorithmDigestStrength(X509_ALGOR const *_pAlgorithm)
+		{
+			if (!_pAlgorithm)
+				return 80; // An omitted RSA-PSS hash parameter means SHA-1.
+
+			ASN1_OBJECT const *pObject = nullptr;
+			X509_ALGOR_get0(&pObject, nullptr, nullptr, _pAlgorithm);
+
+			return fg_DigestSignatureStrength(OBJ_obj2nid(pObject));
+		}
+
+		uint16 fg_CertificateSignatureStrength(X509 *_pCertificate)
+		{
+			auto SignatureNID = X509_get_signature_nid(_pCertificate);
+			if (SignatureNID == NID_ED25519)
+				return 128;
+
+			if (SignatureNID != NID_rsassaPss)
+			{
+				int DigestNID = NID_undef, KeyNID = NID_undef;
+				if (!OBJ_find_sigid_algs(SignatureNID, &DigestNID, &KeyNID))
+					return 0;
+
+				return fg_DigestSignatureStrength(DigestNID);
+			}
+
+			X509_ALGOR const *pAlgorithm = nullptr;
+			X509_get0_signature(nullptr, &pAlgorithm, _pCertificate);
+
+			int Type = V_ASN1_UNDEF;
+			void const *pValue = nullptr;
+			X509_ALGOR_get0(nullptr, &Type, &pValue, pAlgorithm);
+			if (Type != V_ASN1_SEQUENCE || !pValue)
+				return 0;
+
+			auto *pSequence = static_cast<ASN1_STRING const *>(pValue);
+			if (ASN1_STRING_length(pSequence) <= 0)
+				return 0;
+
+			auto *pData = ASN1_STRING_get0_data(pSequence);
+			auto *pEnd = pData + ASN1_STRING_length(pSequence);
+			bssl::UniquePtr<RSA_PSS_PARAMS> Params(d2i_RSA_PSS_PARAMS(nullptr, &pData, pEnd - pData));
+			if (!Params || pData != pEnd)
+				return 0;
+
+			uint16 MaskStrength = 80;
+			if (Params->maskGenAlgorithm)
+			{
+				ASN1_OBJECT const *pMaskObject = nullptr;
+				X509_ALGOR_get0(&pMaskObject, &Type, &pValue, Params->maskGenAlgorithm);
+				if (OBJ_obj2nid(pMaskObject) != NID_mgf1 || Type != V_ASN1_SEQUENCE || !pValue)
+					return 0;
+
+				pSequence = static_cast<ASN1_STRING const *>(pValue);
+				if (ASN1_STRING_length(pSequence) <= 0)
+					return 0;
+
+				pData = ASN1_STRING_get0_data(pSequence);
+				pEnd = pData + ASN1_STRING_length(pSequence);
+				bssl::UniquePtr<X509_ALGOR> MaskHash(d2i_X509_ALGOR(nullptr, &pData, pEnd - pData));
+				if (!MaskHash || pData != pEnd)
+					return 0;
+
+				MaskStrength = fg_AlgorithmDigestStrength(MaskHash.get());
+			}
+
+			return fg_Min(fg_AlgorithmDigestStrength(Params->hashAlgorithm), MaskStrength);
+		}
+
+		bool fg_IsSelfIssuedCertificate(X509 *_pCertificate)
+		{
+			return _pCertificate && X509_check_issued(_pCertificate, _pCertificate) == X509_V_OK;
+		}
+
+		bool fg_IsTrustedSelfIssuedRoot(X509_STORE_CTX *_pStoreContext, X509 *_pCertificate)
+		{
+			if (!fg_IsSelfIssuedCertificate(_pCertificate))
+				return false;
+
+			X509 *pIssuer = nullptr;
+			auto Result = X509_STORE_CTX_get1_issuer(&pIssuer, _pStoreContext, _pCertificate);
+			bssl::UniquePtr<X509> Issuer(pIssuer);
+
+			return Result == 1 && X509_cmp(Issuer.get(), _pCertificate) == 0;
+		}
+
+		// Trust anchors authenticate through their configured keys, not their self-signatures.
+		bool fg_CertificateMeetsStrength(X509 *_pCertificate, uint16 _Minimum, bool _bTrustAnchor)
+		{
+			return _pCertificate
+				&& fg_PublicKeyStrength(X509_get0_pubkey(_pCertificate)) >= _Minimum
+				&& (_bTrustAnchor || fg_CertificateSignatureStrength(_pCertificate) >= _Minimum)
+			;
+		}
 
 		SSL_CTX *fg_CreateSSLContext(SSL_METHOD const *_pMethod)
 		{
@@ -255,19 +394,35 @@ namespace NMib::NNetwork
 				(
 					[&]() -> decltype(auto)
 					{
-						// Protect against destructor not being run in case of exception
 						auto Cleanup = g_OnScopeExit / [&]
 							{
-								this->~CInternal();
+								if (mp_pContext)
+									SSL_CTX_free(mp_pContext);
 							}
 						;
 
-						if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS)
+						auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+						if (Minimum != 0 && Minimum != 128 && Minimum != 192 && Minimum != 256)
+							DMibErrorCryptography("Unsupported minimum cryptographic strength");
+
+						if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_SSL)
 						{
 							if (f_IsClientContext())
-								mp_pContext = fg_CreateSSLContext(TLSv1_2_client_method());
+								mp_pContext = fg_CreateSSLContext(TLS_client_method());
 							else
-								mp_pContext = fg_CreateSSLContext(TLSv1_2_server_method());
+								mp_pContext = fg_CreateSSLContext(TLS_server_method());
+
+							auto MinVersion = mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS_1_3 ? TLS1_3_VERSION : TLS1_2_VERSION;
+							ERR_clear_error();
+							if (!SSL_CTX_set_min_proto_version(mp_pContext, MinVersion))
+								DMibErrorCryptography(fg_GetExceptionStr("Failed to set minimum TLS version"));
+
+							if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_TLS)
+							{
+								ERR_clear_error();
+								if (!SSL_CTX_set_max_proto_version(mp_pContext, MinVersion))
+									DMibErrorCryptography(fg_GetExceptionStr("Failed to set maximum TLS version"));
+							}
 						}
 						else
 						{
@@ -277,15 +432,45 @@ namespace NMib::NNetwork
 								mp_pContext = fg_CreateSSLContext(SSLv23_server_method());
 						}
 
+						SSL_CTX_set_app_data(mp_pContext, this);
+
+						ERR_clear_error();
+						if (!SSL_CTX_set_tls13_cipher_policy(mp_pContext, Minimum, 1))
+							DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS 1.3 cipher strength"));
+
+						if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_DisallowEllipticCurveDHKeyExchange)
+							DMibErrorCryptography("Disabling elliptic-curve key exchange is not supported by this TLS backend");
+
+						if (Minimum)
+						{
+							if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_SSL)
+							{
+								ERR_clear_error();
+								if (!SSL_CTX_set_min_proto_version(mp_pContext, TLS1_2_VERSION))
+									DMibErrorCryptography(fg_GetExceptionStr("Failed to set the minimum TLS version for cryptographic strength"));
+							}
+						}
+
 						SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
+
 						// Quiet shutdown sends no close_notify, so a Malterlib peer sees plain EOF; both receive paths treat that as truncation
 						SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
 						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
 							SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1);
-						SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE);
+						SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET);
 						SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
-						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites))
-							SSL_CTX_set_cipher_list(mp_pContext, "AES256+EECDH:AES256+EDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS");
+
+						char const *pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+						if (Minimum >= 192)
+							pCipherList = "AES256+EECDH:CHACHA20:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+						else if (Minimum)
+							pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+						else if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites)
+							pCipherList = "AES256:CHACHA20:AES128:ALL";
+
+						ERR_clear_error();
+						if (!SSL_CTX_set_cipher_list(mp_pContext, pCipherList))
+							DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS cipher preferences"));
 
 						fp_ProcessSettings();
 						Cleanup.f_Clear();
@@ -436,6 +621,26 @@ namespace NMib::NNetwork
 
 			CSSLConnectionResult& Result = pCSSL->f_GetConnectionResult();
 
+			auto *pContext = static_cast<CInternal *>(SSL_CTX_get_app_data(SSL_get_SSL_CTX(pSSL)));
+			auto Minimum = uint16(pContext->mp_Settings.m_MinimumCryptoStrength);
+			if (Minimum)
+			{
+				auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
+				auto nCertificates = sk_X509_num(pChain);
+				bool bTrustedRoot = nCertificates && fg_IsTrustedSelfIssuedRoot(_pStoreContext, sk_X509_value(pChain, nCertificates - 1));
+
+				for (umint i = 0; i < nCertificates; ++i)
+				{
+					if (!fg_CertificateMeetsStrength(sk_X509_value(pChain, i), Minimum, bTrustedRoot && i + 1 == nCertificates))
+					{
+						Result.f_AddSSLError("Peer certificate chain does not meet the minimum cryptographic strength");
+						X509_STORE_CTX_set_error(_pStoreContext, X509_V_ERR_APPLICATION_VERIFICATION);
+
+						return 0;
+					}
+				}
+			}
+
 			// Update chain of certificates
 			if (!Result.f_HasLoggedCertificateChain())
 			{
@@ -530,18 +735,7 @@ namespace NMib::NNetwork
 
 			SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
 
-			static const int s_SupportedCurves[] =
-				{
-					NID_secp521r1
-					, NID_secp384r1
-					, NID_X25519
-					, NID_X9_62_prime256v1
-				}
-			;
-
-			ERR_clear_error();
-			if (!SSL_CTX_set1_curves(mp_pContext, s_SupportedCurves, fg_ArraySize(s_SupportedCurves)))
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to set supported curves on ssl context"));
+			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
 
 			bool bVerifyCertAndKey = false;
 			if (fp_LoadPublicCertificate())
@@ -552,6 +746,23 @@ namespace NMib::NNetwork
 
 			if (bVerifyCertAndKey)
 				fp_VerifyPublicCertAndPrivateKey();
+
+			if (Minimum && SSL_CTX_get0_certificate(mp_pContext))
+			{
+				if (!fg_CertificateMeetsStrength(SSL_CTX_get0_certificate(mp_pContext), Minimum, false))
+					DMibErrorCryptography("Local certificate does not meet the minimum cryptographic strength");
+
+				STACK_OF(X509) *pChain = nullptr;
+				SSL_CTX_get0_chain_certs(mp_pContext, &pChain);
+
+				for (umint i = 0; i < sk_X509_num(pChain); ++i)
+				{
+					auto *pCertificate = sk_X509_value(pChain, i);
+					bool bTrustAnchor = i + 1 == sk_X509_num(pChain) && fg_IsSelfIssuedCertificate(pCertificate);
+					if (!fg_CertificateMeetsStrength(pCertificate, Minimum, bTrustAnchor))
+						DMibErrorCryptography("Local certificate chain does not meet the minimum cryptographic strength");
+				}
+			}
 
 			fp_LoadCRLs();
 		}
@@ -704,7 +915,7 @@ namespace NMib::NNetwork
 			}
 		}
 
-		void fp_DeduceSigningAlgorithms(int _CurveName)
+		void fp_ConfigureAlgorithms(EVP_PKEY const *_pKey)
 		{
 			static const uint16_t s_DefaultAlgos[] =
 				{
@@ -719,56 +930,66 @@ namespace NMib::NNetwork
 					, SSL_SIGN_RSA_PKCS1_SHA256
 				}
 			;
-			umint nAlgos = fg_ArraySize(s_DefaultAlgos);
-			const uint16_t *pAlgos = s_DefaultAlgos;
 
-			switch (_CurveName)
+			uint16 StrengthOrder[] = {256, 192, 128};
+			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+			auto PreferredStrength = Minimum ? Minimum : uint16(256);
+			if (_pKey)
+				PreferredStrength = fg_PublicKeyStrength(_pKey);
+
+			if (PreferredStrength <= 128)
+				fg_Swap(StrengthOrder[0], StrengthOrder[2]);
+			else if (PreferredStrength <= 192)
+				fg_Swap(StrengthOrder[0], StrengthOrder[1]);
+
+			struct CGroup
 			{
-			case NID_secp521r1: break;
-			case NID_secp384r1:
+				uint16 m_Strength;
+				uint16_t m_ID;
+			};
+
+			static constexpr CGroup s_Groups[] =
 				{
-					static const uint16_t s_CustomAlgos[] =
-						{
-							SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, SSL_SIGN_RSA_PSS_SHA384
-							, SSL_SIGN_RSA_PKCS1_SHA384
-							, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, SSL_SIGN_RSA_PSS_SHA512
-							, SSL_SIGN_RSA_PKCS1_SHA512
-							, SSL_SIGN_ECDSA_SECP256R1_SHA256
-							, SSL_SIGN_RSA_PSS_SHA256
-							, SSL_SIGN_RSA_PKCS1_SHA256
-						}
-					;
-					nAlgos = fg_ArraySize(s_CustomAlgos);
-					pAlgos = s_CustomAlgos;
+					{256, SSL_GROUP_SECP521R1},
+					{192, SSL_GROUP_SECP384R1},
+					{128, SSL_GROUP_X25519},
+					{128, SSL_GROUP_SECP256R1},
 				}
-				break;
-			case NID_X9_62_prime256v1:
-			case NID_X25519:
+			;
+			NContainer::TCVector<uint16_t> AllowedGroups;
+			NContainer::TCVector<uint16_t> AllowedAlgorithms;
+
+			for (auto Strength : StrengthOrder)
+			{
+				if (Strength < Minimum)
+					continue;
+
+				for (auto const &Group : s_Groups)
 				{
-					static const uint16_t s_CustomAlgos[] =
-						{
-							SSL_SIGN_ECDSA_SECP256R1_SHA256
-							, SSL_SIGN_RSA_PSS_SHA256
-							, SSL_SIGN_RSA_PKCS1_SHA256
-							, SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, SSL_SIGN_RSA_PSS_SHA384
-							, SSL_SIGN_RSA_PKCS1_SHA384
-							, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, SSL_SIGN_RSA_PSS_SHA512
-							, SSL_SIGN_RSA_PKCS1_SHA512
-						}
-					;
-					nAlgos = fg_ArraySize(s_CustomAlgos);
-					pAlgos = s_CustomAlgos;
+					if (Group.m_Strength == Strength)
+						AllowedGroups.f_InsertLast(Group.m_ID);
 				}
-				break;
+
+				for (auto Algorithm : s_DefaultAlgos)
+				{
+					auto *pDigest = SSL_get_signature_algorithm_digest(Algorithm);
+					if (pDigest && uint16(EVP_MD_size(pDigest) * 4) == Strength)
+						AllowedAlgorithms.f_InsertLast(Algorithm);
+				}
 			}
+
+			ERR_clear_error();
+			if (!SSL_CTX_set1_group_ids(mp_pContext, AllowedGroups.f_GetArray(), AllowedGroups.f_GetLen()))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to set supported TLS groups"));
+
+			auto *pAlgos = AllowedAlgorithms.f_GetArray();
+			auto nAlgos = AllowedAlgorithms.f_GetLen();
 
 			ERR_clear_error();
 			if (!SSL_CTX_set_signing_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
 				DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred signing algorithms on ssl context"));
+
+			ERR_clear_error();
 			if (!SSL_CTX_set_verify_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
 				DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred verify algorithms on ssl context"));
 		}
@@ -777,7 +998,8 @@ namespace NMib::NNetwork
 		{
 			if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
 			{
-				fp_DeduceSigningAlgorithms(0);
+				fp_ConfigureAlgorithms(nullptr);
+
 				return false;
 			}
 
@@ -788,63 +1010,11 @@ namespace NMib::NNetwork
 				}
 			;
 
-			{
-				int CurveName = 0;
-				if (auto pRSA = EVP_PKEY_get1_RSA(pKey))
-				{
-					auto RSASize = RSA_size(pRSA) * 8;
-					RSA_free(pRSA);
+			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+			if (Minimum && fg_PublicKeyStrength(pKey) < Minimum)
+				DMibErrorCryptography("Local private key does not meet the minimum cryptographic strength");
 
-					DH *pDHParam;
-					if (RSASize >= 8192)
-						pDHParam = fg_Get_dh8192();
-					else if (RSASize >= 4096)
-						pDHParam = fg_Get_dh4096();
-					else if (RSASize >= 2048)
-						pDHParam = fg_Get_dh2048();
-					else
-						pDHParam = fg_Get_dh1024();
-
-					if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_DisallowEllipticCurveDHKeyExchange))
-					{
-						if (RSASize >= 12288)
-							CurveName = NID_secp521r1;
-						else if (RSASize >= 4096)
-							CurveName = NID_secp384r1;
-						else
-							CurveName = NID_X25519;
-					}
-
-					if (SSL_CTX_set_tmp_dh(mp_pContext, pDHParam) != 1)
-						DMibErrorCryptography(fg_GetExceptionStr("Failed to set tmp dh param in SSL context"));
-					DH_free(pDHParam);
-				}
-				else if (auto pECKey = EVP_PKEY_get1_EC_KEY(pKey))
-				{
-					CurveName = EC_GROUP_get_curve_name(EC_KEY_get0_group(pECKey));
-					if (!CurveName)
-						CurveName = NID_secp521r1;
-					EC_KEY_free(pECKey);
-				}
-
-				fp_DeduceSigningAlgorithms(CurveName);
-
-				if (f_IsServerContext() && CurveName)
-				{
-					EC_KEY *pECDH = EC_KEY_new_by_curve_name(CurveName);
-					if (pECDH)
-					{
-						auto Cleanup = g_OnScopeExit / [&]
-							{
-								EC_KEY_free(pECDH);
-							}
-						;
-						SSL_CTX_set_options(mp_pContext, SSL_OP_SINGLE_ECDH_USE);
-						if (SSL_CTX_set_tmp_ecdh(mp_pContext, pECDH) != 1)
-							DMibErrorCryptography(fg_GetExceptionStr("Failed to set ecdh in SSL context"));
-					}
-				}
-			}
+			fp_ConfigureAlgorithms(pKey);
 
 			ERR_clear_error();
 			if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
@@ -1020,6 +1190,20 @@ namespace NMib::NNetwork
 		{
 			fp_AttachTransport();
 
+			if (mp_pContext->f_IsClientContext())
+			{
+				auto Minimum = mp_pContext->f_GetSettings().m_MinimumCryptoStrength;
+				uint16_t Group = SSL_GROUP_SECP384R1;
+				if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric128bit)
+					Group = SSL_GROUP_X25519;
+				else if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric256bit)
+					Group = SSL_GROUP_SECP521R1;
+
+				ERR_clear_error();
+				if (!SSL_set1_client_key_shares(f_GetSSL(), &Group, 1))
+					DMibErrorCryptography(fg_GetExceptionStr("Failed to configure the initial TLS client key share"));
+			}
+
 			if (_Hostname)
 			{
 				ERR_clear_error();
@@ -1110,14 +1294,58 @@ namespace NMib::NNetwork
 		{
 			DMibRequire(mp_bConnected);
 
+			if (SSL_version(f_GetSSL()) >= TLS1_3_VERSION)
+			{
+				// TLS 1.3 session master keys are resumption secrets, not a shared channel binding.
+				NContainer::CSecureByteVector KeyData;
+				KeyData.f_SetLen(32);
+				constexpr char c_Label[] = "EXPORTER-Malterlib-SessionKeyDigest";
+
+				ERR_clear_error();
+				if (!SSL_export_keying_material(f_GetSSL(), KeyData.f_GetArray(), KeyData.f_GetLen(), c_Label, sizeof(c_Label) - 1, nullptr, 0, 0))
+					DMibErrorCryptography(fg_GetExceptionStr("Failed to export TLS channel binding"));
+
+				return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyData.f_GetLen());
+			}
+
 			auto pSession = SSL_get_session(f_GetSSL());
 			DMibRequire(pSession);
 
 			auto KeyLength = SSL_SESSION_get_master_key(pSession, nullptr, 0);
-			NContainer::CByteVector KeyData;
+			NContainer::CSecureByteVector KeyData;
 			KeyData.f_SetLen(KeyLength);
 			SSL_SESSION_get_master_key(pSession, KeyData.f_GetArray(), KeyLength);
+
 			return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyLength);
+		}
+
+		uint16 f_GetCipherStrength()
+		{
+			auto *pCipher = SSL_get_current_cipher(f_GetSSL());
+
+			return pCipher ? uint16(SSL_CIPHER_get_bits(pCipher, nullptr)) : 0;
+		}
+
+		uint16 f_GetKeyExchangeStrength()
+		{
+			switch (SSL_get_group_id(f_GetSSL()))
+			{
+			case SSL_GROUP_SECP521R1: return 256;
+			case SSL_GROUP_SECP384R1: return 192;
+			case SSL_GROUP_SECP256R1:
+			case SSL_GROUP_X25519: return 128;
+			default: return 0;
+			}
+		}
+
+		bool f_UsedHelloRetryRequest()
+		{
+			return SSL_used_hello_retry_request(f_GetSSL()) != 0;
+		}
+
+		NStr::CStr f_GetProtocolVersion()
+		{
+			return mp_bConnected ? NStr::CStr(SSL_get_version(f_GetSSL())) : NStr::CStr{};
 		}
 
 		bool f_Connect()
@@ -1842,6 +2070,7 @@ namespace NMib::NNetwork
 				{
 					CSSLConnectionResult& Result = mp_pSSL->f_GetConnectionResult();
 					Result.f_AddSSLError(SystemErrors);
+
 					if (bConnectionRefused)
 						Result.f_SetConnectionRefused();
 					f_SetState(EState_ConnectionFailed);
@@ -2463,6 +2692,26 @@ namespace NMib::NNetwork
 				}
 			)
 		;
+	}
+
+	uint16 CSSLConnection::f_GetCipherStrength() const
+	{
+		return mp_pInternal->f_GetCipherStrength();
+	}
+
+	uint16 CSSLConnection::f_GetKeyExchangeStrength() const
+	{
+		return mp_pInternal->f_GetKeyExchangeStrength();
+	}
+
+	bool CSSLConnection::f_UsedHelloRetryRequest() const
+	{
+		return mp_pInternal->f_UsedHelloRetryRequest();
+	}
+
+	NStr::CStr CSSLConnection::f_GetProtocolVersion() const
+	{
+		return mp_pInternal->f_GetProtocolVersion();
 	}
 
 	NCryptography::CHashDigest_SHA256 CSSLConnection::f_GetSessionKeyDigest() const

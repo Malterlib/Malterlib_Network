@@ -14,6 +14,11 @@ namespace NMib::NNetwork
 	{
 		NContainer::CByteVector m_PeerCertificate;
 		NContainer::TCVector<NContainer::CByteVector> m_CertificateChain;
+		NStr::CStr m_ProtocolVersion;
+		NCryptography::CHashDigest_SHA256 m_SessionKeyDigest;
+		uint16 m_CipherStrength = 0;
+		uint16 m_KeyExchangeStrength = 0;
+		bool m_bHelloRetryRequest = false;
 	};
 
 	class CSocket_SSL final : public ICSocket, public ICSocketCompletionIo
