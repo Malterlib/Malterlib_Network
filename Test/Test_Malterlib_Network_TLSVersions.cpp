@@ -34,14 +34,28 @@ namespace
 
 			TCSharedPointer<NThread::CEventAutoReset> Changed = fg_Construct();
 			CSocket Peer;
-			Peer.f_Accept
-				(
-					&Listener, [Changed](ENetTCPState)
-					{
-						Changed->f_Signal();
-					}
-				)
-			;
+
+			// Accepting only succeeds once the connection has arrived, and the listener reports no state,
+			// so it is retried until it does
+			for (NTime::CStopwatch AcceptTimeout(true); !Peer.f_IsValid(); )
+			{
+				Peer.f_Accept
+					(
+						&Listener, [Changed](ENetTCPState)
+						{
+							Changed->f_Signal();
+						}
+					)
+				;
+
+				if (Peer.f_IsValid())
+					break;
+
+				if (AcceptTimeout.f_GetTime() >= 10.0 * NTest::gc_TimeoutMultiplier)
+					DMibError("Could not accept the connection for the configured ClientHello");
+
+				NSys::fg_Thread_Sleep(0.005f);
+			}
 
 			TCSharedPointer<CSSLContext> Context = fg_Construct(CSSLContext::EType_Client, _Settings);
 			CSSLConnection Connection(Context, {}, {}, "localhost");
