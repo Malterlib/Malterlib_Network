@@ -33,6 +33,20 @@ namespace NMib::NNetwork
 
 	CResolveActor::~CResolveActor() = default;
 
+	// Resolving is stateless apart from the shared cache and the concurrency limit, so one resolver with the
+	// default configuration serves the whole process. The concurrency manager destroys it during shutdown
+	TCWrapped<TCActor<CResolveActor>> CResolveActor::fs_GetShared(CConcurrencyManager &_Manager)
+	{
+		return _Manager.f_GetSingleton<CResolveActor>
+			(
+				[&_Manager]
+				{
+					return _Manager.f_ConstructActor(fg_Construct<CResolveActor>());
+				}
+			)
+		;
+	}
+
 	void CResolveActor::fp_Construct()
 	{
 		auto &Internal = *mp_pInternal;

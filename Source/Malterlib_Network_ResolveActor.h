@@ -20,6 +20,8 @@ namespace NMib::NNetwork
 		CResolveActor(FHostResolver const &_fHostResolver = {}, umint _MaxConcurrent = 4, CNetAddress const &_NameServer = {});
 		~CResolveActor();
 
+		static NConcurrency::TCWrapped<NConcurrency::TCActor<CResolveActor>> fs_GetShared(NConcurrency::CConcurrencyManager &_Manager);
+
 		template <typename t_CResult>
 		struct TCLookup
 		{

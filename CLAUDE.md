@@ -84,6 +84,13 @@ empty address. Scoped IPv6 host strings passed directly to `f_ResolveHost`,
 custom blocking providers, and platforms without an I/O loop use the sequenced
 blocking backend.
 
+`CResolveActor::fs_GetShared(_Manager)` returns the process-wide resolver with the
+default configuration, created on first use and destroyed by the concurrency
+manager during shutdown. Use it instead of constructing a resolver per client;
+hold the returned actor by value and release the reference rather than destroying
+the actor. Construct a resolver directly when a custom host resolver, name server,
+or concurrency limit is needed.
+
 Resolver destruction cancels outstanding results, destroys the c-ares channel,
 and awaits socket deregistration acknowledgements before releasing its state.
 
