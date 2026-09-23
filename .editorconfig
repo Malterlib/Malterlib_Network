@@ -9,18 +9,31 @@ indent_size = 4
 tab_width = 4
 max_line_length = 190
 
-# Markdown tables and prose may need long lines.
-[*.md]
+# Malterlib-owned C, C++, Objective-C and Objective-C++ sources follow the Malterlib code standard.
+[*.{c,cc,cpp,cxx,h,hh,hpp,hxx,inl,m,mm}]
+malterlib_format = malterlib
+
+# Public include wrappers have no extension, and are C++ headers like any other.
+[Include/**]
+malterlib_format = malterlib
+
+# Hand-written build system files; '.MRepo' is JSON, and the state files are generated.
+[*.{MBuildSystem,MConfig,MGeneratorSettings,MHeader,MInclude,MLBuildOptions,MOptionalHeader,MSettings,MTarget,MWorkspace}]
+malterlib_format = malterlib-buildsystem
+
+# Markdown and Doxygen tables and prose may need long lines.
+[*.{md,dox}]
 max_line_length = unset
 
 # YAML indentation must use spaces, including clang configuration files.
-[{*.yaml,*.yml,.clangd,.clang-format}]
+[{*.yaml,*.yml,.clangd,.clang-format,.malterlib-format}]
 indent_style = space
 indent_size = 2
 tab_width = 2
 
 # Generated CMake import caches (including the shortened Windows cache path).
 [**/{ImportCache,IC}/**]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
@@ -34,6 +47,7 @@ tab_width = 4
 
 # Canonical license texts retain their original formatting.
 [**/LICENSES/**]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
@@ -41,6 +55,7 @@ max_line_length = unset
 
 # License notices may also live alongside vendored sources.
 [{LICENSE,LICENSE.*,COPYING,COPYING.*}]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
@@ -48,6 +63,7 @@ max_line_length = unset
 
 # Patch context and prefixes must be preserved exactly.
 [*.{patch,diff}]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
@@ -55,6 +71,7 @@ max_line_length = unset
 
 # npm writes dependency lockfiles using its own formatting.
 [package-lock.json]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
@@ -62,6 +79,7 @@ max_line_length = unset
 
 # Generated license metadata retains the generator's formatting.
 [REUSE.toml]
+malterlib_format = unset
 indent_style = unset
 indent_size = unset
 tab_width = unset
