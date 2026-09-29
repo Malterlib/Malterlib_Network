@@ -27,10 +27,9 @@ namespace
 
 	struct CBenchState
 	{
-		CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho, uint64 _AckTargetBytes)
+		CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho)
 			: m_pRunLoop(_pRunLoop)
 			, m_bEcho(_bEcho)
-			, m_AckTargetBytes(_AckTargetBytes)
 		{
 		}
 
@@ -124,8 +123,9 @@ namespace
 		TCSharedPointer<CDefaultRunLoop> m_pRunLoop;
 
 		bool m_bEcho = false;
-		uint64 m_AckTargetBytes = 0;
-		uint64 m_nServerReceivedBytes = 0;
+		uint64 m_nServerPayloadBytes = 0; // That are left of what the last control message said would follow it
+		TCVector<uint8> m_ServerControl; // The bytes of a control message that have been received so far
+		bool m_bServerLostTrack = false; // What was received where a control message should be was not one
 
 		TCActor<CAsyncSocketServerActor> m_ServerActor;
 		CActorSubscription m_ListenSubscription;
@@ -181,6 +181,197 @@ namespace
 		return true;
 	}
 
+	CSharedByteVector fg_BenchAck()
+	{
+		CIOByteVector Ack;
+		Ack.f_SetLen(8);
+		NMemory::fg_ObjectSet(Ack.f_GetArray(), (uint8)0xA5, 8);
+
+		return CSharedByteVector(fg_Move(Ack));
+	}
+
+	// Download wire format: eight magic bytes, then the fields of CBenchDownload in their order. The server answers with the chunks.
+	// What is received is a stream of bytes, where a control message is followed by the payload bytes that it says.
+	constexpr uint64 gc_BenchDownloadMagic = 0x6E776F446269424Dull; // "MBibDown"
+	constexpr uint32 gc_BenchMaxDownloadChunkSize = 64 * 1024 * 1024;
+	constexpr uint32 gc_BenchMaxPipelineLength = 1024;
+
+	struct CBenchDownload
+	{
+		uint64 m_nChunks = 0;
+		uint64 m_SendWindow = 0; // 0 keeps the one that the socket has
+		uint32 m_ChunkSize = 0;
+		uint32 m_PipelineLength = 0;
+	};
+
+	constexpr umint gc_BenchDownloadBytes = sizeof(uint64) + sizeof(CBenchDownload);
+
+	CSharedByteVector fg_BenchDownloadMessage(CBenchDownload const &_Download)
+	{
+		CIOByteVector Message;
+		Message.f_SetLen(gc_BenchDownloadBytes);
+
+		uint64 Magic = gc_BenchDownloadMagic;
+		NMemory::fg_ObjectCopy(Message.f_GetArray(), (uint8 const *)&Magic, sizeof(Magic));
+		NMemory::fg_ObjectCopy(Message.f_GetArray() + sizeof(Magic), (uint8 const *)&_Download, sizeof(_Download));
+
+		return CSharedByteVector(fg_Move(Message));
+	}
+
+	// The request is from the network, so what it asks for is limited to what a benchmark needs
+	bool fg_BenchParseDownload(uint8 const *_pData, umint _nBytes, CBenchDownload &o_Download)
+	{
+		if (_nBytes != gc_BenchDownloadBytes)
+			return false;
+
+		uint64 Magic = 0;
+		NMemory::fg_ObjectCopy((uint8 *)&Magic, _pData, sizeof(Magic));
+		if (Magic != gc_BenchDownloadMagic)
+			return false;
+
+		NMemory::fg_ObjectCopy((uint8 *)&o_Download, _pData + sizeof(Magic), sizeof(o_Download));
+
+		o_Download.m_ChunkSize = fg_Clamp(o_Download.m_ChunkSize, uint32(1), gc_BenchMaxDownloadChunkSize);
+		o_Download.m_PipelineLength = fg_Clamp(o_Download.m_PipelineLength, uint32(1), gc_BenchMaxPipelineLength);
+
+		return true;
+	}
+
+	enum class EBenchSender
+	{
+		mc_Client
+		, mc_Server
+	};
+
+	// The connection of the server is assigned by accept, so it is used under the lock
+	TCFuture<void> fg_BenchSendChunk(CBenchState &_State, EBenchSender _Sender, CSharedByteVector const &_Chunk)
+	{
+		if (_Sender == EBenchSender::mc_Client)
+			return _State.m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0);
+
+		DMibLock(_State.m_Lock);
+
+		return _State.m_ServerConnection(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0);
+	}
+
+	// Keeps _PipelineLength sends outstanding, to avoid measuring per-chunk idle gaps.
+	TCFuture<void> fg_BenchSendChunks
+		(
+			TCSharedPointerSupportWeak<CBenchState> _pState
+			, EBenchSender _Sender
+			, CSharedByteVector _Chunk
+			, uint64 _nChunks
+			, umint _PipelineLength
+		)
+	{
+		uint64 nQueued = 0;
+
+		TCVector<TCFuture<void>> InFlight;
+		while (nQueued < _nChunks && InFlight.f_GetLen() < _PipelineLength)
+		{
+			InFlight.f_InsertLast(fg_BenchSendChunk(*_pState, _Sender, _Chunk));
+			++nQueued;
+		}
+
+		for (uint64 iChunk = 0; iChunk < _nChunks; ++iChunk)
+		{
+			umint iSlot = umint(iChunk % InFlight.f_GetLen());
+			co_await fg_Move(InFlight[iSlot]);
+
+			if (nQueued < _nChunks)
+			{
+				InFlight[iSlot] = fg_BenchSendChunk(*_pState, _Sender, _Chunk);
+				++nQueued;
+			}
+		}
+
+		co_return {};
+	}
+
+	CSharedByteVector fg_BenchChunk(uint32 _ChunkSize)
+	{
+		CIOByteVector ChunkData;
+		ChunkData.f_SetLen(_ChunkSize);
+		NMemory::fg_ObjectSet(ChunkData.f_GetArray(), (uint8)0x3C, _ChunkSize);
+
+		return CSharedByteVector(fg_Move(ChunkData));
+	}
+
+	struct CBenchReceived
+	{
+		umint m_nAcks = 0;
+		TCVector<CBenchDownload> m_Downloads;
+	};
+
+	// Takes what the server received, which is control messages and the payload that follows them, in pieces of any size.
+	// Called with the lock of the state.
+	CBenchReceived fg_BenchServerReceive(CBenchState &_State, uint8 const *_pData, umint _nBytes)
+	{
+		CBenchReceived Received;
+
+		while (_nBytes && !_State.m_bServerLostTrack)
+		{
+			if (_State.m_nServerPayloadBytes)
+			{
+				umint nPayload = umint(fg_Min(uint64(_nBytes), _State.m_nServerPayloadBytes));
+
+				_pData += nPayload;
+				_nBytes -= nPayload;
+				_State.m_nServerPayloadBytes -= nPayload;
+
+				if (!_State.m_nServerPayloadBytes)
+					++Received.m_nAcks;
+
+				continue;
+			}
+
+			auto &Control = _State.m_ServerControl;
+
+			// The magic says how long the message is
+			umint nWanted = sizeof(uint64);
+			if (Control.f_GetLen() >= sizeof(uint64))
+			{
+				uint64 Magic = 0;
+				NMemory::fg_ObjectCopy((uint8 *)&Magic, Control.f_GetArray(), sizeof(Magic));
+
+				if (Magic == gc_BenchControlMagic)
+					nWanted = gc_BenchControlBytes;
+				else if (Magic == gc_BenchDownloadMagic)
+					nWanted = gc_BenchDownloadBytes;
+				else
+				{
+					_State.m_bServerLostTrack = true;
+					break;
+				}
+			}
+
+			umint nControl = fg_Min(_nBytes, nWanted - Control.f_GetLen());
+			Control.f_Insert(_pData, nControl);
+
+			_pData += nControl;
+			_nBytes -= nControl;
+
+			if (Control.f_GetLen() < nWanted || nWanted == sizeof(uint64))
+				continue;
+
+			uint64 AckTargetBytes = 0;
+			CBenchDownload Download;
+
+			if (fg_BenchParseControl(Control.f_GetArray(), Control.f_GetLen(), AckTargetBytes))
+			{
+				_State.m_nServerPayloadBytes = AckTargetBytes;
+				if (!AckTargetBytes)
+					++Received.m_nAcks;
+			}
+			else if (fg_BenchParseDownload(Control.f_GetArray(), Control.f_GetLen(), Download))
+				Received.m_Downloads.f_Insert(Download);
+
+			Control.f_Clear();
+		}
+
+		return Received;
+	}
+
 	constexpr umint gc_BenchLocalFragmentationSize = 1024 * 1024 + 4096; // Local frames reduce per-frame overhead; remote frames retain the interleaving bound.
 	template <typename t_CHandler>
 	uint16 fg_SetupServer
@@ -215,31 +406,46 @@ namespace
 
 						co_await pState->f_WaitServerConnection();
 
-						DMibLock(pState->m_Lock);
-
-						uint64 ControlTarget = 0;
-						if (fg_BenchParseControl(_Data.f_GetArray(), _Data.f_GetLen(), ControlTarget))
+						CBenchReceived Received;
+						TCFutureVector<void> Sends;
 						{
-							pState->m_AckTargetBytes = ControlTarget;
-							pState->m_nServerReceivedBytes = 0;
-							co_return {};
+							DMibLock(pState->m_Lock);
+
+							if (pState->m_bEcho)
+							{
+								pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, fg_Move(_Data), 0).f_DiscardResult();
+								co_return {};
+							}
+
+							bool bLostTrack = pState->m_bServerLostTrack;
+							Received = fg_BenchServerReceive(*pState, _Data.f_GetArray(), _Data.f_GetLen());
+
+							if (pState->m_bServerLostTrack && !bLostTrack)
+								NSys::fg_ConsoleOutput(CStr("What was received is not from this benchmark, and what follows it is not answered\n"));
+
+							for (umint iAck = 0; iAck < Received.m_nAcks; ++iAck)
+								pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, fg_BenchAck(), 0).f_DiscardResult();
+
+							for (auto &Download : Received.m_Downloads)
+							{
+								if (Download.m_SendWindow)
+									pState->m_ServerConnection(&CAsyncSocketActor::f_SetSendWindow, umint(Download.m_SendWindow)) > Sends;
+							}
 						}
 
-						if (pState->m_bEcho)
-						{
-							pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, fg_Move(_Data), 0).f_DiscardResult();
-							co_return {};
-						}
+						if (!Sends.f_IsEmpty())
+							co_await fg_AllDone(Sends);
 
-						pState->m_nServerReceivedBytes += _Data.f_GetLen();
-						if (pState->m_nServerReceivedBytes >= pState->m_AckTargetBytes && pState->m_ServerConnection)
+						// The socket waits for this function before it goes on, so the chunks are sent after it
+						for (auto &Download : Received.m_Downloads)
 						{
-							pState->m_nServerReceivedBytes -= pState->m_AckTargetBytes;
-
-							CIOByteVector Ack;
-							Ack.f_SetLen(8);
-							NMemory::fg_ObjectSet(Ack.f_GetArray(), (uint8)0xA5, 8);
-							pState->m_ServerConnection(&CAsyncSocketActor::f_SendData, CSharedByteVector(fg_Move(Ack)), 0).f_DiscardResult();
+							fg_BenchSendChunks(pState, EBenchSender::mc_Server, fg_BenchChunk(Download.m_ChunkSize), Download.m_nChunks, Download.m_PipelineLength)
+								> [](TCAsyncResult<void> &&_Result)
+								{
+									if (!_Result)
+										NSys::fg_ConsoleOutput(CStr("Failed to send what was asked for: {}\n"_f << _Result.f_GetExceptionStr()));
+								}
+							;
 						}
 
 						co_return {};
@@ -382,8 +588,10 @@ namespace
 		TCFuture<void> f_RunUpload(TCSharedPointerSupportWeak<CBenchState> _pState, CSharedByteVector _Chunk, uint64 _nBytes)
 		{
 			umint ChunkSize = _Chunk.f_GetLen();
+			uint64 nChunks = (_nBytes + ChunkSize - 1) / ChunkSize;
 
-			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchControlMessage(_nBytes), 0).f_DiscardResult();
+			// The server finds the next control message after the bytes that this one says
+			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchControlMessage(nChunks * ChunkSize), 0).f_DiscardResult();
 
 			uint64 AckTargetBytes = 0;
 			{
@@ -391,32 +599,33 @@ namespace
 				AckTargetBytes = _pState->m_nClientReceivedBytes + 8;
 			}
 
-			// Keep enough sends outstanding to avoid measuring per-chunk idle gaps.
 			umint PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(umint(16));
 
-			uint64 nChunks = (_nBytes + ChunkSize - 1) / ChunkSize;
-			uint64 nQueued = 0;
-
-			TCVector<TCFuture<void>> InFlight;
-			while (nQueued < nChunks && InFlight.f_GetLen() < PipelineLength)
-			{
-				InFlight.f_InsertLast(_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0));
-				++nQueued;
-			}
-
-			for (uint64 iChunk = 0; iChunk < nChunks; ++iChunk)
-			{
-				umint iSlot = umint(iChunk % InFlight.f_GetLen());
-				co_await fg_Move(InFlight[iSlot]);
-
-				if (nQueued < nChunks)
-				{
-					InFlight[iSlot] = _pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0);
-					++nQueued;
-				}
-			}
+			co_await fg_BenchSendChunks(_pState, EBenchSender::mc_Client, fg_Move(_Chunk), nChunks, PipelineLength);
 
 			co_await _pState->f_WaitClientReceived(AckTargetBytes);
+
+			co_return {};
+		}
+
+		// The server sends and the client receives, which is the other direction on the same connection
+		TCFuture<void> f_RunDownload(TCSharedPointerSupportWeak<CBenchState> _pState, uint32 _ChunkSize, uint64 _nBytes)
+		{
+			CBenchDownload Download;
+			Download.m_ChunkSize = _ChunkSize;
+			Download.m_nChunks = (_nBytes + _ChunkSize - 1) / _ChunkSize;
+			Download.m_PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(uint32(16));
+			Download.m_SendWindow = fg_GetSys()->f_GetEnvironmentVariable("SendWindow").f_ToInt(uint64(0));
+
+			uint64 TargetBytes = 0;
+			{
+				DMibLock(_pState->m_Lock);
+				TargetBytes = _pState->m_nClientReceivedBytes + Download.m_nChunks * _ChunkSize;
+			}
+
+			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchDownloadMessage(Download), 0).f_DiscardResult();
+
+			co_await _pState->f_WaitClientReceived(TargetBytes);
 
 			co_return {};
 		}
@@ -438,7 +647,7 @@ namespace
 			, umint _nRepetitions
 		)
 	{
-		TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(_RunLoopHelper.m_pRunLoop, true, uint64(0));
+		TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(_RunLoopHelper.m_pRunLoop, true);
 		fg_SetupConnection(_RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<t_CHandler>());
 
 		TCActor<t_CDriver> Driver = fg_ConstructActor<t_CDriver>();
@@ -476,10 +685,7 @@ namespace
 		TCActor<CBenchDriverActor> Driver = fg_ConstructActor<CBenchDriverActor>();
 
 		// Allocate once outside timing so throughput excludes payload creation.
-		CIOByteVector ChunkData;
-		ChunkData.f_SetLen(_ChunkSize);
-		NMemory::fg_ObjectSet(ChunkData.f_GetArray(), (uint8)0x3C, _ChunkSize);
-		CSharedByteVector Chunk(fg_Move(ChunkData));
+		CSharedByteVector Chunk = fg_BenchChunk(_ChunkSize);
 
 		Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, uint64(_ChunkSize))
 			.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
@@ -490,6 +696,38 @@ namespace
 		{
 			Time.f_Start();
 			Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, _nTransferBytes)
+				.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
+			;
+			Time.f_Stop(_nTransferBytes);
+		}
+		_PerfTest.f_Add(Time);
+
+		Driver->f_BlockDestroy(_RunLoopHelper.m_pRunLoop->f_ActorDestroyLoop());
+	}
+
+	void fg_MeasureDownload
+		(
+			CActorRunLoopTestHelper &_RunLoopHelper
+			, CTestPerformance &_PerfTest
+			, TCSharedPointerSupportWeak<CBenchState> const &_pState
+			, CStr const &_MeasureName
+			, uint64 _nTransferBytes
+			, uint32 _ChunkSize
+			, umint _nRepetitions
+			, fp64 _CallTimeout
+		)
+	{
+		TCActor<CBenchDriverActor> Driver = fg_ConstructActor<CBenchDriverActor>();
+
+		Driver(&CBenchDriverActor::f_RunDownload, _pState, _ChunkSize, uint64(_ChunkSize))
+			.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
+		;
+
+		CTestPerformanceMeasure Time(_MeasureName);
+		for (umint iRepetition = 0; iRepetition < _nRepetitions; ++iRepetition)
+		{
+			Time.f_Start();
+			Driver(&CBenchDriverActor::f_RunDownload, _pState, _ChunkSize, _nTransferBytes)
 				.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
 			;
 			Time.f_Stop(_nTransferBytes);
@@ -622,10 +860,11 @@ namespace
 						{
 							DMibTestPath(_Tag);
 
-							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false);
 							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mc_nRepetitions, g_Timeout);
+							fg_MeasureDownload(RunLoopHelper, PerfTest, pState, "ThrDown_{}"_f << _Tag, TransferBytes, ChunkSize, mc_nRepetitions, g_Timeout);
 						}
 					)
 				;
@@ -660,7 +899,7 @@ namespace
 						ServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
 					}
 
-					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false);
 
 					fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), ServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
 
@@ -700,6 +939,12 @@ namespace
 					uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mc_nTransferBytes);
 					fp64 CallTimeout = fg_GetSys()->f_GetEnvironmentVariable("BenchCallTimeout").f_ToFloat(fp64(600.0));
 
+					CStr Direction = fg_GetSys()->f_GetEnvironmentVariable("BenchDirection");
+					if (Direction.f_IsEmpty())
+						Direction = "upload";
+
+					DMibAssertTrue(Direction == "upload" || Direction == "download");
+
 					CActorRunLoopTestHelper RunLoopHelper;
 
 					CTestPerformance PerfTest(0.015);
@@ -715,11 +960,14 @@ namespace
 						ClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
 					}
 
-					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false);
 					fg_SetupClient(RunLoopHelper, pState, Address, ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 					DMibTestPath("Remote");
-					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mc_nRepetitions, CallTimeout);
+					if (Direction == "download")
+						fg_MeasureDownload(RunLoopHelper, PerfTest, pState, "ThrRemoteDown_{}"_f << Scheme, TransferBytes, ChunkSize, mc_nRepetitions, CallTimeout);
+					else
+						fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mc_nRepetitions, CallTimeout);
 
 					DMibExpectTrue(PerfTest);
 				}
