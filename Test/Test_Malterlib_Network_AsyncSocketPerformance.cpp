@@ -301,15 +301,7 @@ namespace
 		if (ResolvedAddress.f_GetType() == ENetAddressType_Unix || fg_IsLoopbackAddress(ResolvedAddress))
 			_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, gc_BenchLocalFragmentationSize).f_DiscardResult();
 
-		auto NewClientConnection = _pState->m_ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, _ConnectAddress
-				, ""
-				, ENetAddressType_None
-				, 0
-				, fg_TempCopy(_ClientFactory)
-			)
+		auto NewClientConnection = _pState->m_ClientActor(&CAsyncSocketClientActor::f_Connect, _ConnectAddress, "", ENetAddressType_None, 0, fg_TempCopy(_ClientFactory))
 			.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
 		;
 
@@ -443,17 +435,13 @@ namespace
 
 		TCActor<t_CDriver> Driver = fg_ConstructActor<t_CDriver>();
 
-		Driver(&t_CDriver::f_RunPing, pState, _nPingRoundTrips / 8)
-			.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
+		Driver(&t_CDriver::f_RunPing, pState, _nPingRoundTrips / 8).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		CTestPerformanceMeasure Time(_Name);
 		for (umint iRepetition = 0; iRepetition < _nRepetitions; ++iRepetition)
 		{
 			Time.f_Start();
-			Driver(&t_CDriver::f_RunPing, pState, _nPingRoundTrips)
-				.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
-			;
+			Driver(&t_CDriver::f_RunPing, pState, _nPingRoundTrips).f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout);
 			Time.f_Stop(_nPingRoundTrips);
 		}
 		_PerfTest.f_Add(Time);
@@ -481,17 +469,13 @@ namespace
 		NMemory::fg_ObjectSet(ChunkData.f_GetArray(), (uint8)0x3C, _ChunkSize);
 		CSharedByteVector Chunk(fg_Move(ChunkData));
 
-		Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, uint64(_ChunkSize))
-			.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
-		;
+		Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, uint64(_ChunkSize)).f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout);
 
 		CTestPerformanceMeasure Time(_MeasureName);
 		for (umint iRepetition = 0; iRepetition < _nRepetitions; ++iRepetition)
 		{
 			Time.f_Start();
-			Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, _nTransferBytes)
-				.f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout)
-			;
+			Driver(&CBenchDriverActor::f_RunUpload, _pState, Chunk, _nTransferBytes).f_CallSync(_RunLoopHelper.m_pRunLoop, _CallTimeout);
 			Time.f_Stop(_nTransferBytes);
 		}
 		_PerfTest.f_Add(Time);
@@ -502,15 +486,15 @@ namespace
 	class CAsyncSocketPerformance_Tests : public CTest
 	{
 #if defined(DMibDebug) || defined(DMibSanitizerEnabled)
-		constexpr static uint64 mc_nTransferBytes = 8ull << 20;
-		constexpr static umint mc_nPingRoundTrips = 128;
-		constexpr static umint mc_nRepetitions = 3;
+		static constexpr uint64 mc_nTransferBytes = 8ull << 20;
+		static constexpr umint mc_nPingRoundTrips = 128;
+		static constexpr umint mc_nRepetitions = 3;
 #else
-		constexpr static uint64 mc_nTransferBytes = 8 * (1024ull << 20);
-		constexpr static umint mc_nPingRoundTrips = 4 * 16384;
-		constexpr static umint mc_nRepetitions = 5;
+		static constexpr uint64 mc_nTransferBytes = 8 * (1024ull << 20);
+		static constexpr umint mc_nPingRoundTrips = 4 * 16384;
+		static constexpr umint mc_nRepetitions = 5;
 #endif
-		constexpr static uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
+		static constexpr uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
 
 		static bool fs_BenchSchemeEnabled(CStr const &_Tag)
 		{

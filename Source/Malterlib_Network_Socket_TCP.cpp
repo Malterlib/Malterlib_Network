@@ -19,7 +19,7 @@ namespace NMib::NNetwork
 	{
 	}
 
-	CSocket_TCP &CSocket_TCP::operator =(CSocket_TCP &&_Other)
+	CSocket_TCP &CSocket_TCP::operator = (CSocket_TCP &&_Other)
 	{
 		mp_Socket = fg_Move(_Other.mp_Socket);
 		mp_nTransferSizeHint = fg_Exchange(_Other.mp_nTransferSizeHint, 0);
@@ -164,7 +164,7 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
-	CSocketOperationResult CSocket_TCP::f_Send(const void *_pData, umint _DataLen)
+	CSocketOperationResult CSocket_TCP::f_Send(void const *_pData, umint _DataLen)
 	{
 		if (!_DataLen)
 			return {};
@@ -292,8 +292,7 @@ namespace NMib::NNetwork
 				_pSpans
 				, _nSpans
 				, fg_Move(_fOnComplete)
-				,
-				[fOnReleased = fg_Move(_fOnReleased)]() mutable
+				, [fOnReleased = fg_Move(_fOnReleased)]() mutable
 				{
 					fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
 				}
@@ -301,7 +300,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	umint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
+	umint CSocket_TCP::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen)
 	{
 		return mp_Socket.f_SendDatagram(_Address, _pData, _DataLen);
 	}
@@ -337,5 +336,5 @@ namespace NMib::NNetwork
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+using namespace NMib::NNetwork;
 #endif

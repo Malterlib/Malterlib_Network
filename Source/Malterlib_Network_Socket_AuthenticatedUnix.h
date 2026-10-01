@@ -30,8 +30,8 @@ namespace NMib::NNetwork
 		bool f_IsServerContext() const;
 
 		CSSLSettings m_Settings;
-		NCryptography::CCertificateVerifyOptions m_VerifyOptions; // Empty axes are unrestricted; local keys must also satisfy the key whitelist.
-		NContainer::CSecureByteVector m_PrivateKeyDER; // Normalized for CPublicCrypto signing; empty for anonymous clients
+		NCryptography::CCertificateVerifyOptions m_VerifyOptions;              // Empty axes are unrestricted; local keys must also satisfy the key whitelist.
+		NContainer::CSecureByteVector m_PrivateKeyDER;                         // Normalized for CPublicCrypto signing; empty for anonymous clients
 		NContainer::TCVector<NContainer::CByteVector> m_LocalCertificateChain; // Leaf first followed by the CA certificate, matching what a TLS context sends
 		EType m_Type;
 	};
@@ -58,28 +58,32 @@ namespace NMib::NNetwork
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) override
+			)
+			override
 		;
 		virtual void f_AsyncConnect
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) override
+			)
+			override
 		;
 		virtual void f_Listen
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::ENetFlag _Flags
-			) override
+			)
+			override
 		;
 		virtual void f_ListenDatagram
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::ENetFlag _Flags
-			) override
+			)
+			override
 		;
 		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
@@ -89,9 +93,9 @@ namespace NMib::NNetwork
 		virtual ENetTCPState f_GetState() override;
 		virtual NStr::CStr f_GetCloseReason() override;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override;
-		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override;
+		virtual CSocketOperationResult f_Send(void const *_pData, umint _DataLen) override;
 		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
-		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) override;
+		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen) override;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
 		virtual uint32 f_GetListenPort() const override;
@@ -145,7 +149,7 @@ namespace NMib::NNetwork
 			NContainer::CByteVector m_LocalHello;
 			NContainer::CByteVector m_PeerHello;
 
-			NSys::NNetwork::CProcessIdentity m_LocalIdentity; // Local kernel identity signed into the hello.
+			NSys::NNetwork::CProcessIdentity m_LocalIdentity;        // Local kernel identity signed into the hello.
 			NSys::NNetwork::CProcessIdentity m_ExpectedPeerIdentity; // The peer must claim this kernel-reported identity.
 
 			EHandshakeStage m_Stage = EHandshakeStage::mc_WaitHello;
@@ -185,10 +189,10 @@ namespace NMib::NNetwork
 		NStr::CStr mp_CloseReason;
 
 		EState mp_State = EState::mc_None;
-		bool mp_bHandshakePumpOnWrite = false; // Callback-lock-protected handshake mirror; mp_State belongs to the owner thread.
+		bool mp_bHandshakePumpOnWrite = false;          // Callback-lock-protected handshake mirror; mp_State belongs to the owner thread.
 		NAtomic::TCAtomic<bool> mp_bTransportConnected; // Handshake may start only after transport connection is reported.
 		bool mp_bBrokenStateReported = false;
-		bool mp_bSendShutdown = false; // f_Shutdown on an established connection half-closes: sends stop while reads keep draining until remote closure
+		bool mp_bSendShutdown = false;                  // f_Shutdown on an established connection half-closes: sends stop while reads keep draining until remote closure
 
 		bool mp_bHandshakeSentNetwork = false; // Handshake traffic must reset inactivity accounting before application payload is available.
 		bool mp_bHandshakeReceivedNetwork = false;
@@ -196,5 +200,5 @@ namespace NMib::NNetwork
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+using namespace NMib::NNetwork;
 #endif

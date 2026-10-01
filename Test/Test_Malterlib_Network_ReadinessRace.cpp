@@ -26,7 +26,15 @@ namespace
 		void fp_Test(CNetAddress const &_ListenAddress, bool _bTcp)
 		{
 			auto pListen = CSocket_TCP::fs_GetFactory()("");
-			pListen->f_Listen(_ListenAddress, [](ENetTCPState){}, ENetFlag_None);
+			pListen->f_Listen
+				(
+					_ListenAddress
+					, [](ENetTCPState)
+					{
+					}
+					, ENetFlag_None
+				)
+			;
 
 			CNetAddress ConnectAddress = _ListenAddress;
 			if (_bTcp)
@@ -38,7 +46,15 @@ namespace
 			}
 
 			auto pClient = CSocket_TCP::fs_GetFactory()("");
-			pClient->f_Connect(ConnectAddress, [](ENetTCPState){}, CNetAddress());
+			pClient->f_Connect
+				(
+					ConnectAddress
+					, [](ENetTCPState)
+					{
+					}
+					, CNetAddress()
+				)
+			;
 
 			NAtomic::TCAtomic<umint> nReadReports = 0;
 			TCUniquePointer<ICSocket> pServer;
@@ -118,11 +134,7 @@ namespace
 
 			DMibTestSuite("ReadinessRace Unix")
 			{
-				CStr Path = NNetwork::fg_GetSafeUnixSocketPath
-					(
-						"{}/RR_{}.socket"_f << NFile::CFile::fs_GetProgramDirectory() << NCryptography::fg_RandomID().f_Left(8)
-					)
-				;
+				CStr Path = NNetwork::fg_GetSafeUnixSocketPath("{}/RR_{}.socket"_f << NFile::CFile::fs_GetProgramDirectory() << NCryptography::fg_RandomID().f_Left(8));
 				fp_Test(CSocket::fs_ResolveAddress("UNIX:" + Path), false);
 			};
 		}

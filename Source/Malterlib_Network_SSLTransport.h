@@ -29,7 +29,7 @@ namespace NMib::NNetwork
 			umint m_nFill = 0;
 			umint m_iSent = 0;
 			umint m_nPinnedBytes = 0;
-			uint64 m_PinStamp = 0; // Submit-to-release latency sample; zero when unsampled.
+			uint64 m_PinStamp = 0;    // Submit-to-release latency sample; zero when unsampled.
 			int32 m_iNextUnsent = -1; // Links either the unsent or free list; -1 ends the list.
 			int32 m_iNextFree = -1;
 		};
@@ -71,7 +71,7 @@ namespace NMib::NNetwork
 		ETransferResult f_Write(void const *_pData, umint _nBytes, umint &o_nWritten);
 		ETransferResult f_Flush();
 
-		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);
+		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer);
 		void f_AbortSend(umint _iBuffer);
 		void f_SendCompleted(umint _iBuffer, umint _nBytes);
 		umint f_GetFillBuffer() const;
@@ -108,7 +108,7 @@ namespace NMib::NNetwork
 
 		static constexpr umint mc_nInboundBufferSize = 17 * 1024; // Fits one complete framed TLS record.
 		static constexpr umint mc_nOutboundBufferCap = 32 * 1024; // Synchronous deferrals attempt an early flush at this cap.
-		static constexpr umint mc_nPlainHoldSize = 17 * 1024; // Includes TLS 1.3 bytes written beyond plaintext before trimming.
+		static constexpr umint mc_nPlainHoldSize = 17 * 1024;     // Includes TLS 1.3 bytes written beyond plaintext before trimming.
 
 		static constexpr umint mc_nMaxSendDepth = 8; // Prompt-release generation cap; late-release transports use the byte window.
 
@@ -141,13 +141,13 @@ namespace NMib::NNetwork
 		CSocket *mp_pSocket = nullptr;
 		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
-		NContainer::TCVector<COut> mp_Out; // Grows on demand; free generations are reused newest-first for cache locality.
+		NContainer::TCVector<COut> mp_Out;                                 // Grows on demand; free generations are reused newest-first for cache locality.
 		NStorage::TCSharedPointer<NContainer::CByteVector> mp_pOutRetired; // Reusable only after the displaced zero-copy send releases it.
 
 		NStr::CStr mp_TransportError;
 		NContainer::CByteVector mp_Plain;
 
-		CCipherSegment mp_CipherQueue[mc_nCipherQueueCapacity]; // Live range is [mp_iCipherHead, mp_nCipherQueue); each segment retains its bytes until consumed.
+		CCipherSegment mp_CipherQueue[mc_nCipherQueueCapacity];            // Live range is [mp_iCipherHead, mp_nCipherQueue); each segment retains its bytes until consumed.
 		umint mp_nCipherQueue = 0;
 		NStorage::TCSharedPointer<NContainer::CByteVector> mp_pCipherFill; // Consecutive readiness reads extend one queue piece.
 

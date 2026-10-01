@@ -100,22 +100,20 @@ namespace NMib::NNetwork
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) = 0
+			)
+			= 0
 		;
 		virtual void f_AsyncConnect
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) = 0
+			)
+			= 0
 		;
 		virtual void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) = 0;
-		virtual void f_ListenDatagram
-			(
-				NMib::NNetwork::CNetAddress const &_Address
-				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
-				, ENetFlag _Flags
-			) = 0
+		virtual auto f_ListenDatagram(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
+			-> void = 0
 		;
 		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
 		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) = 0;
@@ -129,9 +127,9 @@ namespace NMib::NNetwork
 		virtual ENetTCPState f_GetState() = 0;
 		virtual NStr::CStr f_GetCloseReason() = 0;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) = 0;
-		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) = 0;
+		virtual CSocketOperationResult f_Send(void const *_pData, umint _DataLen) = 0;
 		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans);
-		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) = 0;
+		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen) = 0;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) = 0;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const = 0;
 		virtual uint32 f_GetListenPort() const = 0;
@@ -154,5 +152,5 @@ namespace NMib::NNetwork
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+using namespace NMib::NNetwork;
 #endif

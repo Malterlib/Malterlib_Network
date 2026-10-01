@@ -102,7 +102,6 @@ namespace NMib::NNetwork
 			Listen.m_fOnNewConnection = fg_Move(_Callbacks.m_fNewConnection);
 			Listen.m_fOnFailedConnection = fg_Move(_Callbacks.m_fFailedConnection);
 
-
 			umint nListenTo = _AddressesToListenTo.f_GetLen();
 
 			Listen.m_ListenSockets.f_SetLen(nListenTo);
@@ -236,9 +235,7 @@ namespace NMib::NNetwork
 							pListen->m_fOnNewConnection.f_CallDiscard(CAsyncSocketNewServerConnection(fg_Move(ConnectionResult.m_ConnectionInfo), Connection));
 					}
 					break;
-				default:
-					DMibPDebugBreak;
-					break;
+				default: DMibPDebugBreak; break;
 				}
 				co_return {};
 			}

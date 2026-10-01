@@ -55,8 +55,7 @@ namespace
 				)
 			;
 
-			auto fHandlerFactory
-				= [=, this](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
+			auto fHandlerFactory = [=, this](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
 				{
 					return [=, this](NNetwork::ENetTCPState _StateAdded)
 						{
@@ -85,9 +84,7 @@ namespace
 																		[=, this]()
 																		{
 																			if (!(*pSocketShared))
-																			{
 																				return;
-																			}
 																			if (_StateAdded & NNetwork::ENetTCPState_Read)
 																			{
 																				try
@@ -97,9 +94,7 @@ namespace
 																					while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096, bEndOfStream))
 																					{
 																						if (_LoopbackType == ELoopbackType_Echo)
-																						{
 																							pSendBuffer->f_Insert(Buffer, nBytes);
-																						}
 																					}
 																					while (!pSendBuffer->f_IsEmpty())
 																					{
@@ -171,7 +166,12 @@ namespace
 																						{
 																							while (!pSendBufferMirror->f_IsEmpty())
 																							{
-																								umint nSent = (*pSocketShared)->f_Send(pSendBufferMirror->f_GetArray(), pSendBufferMirror->f_GetLen());
+																								umint nSent = (*pSocketShared)->f_Send
+																									(
+																										pSendBufferMirror->f_GetArray()
+																										, pSendBufferMirror->f_GetLen()
+																									)
+																								;
 																								if (!nSent)
 																									break;
 																								pSendBufferMirror->f_Remove(0, nSent);
@@ -203,7 +203,6 @@ namespace
 																}
 															)
 														;
-
 													}
 												}
 												catch (CExceptionNet const &)
@@ -231,20 +230,8 @@ namespace
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20679;
 
-				m_ListenSocketV4.f_Listen
-					(
-						CNetAddress(ListenV4)
-						, fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal)
-						, NNetwork::ENetFlag_None
-					)
-				;
-				m_ListenSocketV6.f_Listen
-					(
-						CNetAddress(ListenV6)
-						, fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal)
-						, NNetwork::ENetFlag_None
-					)
-				;
+				m_ListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal), NNetwork::ENetFlag_None);
+				m_ListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal), NNetwork::ENetFlag_None);
 			}
 
 			{
@@ -256,20 +243,8 @@ namespace
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20677;
 
-				m_EchoListenSocketV4.f_Listen
-					(
-						CNetAddress(ListenV4)
-						, fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo)
-						, NNetwork::ENetFlag_None
-					)
-				;
-				m_EchoListenSocketV6.f_Listen
-					(
-						CNetAddress(ListenV6)
-						, fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo)
-						, NNetwork::ENetFlag_None
-					)
-				;
+				m_EchoListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo), NNetwork::ENetFlag_None);
+				m_EchoListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo), NNetwork::ENetFlag_None);
 			}
 
 			{
@@ -281,20 +256,8 @@ namespace
 				ListenV6.f_SetLocalhost();
 				ListenV6.m_Port = 20678;
 
-				m_MirrorListenSocketV4.f_Listen
-					(
-						CNetAddress(ListenV4)
-						, fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror)
-						, NNetwork::ENetFlag_None
-					)
-				;
-				m_MirrorListenSocketV6.f_Listen
-					(
-						CNetAddress(ListenV6)
-						, fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror)
-						, NNetwork::ENetFlag_None
-					)
-				;
+				m_MirrorListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
+				m_MirrorListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
 			}
 		}
 

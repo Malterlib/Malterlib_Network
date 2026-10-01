@@ -49,13 +49,13 @@ namespace NMib::NNetwork
 			_fOnClosed();
 	}
 
-	inline void CAsyncResolver::f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish)
+	inline void CAsyncResolver::f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish)
 	{
 		f_CloseAsync({});
 		mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open(_Address, _PreferType, fg_Move(_fOnFinish));
 	}
 
-	inline void CAsyncResolver::f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo)
+	inline void CAsyncResolver::f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo)
 	{
 		f_CloseAsync({});
 		mp_pResolver = NMib::NSys::NNetwork::fg_AsyncResolveAddress_Open

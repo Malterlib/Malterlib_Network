@@ -12,8 +12,8 @@
 namespace NMib::NNetwork
 {
 	CAsyncSocketClientActor::CAsyncSocketClientActor()
-		: mp_MaxMessageSize(24*1024*1024)
-		, mp_FragmentationSize(32*1024)
+		: mp_MaxMessageSize(24 * 1024 * 1024)
+		, mp_FragmentationSize(32 * 1024)
 		, mp_Timeout(60.0)
 	{
 	}
@@ -82,7 +82,7 @@ namespace NMib::NNetwork
 			)
 		;
 
-		auto [ConnectAddresses, BindAddresses] = co_await(fg_Move(ConnectLookup.m_Result) + fg_Move(BindLookup.m_Result));
+		auto [ConnectAddresses, BindAddresses] = co_await (fg_Move(ConnectLookup.m_Result) + fg_Move(BindLookup.m_Result));
 
 		auto ConnectToAddress = fg_Move(ConnectAddresses[0]);
 		auto BindToAddress = fg_Move(BindAddresses[0]);
@@ -197,15 +197,7 @@ namespace NMib::NNetwork
 							if (!This || pPendingDeleted->f_Load())
 								return (void)pCleanupPromise.f_Clear();
 
-							NConcurrency::g_Dispatch(This) /
-								[
-									this
-									, pPendingDeleted
-									, pPending
-									, Promise
-									, pCleanupPromise
-									, CleanupPending = fg_Move(CleanupPending)
-								]() mutable
+							NConcurrency::g_Dispatch(This) / [this, pPendingDeleted, pPending, Promise, pCleanupPromise, CleanupPending = fg_Move(CleanupPending)]() mutable
 								{
 									if (pPendingDeleted->f_Load())
 										return (void)pCleanupPromise.f_Clear();
@@ -240,8 +232,8 @@ namespace NMib::NNetwork
 											;
 
 											(
-												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
-												/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
+												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor()) / [ConnectionActor, pCleanupPromise]
+												() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 												{
 													auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
 
