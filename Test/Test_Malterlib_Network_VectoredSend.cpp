@@ -31,7 +31,7 @@ namespace
 		umint m_MaxBytesPerSend = TCLimitsInt<umint>::mc_Max;
 		TCVector<CSendCall> m_Calls;
 
-		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override
+		virtual CSocketOperationResult f_Send(void const *_pData, umint _DataLen) override
 		{
 			umint nAccepted = fg_Min(_DataLen, m_MaxBytesPerSend);
 			m_Calls.f_InsertLast(CSendCall{_pData, nAccepted});
@@ -120,7 +120,7 @@ namespace
 			return {};
 		}
 
-		virtual umint f_SendDatagram(CNetAddress const &, const void *, umint) override
+		virtual umint f_SendDatagram(CNetAddress const &, void const *, umint) override
 		{
 			return 0;
 		}
@@ -197,25 +197,43 @@ namespace
 #if defined(DPlatformFamily_macOS) || defined(DPlatformFamily_Linux)
 			DMibTestSuite("UnixLoopback")
 			{
-				CStr Path = NNetwork::fg_GetSafeUnixSocketPath
-					(
-						"{}/VS_{}.socket"_f << NFile::CFile::fs_GetProgramDirectory() << NCryptography::fg_RandomID().f_Left(8)
-					)
-				;
+				CStr Path = NNetwork::fg_GetSafeUnixSocketPath("{}/VS_{}.socket"_f << NFile::CFile::fs_GetProgramDirectory() << NCryptography::fg_RandomID().f_Left(8));
 				CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
 
 				auto pListen = CSocket_TCP::fs_GetFactory()("");
-				pListen->f_Listen(Address, [](ENetTCPState){}, ENetFlag_None);
+				pListen->f_Listen
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, ENetFlag_None
+					)
+				;
 
 				auto pClient = CSocket_TCP::fs_GetFactory()("");
-				pClient->f_Connect(Address, [](ENetTCPState){}, CNetAddress());
+				pClient->f_Connect
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, CNetAddress()
+					)
+				;
 
 				TCUniquePointer<ICSocket> pServer;
 				{
 					CTimeout Timeout(gc_Timeout);
 					while (!Timeout.f_TimedOut())
 					{
-						pServer = pListen->f_Accept([](ENetTCPState){});
+						pServer = pListen->f_Accept
+							(
+								[](ENetTCPState)
+								{
+								}
+							)
+						;
 						if (pServer && pServer->f_IsValid())
 							break;
 

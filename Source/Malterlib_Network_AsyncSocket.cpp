@@ -27,9 +27,7 @@ namespace NMib::NNetwork
 	void CAsyncSocketNewConnection::f_Reject(NStr::CStr const &_Error) const
 	{
 		if (!mp_pHelper->m_bRepliedToConnection.f_Exchange(true))
-		{
 			mp_Connection.f_Bind<&CAsyncSocketActor::fp_RejectConnection>(_Error).f_DiscardResult();
-		}
 	}
 
 	NConcurrency::TCUnsafeFuture<NConcurrency::TCActorInterface<CAsyncSocketActor>> CAsyncSocketNewConnection::f_Accept(CAsyncSocketCallbacks _Callbacks)
@@ -58,15 +56,10 @@ namespace NMib::NNetwork
 	/// Server connection
 	/// =================
 
-	CAsyncSocketNewServerConnection::CAsyncSocketNewServerConnection
-		(
-			CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo
-			, NConcurrency::TCActor<CAsyncSocketActor> const &_Connection
-		)
+	CAsyncSocketNewServerConnection::CAsyncSocketNewServerConnection(CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo, NConcurrency::TCActor<CAsyncSocketActor> const &_Connection)
 		: CAsyncSocketNewConnection(_Connection)
 		, m_Info(fg_Move(_ConnectionInfo))
 	{
-
 	}
 
 	CAsyncSocketNewServerConnection::CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection &&_Other) = default;

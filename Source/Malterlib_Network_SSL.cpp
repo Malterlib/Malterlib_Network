@@ -20,8 +20,9 @@ namespace NMib::NNetwork
 		{
 			CSSLLowLevelDataIndex()
 			{
-				m_ExDataIndex = SSL_get_ex_new_index(0, (void*)"CSSLConnection Index", nullptr, nullptr, nullptr);
+				m_ExDataIndex = SSL_get_ex_new_index(0, (void *)"CSSLConnection Index", nullptr, nullptr, nullptr);
 			}
+
 			int m_ExDataIndex = 0;
 		};
 
@@ -204,10 +205,7 @@ namespace NMib::NNetwork
 		// Trust anchors authenticate through their configured keys, not their self-signatures.
 		bool fg_CertificateMeetsStrength(X509 *_pCertificate, uint16 _Minimum, bool _bTrustAnchor)
 		{
-			return _pCertificate
-				&& fg_PublicKeyStrength(X509_get0_pubkey(_pCertificate)) >= _Minimum
-				&& (_bTrustAnchor || fg_CertificateSignatureStrength(_pCertificate) >= _Minimum)
-			;
+			return _pCertificate && fg_PublicKeyStrength(X509_get0_pubkey(_pCertificate)) >= _Minimum && (_bTrustAnchor || fg_CertificateSignatureStrength(_pCertificate) >= _Minimum);
 		}
 
 		SSL_CTX *fg_CreateSSLContext(SSL_METHOD const *_pMethod)
@@ -220,7 +218,6 @@ namespace NMib::NNetwork
 			return g_SSLLowLevelDataIndex->m_ExDataIndex;
 		}
 
-
 		int fg_SSLTransportBioRead(BIO *_pBio, char *_pData, int _nBytes)
 		{
 			BIO_clear_retry_flags(_pBio);
@@ -232,15 +229,12 @@ namespace NMib::NNetwork
 			umint nRead = 0;
 			switch (pTransport->f_Read(_pData, (umint)_nBytes, nRead))
 			{
-			case CSSLTransport::ETransferResult::mc_Data:
-				return (int)nRead;
+			case CSSLTransport::ETransferResult::mc_Data: return (int)nRead;
 			case CSSLTransport::ETransferResult::mc_WouldBlock:
 				BIO_set_retry_read(_pBio);
 				return -1;
-			case CSSLTransport::ETransferResult::mc_EndOfStream:
-				return 0;
-			case CSSLTransport::ETransferResult::mc_Failed:
-				return -1;
+			case CSSLTransport::ETransferResult::mc_EndOfStream: return 0;
+			case CSSLTransport::ETransferResult::mc_Failed: return -1;
 			}
 
 			DMibNeverGetHere;
@@ -258,8 +252,7 @@ namespace NMib::NNetwork
 			umint nWritten = 0;
 			switch (pTransport->f_Write(_pData, (umint)_nBytes, nWritten))
 			{
-			case CSSLTransport::ETransferResult::mc_Data:
-				return (int)nWritten;
+			case CSSLTransport::ETransferResult::mc_Data: return (int)nWritten;
 			case CSSLTransport::ETransferResult::mc_WouldBlock:
 				BIO_set_retry_write(_pBio);
 				return -1;
@@ -290,16 +283,11 @@ namespace NMib::NNetwork
 
 					return Result == CSSLTransport::ETransferResult::mc_Data ? 1 : -1;
 				}
-			case BIO_CTRL_PENDING:
-				return (long)pTransport->f_GetPendingRead();
-			case BIO_CTRL_WPENDING:
-				return (long)pTransport->f_GetPendingWrite();
-			case BIO_CTRL_EOF:
-				return pTransport->f_IsEndOfStream() ? 1 : 0;
-			case BIO_CTRL_GET_CLOSE:
-				return 0; // The transport is owned by the socket, never by the BIO
-			case BIO_CTRL_SET_CLOSE:
-				return 1;
+			case BIO_CTRL_PENDING: return (long)pTransport->f_GetPendingRead();
+			case BIO_CTRL_WPENDING: return (long)pTransport->f_GetPendingWrite();
+			case BIO_CTRL_EOF: return pTransport->f_IsEndOfStream() ? 1 : 0;
+			case BIO_CTRL_GET_CLOSE: return 0; // The transport is owned by the socket, never by the BIO
+			case BIO_CTRL_SET_CLOSE: return 1;
 			}
 
 			return 0;
@@ -367,23 +355,20 @@ namespace NMib::NNetwork
 			}
 		}
 
-		SSL* f_GetSSL()
+		SSL *f_GetSSL()
 		{
 			return mp_pSSL;
 		}
 
 	protected:
-
-		SSL_CTX* mp_pContext;
-		SSL* mp_pSSL;
-
+		SSL_CTX *mp_pContext;
+		SSL *mp_pSSL;
 	};
 
 	// CSSLContext methods
 	class CSSLContext::CInternal
 	{
 	public:
-
 		CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 			: mp_pContext(nullptr)
 			, mp_Type(_Type)
@@ -456,7 +441,7 @@ namespace NMib::NNetwork
 						// Quiet shutdown sends no close_notify, so a Malterlib peer sees plain EOF; both receive paths treat that as truncation
 						SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
 						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
-							SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1);
+							SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 						SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET);
 						SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
 
@@ -541,7 +526,7 @@ namespace NMib::NNetwork
 			return mp_Settings.m_VerificationFlags;
 		}
 
-		CSSLSettings const& f_GetSettings() const
+		CSSLSettings const &f_GetSettings() const
 		{
 			return mp_Settings;
 		}
@@ -551,7 +536,7 @@ namespace NMib::NNetwork
 			NContainer::CByteVector CertData = fg_ConvertX509ToBinary(_pCertificate);
 
 			NContainer::TCVector<NStr::CStr> lHostnames = CCertificate::fs_GetCertificateHostnames(CertData);
-			for (auto const& CertHostName : lHostnames)
+			for (auto const &CertHostName : lHostnames)
 			{
 				if (_Hostname.f_CmpNoCase(CertHostName) == 0)
 					return true;
@@ -565,8 +550,7 @@ namespace NMib::NNetwork
 						continue;
 
 					aint iSubDomainPos = _Hostname.f_Find(".");
-					if (iSubDomainPos == -1 ||
-						iSubDomainPos == _Hostname.f_GetLen() - 1)
+					if (iSubDomainPos == -1 || iSubDomainPos == _Hostname.f_GetLen() - 1)
 						continue;
 
 					NStr::CStr NonWildCardPart = CertHostName.f_Extract(2);
@@ -585,41 +569,35 @@ namespace NMib::NNetwork
 			int Error = X509_STORE_CTX_get_error(_pStoreContext);
 			int Depth = X509_STORE_CTX_get_error_depth(_pStoreContext);
 
-			SSL* pSSL = (SSL*)X509_STORE_CTX_get_ex_data(_pStoreContext, SSL_get_ex_data_X509_STORE_CTX_idx());
+			SSL *pSSL = (SSL *)X509_STORE_CTX_get_ex_data(_pStoreContext, SSL_get_ex_data_X509_STORE_CTX_idx());
 			if (!pSSL)
 				return 0;
 
-			CSSLConnection* pCSSL = (CSSLConnection*)SSL_get_ex_data(pSSL, fg_ExDataIndex());
+			CSSLConnection *pCSSL = (CSSLConnection *)SSL_get_ex_data(pSSL, fg_ExDataIndex());
 			if (!pCSSL)
 				return 0;
 
 			// Check for renegotiation and return the original result as we do not support our verification methods
 			// for renegotiations yet.
 			if (pCSSL->f_Connected())
-			{
 				return _PreVerifyOK;
-			}
 
 			if (_PreVerifyOK == 0)
 			{
-				if
-					(
-						Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH
-						|| Error == X509_V_ERR_AKID_SKID_MISMATCH
-						|| Error == X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH
-					)
+				if (Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH || Error == X509_V_ERR_AKID_SKID_MISMATCH || Error == X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH)
 				{
 					// Don't log these. And I quote:
 					// The presence of rejection messages does not itself imply that anything is wrong: during the normal verify process several rejections may take place.
 					// We must handle these because of our use of X509_V_FLAG_CB_ISSUER_CHECK:
 					// The X509_V_FLAG_CB_ISSUER_CHECK flag enables debugging of certificate issuer checks.
 					// It is not needed unless you are logging certificate verification.
-					// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard errors.
+					// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard
+					// errors.
 					return 0;
 				}
 			}
 
-			CSSLConnectionResult& Result = pCSSL->f_GetConnectionResult();
+			CSSLConnectionResult &Result = pCSSL->f_GetConnectionResult();
 
 			auto *pContext = static_cast<CInternal *>(SSL_CTX_get_app_data(SSL_get_SSL_CTX(pSSL)));
 			auto Minimum = uint16(pContext->mp_Settings.m_MinimumCryptoStrength);
@@ -648,7 +626,7 @@ namespace NMib::NNetwork
 				auto nCertsInChain = sk_X509_num(pChain);
 				while (nCertsInChain)
 				{
-					X509* pCert = sk_X509_value(pChain, nCertsInChain - 1);
+					X509 *pCert = sk_X509_value(pChain, nCertsInChain - 1);
 					NContainer::CByteVector CertData;
 					try
 					{
@@ -661,9 +639,7 @@ namespace NMib::NNetwork
 						if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
 						{
 							if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
-							{
 								Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
-							}
 						}
 					}
 					catch (CExceptionCryptography const &_Exception)
@@ -683,7 +659,7 @@ namespace NMib::NNetwork
 		static X509_CRL *fs_LoadCRL(NContainer::CByteVector const &_CRLData)
 		{
 			ERR_clear_error();
-			BIO* pMemoryBio = BIO_new_mem_buf(const_cast<void*>(static_cast<void const*>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
+			BIO *pMemoryBio = BIO_new_mem_buf(const_cast<void *>(static_cast<void const *>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
 			if (!pMemoryBio)
 				DMibErrorCryptography(fg_GetExceptionStr("Error creating BIO"));
 			auto Cleanup = g_OnScopeExit / [&]
@@ -701,7 +677,6 @@ namespace NMib::NNetwork
 		}
 
 	protected:
-
 		void fp_ProcessSettings()
 		{
 			bool bVerifyIssuer = false;
@@ -752,7 +727,7 @@ namespace NMib::NNetwork
 				if (!fg_CertificateMeetsStrength(SSL_CTX_get0_certificate(mp_pContext), Minimum, false))
 					DMibErrorCryptography("Local certificate does not meet the minimum cryptographic strength");
 
-				STACK_OF(X509) *pChain = nullptr;
+				STACK_OF(X509) * pChain = nullptr;
 				SSL_CTX_get0_chain_certs(mp_pContext, &pChain);
 
 				for (umint i = 0; i < sk_X509_num(pChain); ++i)
@@ -773,7 +748,7 @@ namespace NMib::NNetwork
 
 			if (!mp_Settings.m_CAStoreLocation.f_IsEmpty())
 			{
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
 
 				if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
 					DMibErrorCryptography(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
@@ -811,7 +786,7 @@ namespace NMib::NNetwork
 
 			if (!mp_Settings.m_CACertificateData.f_IsEmpty())
 			{
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
 				X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_CACertificateData);
 				auto Cleanup0 = g_OnScopeExit / [&]
 					{
@@ -857,11 +832,11 @@ namespace NMib::NNetwork
 			if (!mp_Settings.m_CRLData.f_IsEmpty())
 			{
 				ERR_clear_error();
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
 				if (!pStore)
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
 
-				X509_CRL* pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
+				X509_CRL *pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
 
 				auto Cleanup = g_OnScopeExit / [&]
 					{
@@ -881,7 +856,7 @@ namespace NMib::NNetwork
 			if (!mp_Settings.m_PathToCRLs.f_IsEmpty())
 			{
 				ERR_clear_error();
-				X509_STORE* pStore = SSL_CTX_get_cert_store(mp_pContext);
+				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
 				if (!pStore)
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
 
@@ -897,7 +872,7 @@ namespace NMib::NNetwork
 					if (CRLData.f_IsEmpty())
 						continue;
 
-					X509_CRL* pCRL = fs_LoadCRL(CRLData);
+					X509_CRL *pCRL = fs_LoadCRL(CRLData);
 					auto Cleanup = g_OnScopeExit / [&]
 						{
 							X509_CRL_free(pCRL);
@@ -917,7 +892,7 @@ namespace NMib::NNetwork
 
 		void fp_ConfigureAlgorithms(EVP_PKEY const *_pKey)
 		{
-			static const uint16_t s_DefaultAlgos[] =
+			static uint16_t const s_DefaultAlgos[] =
 				{
 					SSL_SIGN_ECDSA_SECP521R1_SHA512
 					, SSL_SIGN_RSA_PSS_SHA512
@@ -950,10 +925,11 @@ namespace NMib::NNetwork
 
 			static constexpr CGroup s_Groups[] =
 				{
-					{256, SSL_GROUP_SECP521R1},
-					{192, SSL_GROUP_SECP384R1},
-					{128, SSL_GROUP_X25519},
-					{128, SSL_GROUP_SECP256R1},
+					// malterlib-format table
+					  {256, SSL_GROUP_SECP521R1}
+					, {192, SSL_GROUP_SECP384R1}
+					, {128, SSL_GROUP_X25519}
+					, {128, SSL_GROUP_SECP256R1}
 				}
 			;
 			NContainer::TCVector<uint16_t> AllowedGroups;
@@ -1003,7 +979,7 @@ namespace NMib::NNetwork
 				return false;
 			}
 
-			EVP_PKEY* pKey = fg_LoadPrivateKey(mp_Settings.m_PrivateKeyData);
+			EVP_PKEY *pKey = fg_LoadPrivateKey(mp_Settings.m_PrivateKeyData);
 			auto Cleanup = g_OnScopeExit / [&]
 				{
 					EVP_PKEY_free(pKey);
@@ -1035,7 +1011,7 @@ namespace NMib::NNetwork
 			CCertificate::fs_GetSystemCertificates(SSL_CTX_get_cert_store(mp_pContext));
 		};
 
-		SSL_CTX* mp_pContext;
+		SSL_CTX *mp_pContext;
 
 		CSSLContext::EType mp_Type;
 		CSSLContext::EState mp_State;
@@ -1164,7 +1140,6 @@ namespace NMib::NNetwork
 		;
 	}
 
-
 	// CSSLConnection methods.
 	class CSSLConnection::CInternal
 	{
@@ -1219,7 +1194,7 @@ namespace NMib::NNetwork
 			mp_pSession.f_Clear();
 		}
 
-		SSL* f_GetSSL()
+		SSL *f_GetSSL()
 		{
 			return mp_pSession->f_GetSSL();
 		}
@@ -1333,7 +1308,8 @@ namespace NMib::NNetwork
 			case SSL_GROUP_SECP521R1: return 256;
 			case SSL_GROUP_SECP384R1: return 192;
 			case SSL_GROUP_SECP256R1:
-			case SSL_GROUP_X25519: return 128;
+			case SSL_GROUP_X25519:
+				return 128;
 			default: return 0;
 			}
 		}
@@ -1391,7 +1367,7 @@ namespace NMib::NNetwork
 			return false;
 		}
 
-		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
 		{
 			return mp_Transport.f_BeginSend(o_pData, o_nBytes, o_iBuffer);
 		}
@@ -1585,7 +1561,7 @@ namespace NMib::NNetwork
 			return true;
 		}
 
-		CSocketOperationResult f_Send(const void *_pData, umint _nLen)
+		CSocketOperationResult f_Send(void const *_pData, umint _nLen)
 		{
 			DMibRequire(_nLen > 0);
 			DMibRequire(mp_bConnected);
@@ -1606,9 +1582,7 @@ namespace NMib::NNetwork
 				int Error = SSL_get_error(pSSL, Ret);
 				DMibLog(DebugVerbose3, " **** SSL error {}", Error);
 				if (Error == SSL_ERROR_ZERO_RETURN)
-				{
 					f_SetState(EState_ConnectionShutdown);
-				}
 				else if (Error == SSL_ERROR_SYSCALL)
 				{
 					if (fp_CheckTransportError(EState_WriteFailed))
@@ -1833,9 +1807,7 @@ namespace NMib::NNetwork
 			{
 				int Error = SSL_get_error(pSSL, Ret);
 				if (Error == SSL_ERROR_ZERO_RETURN)
-				{
 					f_SetState(EState_ConnectionShutdown);
-				}
 				else if (Error == SSL_ERROR_SYSCALL)
 				{
 					if (fp_CheckTransportError(EState_ReadFailed))
@@ -1851,9 +1823,7 @@ namespace NMib::NNetwork
 				}
 			}
 			else
-			{
 				Result.m_nBytes = (umint)Ret;
-			}
 
 			return Result;
 		}
@@ -1889,8 +1859,7 @@ namespace NMib::NNetwork
 		}
 
 	protected:
-
-		CSSLConnection* mp_pSSL;
+		CSSLConnection *mp_pSSL;
 		NStorage::TCSharedPointer<CSSLContext> mp_pContext;
 		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
@@ -2018,16 +1987,11 @@ namespace NMib::NNetwork
 						_ResultForCallback = EAuthenticationResult_Success;
 				}
 				// The peer certificate matches a remembered certificate and does not contain any verification errors.
-				else if (!bVerificationErrors && bTrustErrors &&
-					Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
-				{
+				else if (!bVerificationErrors && bTrustErrors && Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
 					_ResultForCallback = EAuthenticationResult_Success;
-				}
 				// No errors were reported.
 				else if (!bTrustErrors && !bVerificationErrors)
-				{
 					_ResultForCallback = EAuthenticationResult_Success;
-				}
 				// User can manage certificates but cannot ignore verification failures
 				else if (bCanManageTrust && !bCanManageVerification)
 				{
@@ -2048,9 +2012,7 @@ namespace NMib::NNetwork
 				}
 
 				if (_ResultForCallback == EAuthenticationResult_Success)
-				{
 					mp_bConnected = true;
-				}
 				else
 				{
 					f_SetState(EState_ConnectionFailed);
@@ -2068,7 +2030,7 @@ namespace NMib::NNetwork
 				bool bConnectionRefused = false;
 				if (fp_GenerateSystemErrors(_Ret, _ResultForCallback, SystemErrors, bConnectionRefused))
 				{
-					CSSLConnectionResult& Result = mp_pSSL->f_GetConnectionResult();
+					CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
 					Result.f_AddSSLError(SystemErrors);
 
 					if (bConnectionRefused)
@@ -2080,8 +2042,8 @@ namespace NMib::NNetwork
 
 		static NStr::CStr fsp_GetErrorString(uint32_t _Error)
 		{
-			const uint32_t Lib = ERR_GET_LIB(_Error);
-			const uint32_t Reason = ERR_GET_REASON(_Error);
+			uint32_t const Lib = ERR_GET_LIB(_Error);
+			uint32_t const Reason = ERR_GET_REASON(_Error);
 
 			if (Lib == ERR_LIB_SYS)
 			{
@@ -2097,11 +2059,11 @@ namespace NMib::NNetwork
 			uint32_t SysError;
 			NStr::CStr AllErrors;
 
-			if ((SysError=ERR_peek_error()) != 0)
+			if ((SysError = ERR_peek_error()) != 0)
 			{
-				const char *pFile;
+				char const *pFile;
 				int Line;
-				while( (SysError = ERR_get_error_line(&pFile, &Line)))
+				while ((SysError = ERR_get_error_line(&pFile, &Line)))
 					NStr::fg_AddStrSep(AllErrors, fsp_GetErrorString(SysError), "\n");
 
 				_Result = EAuthenticationResult_Failure;
@@ -2134,7 +2096,6 @@ namespace NMib::NNetwork
 
 			return false;
 		}
-
 	};
 
 	CSSLConnection::CSendBatch::CSendBatch(CSSLConnection &_Connection)
@@ -2344,7 +2305,7 @@ namespace NMib::NNetwork
 		return fg_ZeroCopyEnabled(mp_pInternal->f_GetIo()) && fg_CompletionIoReceiveEnabled(mp_pInternal->f_GetIo());
 	}
 
-	bool CSSLConnection::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+	bool CSSLConnection::f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
 	{
 		return fg_RunProtectRegisters
 			(
@@ -2670,7 +2631,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	CSocketOperationResult CSSLConnection::f_Send(const void *_pData, umint _nLen)
+	CSocketOperationResult CSSLConnection::f_Send(void const *_pData, umint _nLen)
 	{
 		return fg_RunProtectRegisters
 			(
@@ -2744,7 +2705,6 @@ namespace NMib::NNetwork
 			mp_bTrustErrorsOccured = true;
 		else
 			mp_bVerificationErrorsOccured = true;
-
 	}
 
 	void CSSLConnectionResult::f_LogMiscError(EMiscError _Error)
@@ -2791,17 +2751,17 @@ namespace NMib::NNetwork
 		for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
 		{
 			if
-				(
-					Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation
-					|| Iter.f_GetKey() == EMiscError_InvalidPublicCertificate
-					|| Iter.f_GetKey() == EMiscError_InvalidPrivateKey
-					|| Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch
-					|| Iter.f_GetKey() == EMiscError_InvalidCRLData
-					|| Iter.f_GetKey() == EMiscError_InvalidCRLPath
-					|| Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
-					|| Iter.f_GetKey() == EMiscError_InternalError
-					|| Iter.f_GetKey() == EMiscError_MismatchingSpecificCertificate
-				)
+			(
+				Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation
+				|| Iter.f_GetKey() == EMiscError_InvalidPublicCertificate
+				|| Iter.f_GetKey() == EMiscError_InvalidPrivateKey
+				|| Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch
+				|| Iter.f_GetKey() == EMiscError_InvalidCRLData
+				|| Iter.f_GetKey() == EMiscError_InvalidCRLPath
+				|| Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
+				|| Iter.f_GetKey() == EMiscError_InternalError
+				|| Iter.f_GetKey() == EMiscError_MismatchingSpecificCertificate
+			)
 			{
 				return true;
 			}
@@ -2820,13 +2780,14 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return false;
 
-		auto fl_VerifyAgainstLocalTrust = [=, this] (NContainer::CByteVector const &_Certificate) -> bool
-		{
-			if (_Certificate.f_IsEmpty())
-				return false;
+		auto fl_VerifyAgainstLocalTrust = [=, this](NContainer::CByteVector const &_Certificate) -> bool
+			{
+				if (_Certificate.f_IsEmpty())
+					return false;
 
-			return (mp_Certificates[umint(0)].m_Data == _Certificate);
-		};
+				return (mp_Certificates[umint(0)].m_Data == _Certificate);
+			}
+		;
 
 		for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
 		{
@@ -2845,7 +2806,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return false;
 
-		X509* pPeerCertificate = fg_LoadCertificate(_SpecificCertificate);
+		X509 *pPeerCertificate = fg_LoadCertificate(_SpecificCertificate);
 		auto Cleanup0 = g_OnScopeExit / [&]
 			{
 				X509_free(pPeerCertificate);
@@ -2862,32 +2823,31 @@ namespace NMib::NNetwork
 	{
 		NStr::CStr ErrorMessage;
 
-		auto fl_AppendError = [&] (NStr::CStr const &_Error)
-		{
-			if (_Format == ECommaSeperated)
+		auto fl_AppendError = [&](NStr::CStr const &_Error)
 			{
-				if (!ErrorMessage.f_IsEmpty())
-					ErrorMessage += NStr::CStr::CFormat(", {}") << _Error;
-				else
-					ErrorMessage = _Error;
+				if (_Format == ECommaSeperated)
+				{
+					if (!ErrorMessage.f_IsEmpty())
+						ErrorMessage += NStr::CStr::CFormat(", {}") << _Error;
+					else
+						ErrorMessage = _Error;
+				}
+				else if (_Format == EHtml)
+				{
+					if (!ErrorMessage.f_IsEmpty())
+						ErrorMessage += NStr::CStr::CFormat("<li>{}</li>") << _Error;
+					else
+						ErrorMessage = NStr::CStr::CFormat("<ul><li>{}</li>") << _Error;
+				}
 			}
-			else if (_Format == EHtml)
-			{
-				if (!ErrorMessage.f_IsEmpty())
-					ErrorMessage += NStr::CStr::CFormat("<li>{}</li>") << _Error;
-				else
-					ErrorMessage = NStr::CStr::CFormat("<ul><li>{}</li>") << _Error;
-			}
-		};
+		;
 
 		// Add errors generated for each level of certificate chain.
 		for (auto Iter = mp_Certificates.f_GetIterator(); Iter; ++Iter)
 		{
-			CResultCertificate const& Certificate = (*Iter);
+			CResultCertificate const &Certificate = (*Iter);
 			for (auto EIter = Certificate.m_Errors.f_GetIterator(); EIter; ++EIter)
-			{
 				fl_AppendError(fp_StringForError(EIter.f_GetKey()));
-			}
 		}
 
 		// Add misc errors.
@@ -2982,130 +2942,69 @@ namespace NMib::NNetwork
 	{
 		switch (_Error)
 		{
-		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-			return "Unable to get issuer certificate";
-		case X509_V_ERR_UNABLE_TO_GET_CRL:
-			return "Unable to get CRL";
-		case X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE:
-			return "Unable to decrypt certificate signature";
-		case X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE:
-			return "Unable to decrypt CRL signature";
-		case X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY:
-			return "Unable to decode issuer public key";
-		case X509_V_ERR_CERT_SIGNATURE_FAILURE:
-			return "Certificate signature failure";
-		case X509_V_ERR_CRL_SIGNATURE_FAILURE:
-			return "CRL signature failure";
-		case X509_V_ERR_CERT_NOT_YET_VALID:
-			return "Certificate is not yet valid (notBefore date is after current time)";
-		case X509_V_ERR_CERT_HAS_EXPIRED:
-			return "Certificate has expired (notAfter date is before the current time)";
-		case X509_V_ERR_CRL_NOT_YET_VALID:
-			return "CRL not yet valid";
-		case X509_V_ERR_CRL_HAS_EXPIRED:
-			return "CRL has expired";
-		case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:
-			return "Format error in certificate notBefore field";
-		case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
-			return "Format error in certificate notAfter field";
-		case X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD:
-			return "Format error in CRL lastUpdate field";
-		case X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD:
-			return "Format error in CRL nextUpdate field";
-		case X509_V_ERR_OUT_OF_MEM:
-			return "Out of memory";
-		case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
-			return "The certificate is self signed and cannot be found in the list of trusted certificates";
-		case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
-			return "Self signed certificate in chain";
-		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
-			return "Unable to get issuer certificate locally";
-		case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
-			return "Unable to verify leaf signature (the chain contains only one certificate and it is not self signed)";
-		case X509_V_ERR_CERT_CHAIN_TOO_LONG:
-			return "Certificate chain too long";
-		case X509_V_ERR_CERT_REVOKED:
-			return "Certificate is revoked";
-		case X509_V_ERR_INVALID_CA:
-			return "Invalid certificate authority";
-		case X509_V_ERR_PATH_LENGTH_EXCEEDED:
-			return "Path length exceeded";
-		case X509_V_ERR_INVALID_PURPOSE:
-			return "Unsupported certificate purpose";
-		case X509_V_ERR_CERT_UNTRUSTED:
-			return "Certificate untrusted (the root CA is not marked as trusted for the specified purpose)";
-		case X509_V_ERR_CERT_REJECTED:
-			return "Certificate rejected (the root CA is marked to reject the specified purpose)";
-		case X509_V_ERR_SUBJECT_ISSUER_MISMATCH:
-			return "Subject issuer mismatch";
-		case X509_V_ERR_AKID_SKID_MISMATCH:
-			return "Authority and subject key identifier mismatch";
-		case X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH:
-			return "Authority and issuer serial number mismatch";
-		case X509_V_ERR_KEYUSAGE_NO_CERTSIGN:
-			return "Key usage does not include certificate signing";
-		case X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER:
-			return "Key usage does not include certificate signing";
-		case X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION:
-			return "Key usage does not include certificate signing";
-		case X509_V_ERR_KEYUSAGE_NO_CRL_SIGN:
-			return "No CRL signature";
-		case X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION:
-			return "Unhandled critical CRL extension";
-		case X509_V_ERR_INVALID_NON_CA:
-			return "Invalid non certificate authority";
-		case X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED:
-			return "Proxy path length exceeded";
-		case X509_V_ERR_KEYUSAGE_NO_DIGITAL_SIGNATURE:
-			return "Key usage - no digital signature";
-		case X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED:
-			return "Proxy certificate are not allowed";
-		case X509_V_ERR_INVALID_EXTENSION:
-			return "Invalid or inconsistent certificate extension";
-		case X509_V_ERR_INVALID_POLICY_EXTENSION:
-			return "Invalid or inconsistent certificate policy extension";
-		case X509_V_ERR_NO_EXPLICIT_POLICY:
-			return "The verification flags were set to require an explicit policy but none was present";
-		case X509_V_ERR_DIFFERENT_CRL_SCOPE:
-			return "Different CRL scope";
-		case X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE:
-			return "Unsupported extension feature";
-		case X509_V_ERR_UNNESTED_RESOURCE:
-			return "Unnested resource";
-		case X509_V_ERR_PERMITTED_VIOLATION:
-			return "Permitted subtree violation";
-		case X509_V_ERR_EXCLUDED_VIOLATION:
-			return "Excluded subtree violation";
-		case X509_V_ERR_SUBTREE_MINMAX:
-			return "Name constraints minimum and maximum not supported";
-		case X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE:
-			return "Unsupported or invalid name constraint type";
-		case X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX:
-			return "Unsupported or invalid name constraint type";
-		case X509_V_ERR_UNSUPPORTED_NAME_SYNTAX:
-			return "Unsupported or invalid name constraint type";
-		case X509_V_ERR_CRL_PATH_VALIDATION_ERROR:
-			return "CRL path validation error";
+		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT: return "Unable to get issuer certificate";
+		case X509_V_ERR_UNABLE_TO_GET_CRL: return "Unable to get CRL";
+		case X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE: return "Unable to decrypt certificate signature";
+		case X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE: return "Unable to decrypt CRL signature";
+		case X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY: return "Unable to decode issuer public key";
+		case X509_V_ERR_CERT_SIGNATURE_FAILURE: return "Certificate signature failure";
+		case X509_V_ERR_CRL_SIGNATURE_FAILURE: return "CRL signature failure";
+		case X509_V_ERR_CERT_NOT_YET_VALID: return "Certificate is not yet valid (notBefore date is after current time)";
+		case X509_V_ERR_CERT_HAS_EXPIRED: return "Certificate has expired (notAfter date is before the current time)";
+		case X509_V_ERR_CRL_NOT_YET_VALID: return "CRL not yet valid";
+		case X509_V_ERR_CRL_HAS_EXPIRED: return "CRL has expired";
+		case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD: return "Format error in certificate notBefore field";
+		case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD: return "Format error in certificate notAfter field";
+		case X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD: return "Format error in CRL lastUpdate field";
+		case X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD: return "Format error in CRL nextUpdate field";
+		case X509_V_ERR_OUT_OF_MEM: return "Out of memory";
+		case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT: return "The certificate is self signed and cannot be found in the list of trusted certificates";
+		case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN: return "Self signed certificate in chain";
+		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY: return "Unable to get issuer certificate locally";
+		case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE: return "Unable to verify leaf signature (the chain contains only one certificate and it is not self signed)";
+		case X509_V_ERR_CERT_CHAIN_TOO_LONG: return "Certificate chain too long";
+		case X509_V_ERR_CERT_REVOKED: return "Certificate is revoked";
+		case X509_V_ERR_INVALID_CA: return "Invalid certificate authority";
+		case X509_V_ERR_PATH_LENGTH_EXCEEDED: return "Path length exceeded";
+		case X509_V_ERR_INVALID_PURPOSE: return "Unsupported certificate purpose";
+		case X509_V_ERR_CERT_UNTRUSTED: return "Certificate untrusted (the root CA is not marked as trusted for the specified purpose)";
+		case X509_V_ERR_CERT_REJECTED: return "Certificate rejected (the root CA is marked to reject the specified purpose)";
+		case X509_V_ERR_SUBJECT_ISSUER_MISMATCH: return "Subject issuer mismatch";
+		case X509_V_ERR_AKID_SKID_MISMATCH: return "Authority and subject key identifier mismatch";
+		case X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH: return "Authority and issuer serial number mismatch";
+		case X509_V_ERR_KEYUSAGE_NO_CERTSIGN: return "Key usage does not include certificate signing";
+		case X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER: return "Key usage does not include certificate signing";
+		case X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION: return "Key usage does not include certificate signing";
+		case X509_V_ERR_KEYUSAGE_NO_CRL_SIGN: return "No CRL signature";
+		case X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION: return "Unhandled critical CRL extension";
+		case X509_V_ERR_INVALID_NON_CA: return "Invalid non certificate authority";
+		case X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED: return "Proxy path length exceeded";
+		case X509_V_ERR_KEYUSAGE_NO_DIGITAL_SIGNATURE: return "Key usage - no digital signature";
+		case X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED: return "Proxy certificate are not allowed";
+		case X509_V_ERR_INVALID_EXTENSION: return "Invalid or inconsistent certificate extension";
+		case X509_V_ERR_INVALID_POLICY_EXTENSION: return "Invalid or inconsistent certificate policy extension";
+		case X509_V_ERR_NO_EXPLICIT_POLICY: return "The verification flags were set to require an explicit policy but none was present";
+		case X509_V_ERR_DIFFERENT_CRL_SCOPE: return "Different CRL scope";
+		case X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE: return "Unsupported extension feature";
+		case X509_V_ERR_UNNESTED_RESOURCE: return "Unnested resource";
+		case X509_V_ERR_PERMITTED_VIOLATION: return "Permitted subtree violation";
+		case X509_V_ERR_EXCLUDED_VIOLATION: return "Excluded subtree violation";
+		case X509_V_ERR_SUBTREE_MINMAX: return "Name constraints minimum and maximum not supported";
+		case X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE: return "Unsupported or invalid name constraint type";
+		case X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX: return "Unsupported or invalid name constraint type";
+		case X509_V_ERR_UNSUPPORTED_NAME_SYNTAX: return "Unsupported or invalid name constraint type";
+		case X509_V_ERR_CRL_PATH_VALIDATION_ERROR: return "CRL path validation error";
 		case EMiscError_HostnameMisMatch:
 			return NStr::CStr::CFormat("Hostname mismatch (valid hostnames in certificate: {0})") << CCertificate::fs_GetCertificateHostnamesStr(f_GetPeerCertificate());
-		case EMiscError_InvalidCertificateAuthorityLocation:
-			return "Invalid certificate authority certificate location";
-		case EMiscError_InvalidPublicCertificate:
-			return "Invalid public certificate"	;
-		case EMiscError_InvalidPrivateKey:
-			return "Invalid private key";
-		case EMiscError_CertificatePrivateKeyMisMatch:
-			return "Public & Private key mismatch error.";
-		case EMiscError_InvalidCRLData:
-			return "Invalid certificate revocation list";
-		case EMiscError_InvalidCRLPath:
-			return "Invalid certificate revocation list path";
-		case EMiscError_InvalidCertificateAuthorityData:
-			return "Invalid certificate authority certificate";
-		case EMiscError_InternalError:
-			return "Internal error";
-		case EMiscError_MismatchingSpecificCertificate:
-			return "Mismatching specific certificate";
+		case EMiscError_InvalidCertificateAuthorityLocation: return "Invalid certificate authority certificate location";
+		case EMiscError_InvalidPublicCertificate: return "Invalid public certificate";
+		case EMiscError_InvalidPrivateKey: return "Invalid private key";
+		case EMiscError_CertificatePrivateKeyMisMatch: return "Public & Private key mismatch error.";
+		case EMiscError_InvalidCRLData: return "Invalid certificate revocation list";
+		case EMiscError_InvalidCRLPath: return "Invalid certificate revocation list path";
+		case EMiscError_InvalidCertificateAuthorityData: return "Invalid certificate authority certificate";
+		case EMiscError_InternalError: return "Internal error";
+		case EMiscError_MismatchingSpecificCertificate: return "Mismatching specific certificate";
 		}
 
 		return NStr::CStr::CFormat("Unknown error: {}") << _Error;
@@ -3113,11 +3012,14 @@ namespace NMib::NNetwork
 
 	bool CSSLConnectionResult::fsp_IsTrustError(int _Error)
 	{
-		if (_Error == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
-			_Error == X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE ||
-			_Error == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT ||
-			_Error == X509_V_ERR_CERT_UNTRUSTED ||
-			_Error == X509_V_ERR_UNABLE_TO_GET_CRL)
+		if
+		(
+			_Error == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+			|| _Error == X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE
+			|| _Error == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
+			|| _Error == X509_V_ERR_CERT_UNTRUSTED
+			|| _Error == X509_V_ERR_UNABLE_TO_GET_CRL
+		)
 		{
 			return true;
 		}

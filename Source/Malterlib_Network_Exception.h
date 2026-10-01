@@ -9,14 +9,13 @@ namespace NMib::NNetwork
 {
 	DMibImpErrorClassDefine(CExceptionNet, NException::CException);
 
-#	define DMibErrorNet(d_Description) DMibImpError(NMib::NNetwork::CExceptionNet, d_Description)
-
-#	ifndef DMibPNoShortCuts
-#		define DErrorNet DMibErrorNet
-#	endif
-}
-
+#define DMibErrorNet(d_Description) DMibImpError(NMib::NNetwork::CExceptionNet, d_Description)
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+#	define DErrorNet DMibErrorNet
+#endif
+}
+
+#ifndef DMibPNoShortCuts
+using namespace NMib::NNetwork;
 #endif

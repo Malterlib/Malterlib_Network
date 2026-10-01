@@ -224,7 +224,7 @@ namespace NMib::NNetwork
 	}
 
 	// Pin the oldest unsent generation. Move the fill elsewhere before later seals can write kernel-owned bytes.
-	bool CSSLTransport::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+	bool CSSLTransport::f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
 	{
 		if (mp_TransportError || mp_iUnsentHead < 0)
 			return false;
@@ -760,7 +760,7 @@ namespace NMib::NNetwork
 
 		NSys::fg_ConsiderIoSendWindowGrowth(mp_Window, nDeliveryRate, bAppLimited, Now, Io.m_nTicksPerSecond, Io.m_nWindowShrinkAfterTicks);
 
-	#if DMibConfig_IoDebug_Enable
+#if DMibConfig_IoDebug_Enable
 		if (auto *pStats = fg_NetIoStats())
 		{
 			uint64 nLagTicks = NSys::fg_GetIoSendMinReleaseLag(mp_Window, Now, Io.m_nWindowShrinkAfterTicks);
@@ -772,7 +772,7 @@ namespace NMib::NNetwork
 			pStats->m_nSslWindowBandwidthDelay.f_Store(nBandwidthDelay, NAtomic::gc_MemoryOrder_Relaxed);
 			pStats->m_nSslWindowQueries.f_FetchAdd(1, NAtomic::gc_MemoryOrder_Relaxed);
 		}
-	#endif
+#endif
 	}
 
 	void CSSLTransport::fp_EnqueueUnsent(umint _iBuffer)
