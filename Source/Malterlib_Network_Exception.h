@@ -16,7 +16,6 @@ namespace NMib::NNetwork
 #	endif
 }
 
-
 #ifndef DMibPNoShortCuts
 	using namespace NMib::NNetwork;
 #endif

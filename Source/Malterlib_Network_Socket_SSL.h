@@ -48,28 +48,32 @@ namespace NMib::NNetwork
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) override
+			)
+			override
 		;
 		virtual void f_AsyncConnect
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
-			) override
+			)
+			override
 		;
 		virtual void f_Listen
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::ENetFlag _Flags
-			) override
+			)
+			override
 		;
 		virtual void f_ListenDatagram
 			(
 				NMib::NNetwork::CNetAddress const &_Address
 				, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::ENetFlag _Flags
-			) override
+			)
+			override
 		;
 		virtual NStorage::TCUniquePointer<ICSocket> f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
 		virtual void f_InheritHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
@@ -79,7 +83,7 @@ namespace NMib::NNetwork
 		virtual ENetTCPState f_GetState() override;
 		virtual NStr::CStr f_GetCloseReason() override;
 		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override;
-		virtual CSocketOperationResult f_Send(const void *_pData, umint _DataLen) override;
+		virtual CSocketOperationResult f_Send(void const *_pData, umint _DataLen) override;
 		virtual CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
 		virtual void f_SetTransferSizeHint(umint _nBytes) override;
 		virtual void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
@@ -110,7 +114,7 @@ namespace NMib::NNetwork
 		virtual bool f_HasPendingOutput() const override;
 
 	public:
-		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen) override;
+		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen) override;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
 		virtual uint32 f_GetListenPort() const override;
@@ -148,11 +152,11 @@ namespace NMib::NNetwork
 			uint32 m_iBuffer = 0; // Generation whose ciphertext carries this transfer.
 			int32 m_iNextForBuffer = -1;
 			int32 m_iNextFree = -1;
-			bool m_bHasFunctors : 1 = false;
-			bool m_bInUse : 1 = false;
-			bool m_bResolved : 1 = false;
-			bool m_bReleased : 1 = false;
-			bool m_bLinked : 1 = false;
+			bool m_bHasFunctors:1 = false;
+			bool m_bInUse:1 = false;
+			bool m_bResolved:1 = false;
+			bool m_bReleased:1 = false;
+			bool m_bLinked:1 = false;
 		};
 
 		bool fp_HandleHandshake();

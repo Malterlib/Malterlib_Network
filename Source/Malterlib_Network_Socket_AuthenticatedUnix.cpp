@@ -84,14 +84,8 @@ namespace NMib::NNetwork
 			DMibErrorNet("Certificate and private key must both be set or both be empty");
 
 		// Without hostname verification, OS-store trust can authenticate an unrelated certificate holder. Require a pinned CA or explicit insecure/anonymous mode.
-		if
-		(
-			(m_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified) != 0
-			&& m_Settings.m_CACertificateData.f_IsEmpty()
-		)
-		{
+		if ((m_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified) != 0 && m_Settings.m_CACertificateData.f_IsEmpty())
 			DMibErrorNet("wsa peer verification cannot use the OS trust store (no hostname is verified); pin a CA certificate instead");
-		}
 
 		if (_Type == EType::mc_Server && !bHasKey)
 			DMibErrorNet("Server context requires a certificate and private key");
@@ -435,7 +429,7 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
-	CSocketOperationResult CSocket_AuthenticatedUnix::f_Send(const void *_pData, umint _DataLen)
+	CSocketOperationResult CSocket_AuthenticatedUnix::f_Send(void const *_pData, umint _DataLen)
 	{
 		if (mp_State == EState::mc_ShutdownSocket || mp_bSendShutdown)
 			return {};
@@ -597,8 +591,7 @@ namespace NMib::NNetwork
 				_pSpans
 				, _nSpans
 				, fg_Move(_fOnComplete)
-				,
-				[fOnReleased = fg_Move(_fOnReleased)]() mutable
+				, [fOnReleased = fg_Move(_fOnReleased)]() mutable
 				{
 					fOnReleased(NMib::NSys::CIoCompletion::mc_iTransferNone);
 				}
@@ -606,7 +599,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	umint CSocket_AuthenticatedUnix::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
+	umint CSocket_AuthenticatedUnix::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
 		return 0;
@@ -656,9 +649,8 @@ namespace NMib::NNetwork
 		if (!mp_Socket.f_GetProcessIdentity(Handshake.m_LocalIdentity, Handshake.m_ExpectedPeerIdentity))
 			return false;
 
-		Handshake.m_bProcessIdentityValid =
-			Handshake.m_LocalIdentity.m_ProcessID != 0
-			&& (Handshake.m_ExpectedPeerIdentity.m_ProcessID != 0 || Handshake.m_ExpectedPeerIdentity.m_PidFSInode != 0)
+		Handshake.m_bProcessIdentityValid
+			= Handshake.m_LocalIdentity.m_ProcessID != 0 && (Handshake.m_ExpectedPeerIdentity.m_ProcessID != 0 || Handshake.m_ExpectedPeerIdentity.m_PidFSInode != 0)
 		;
 
 		return Handshake.m_bProcessIdentityValid;
@@ -1041,8 +1033,7 @@ namespace NMib::NNetwork
 		case EState::mc_Disconnected:
 			mp_pHandshake.f_Clear();
 			return false;
-		case EState::mc_Done:
-			return true;
+		case EState::mc_Done: return true;
 		case EState::mc_None:
 		case EState::mc_Listen:
 			return false;
@@ -1055,8 +1046,7 @@ namespace NMib::NNetwork
 			fp_StartHandshake();
 
 			break;
-		case EState::mc_Handshake:
-			break;
+		case EState::mc_Handshake: break;
 		}
 
 		fp_PumpHandshake();
@@ -1076,7 +1066,6 @@ namespace NMib::NNetwork
 
 		return false;
 	}
-
 }
 
 #ifndef DMibPNoShortCuts

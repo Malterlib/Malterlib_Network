@@ -37,11 +37,12 @@ namespace
 
 			// Accepting only succeeds once the connection has arrived, and the listener reports no state,
 			// so it is retried until it does
-			for (NTime::CStopwatch AcceptTimeout(true); !Peer.f_IsValid(); )
+			for (NTime::CStopwatch AcceptTimeout(true); !Peer.f_IsValid();)
 			{
 				Peer.f_Accept
 					(
-						&Listener, [Changed](ENetTCPState)
+						&Listener
+						, [Changed](ENetTCPState)
 						{
 							Changed->f_Signal();
 						}
@@ -98,8 +99,10 @@ namespace
 			CBS_init(&Message, _Hello.f_GetArray() + 9, _Hello.f_GetLen() - 9);
 			if
 			(
-				!CBS_skip(&Message, 34) || !CBS_get_u8_length_prefixed(&Message, &SessionID)
-				|| !CBS_get_u16_length_prefixed(&Message, &Ciphers) || !CBS_get_u8_length_prefixed(&Message, &Compression)
+				!CBS_skip(&Message, 34)
+				|| !CBS_get_u8_length_prefixed(&Message, &SessionID)
+				|| !CBS_get_u16_length_prefixed(&Message, &Ciphers)
+				|| !CBS_get_u8_length_prefixed(&Message, &Compression)
 				|| !CBS_get_u16_length_prefixed(&Message, &Extensions)
 			)
 			{
@@ -232,13 +235,7 @@ namespace
 			Restricted[Offset + 1] = 2;
 			Restricted[Offset + 2] = 0x13;
 			Restricted[Offset + 3] = 0x01; // TLS_AES_128_GCM_SHA256
-			NMemory::fg_MemCopy
-				(
-					Restricted.f_GetArray() + Offset + 4
-					, Hello.f_GetArray() + Offset + 2 + CipherBytes
-					, Hello.f_GetLen() - Offset - 2 - CipherBytes
-				)
-			;
+			NMemory::fg_MemCopy(Restricted.f_GetArray() + Offset + 4, Hello.f_GetArray() + Offset + 2 + CipherBytes, Hello.f_GetLen() - Offset - 2 - CipherBytes);
 
 			auto RecordLength = Restricted.f_GetLen() - 5;
 			auto HandshakeLength = Restricted.f_GetLen() - 9;
@@ -333,8 +330,10 @@ namespace
 						uint16_t Signature = SSL_SIGN_ECDSA_SECP521R1_SHA512;
 						if
 						(
-							!Context || !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-							|| !SSL_CTX_set1_group_ids(Context.get(), &Group, 1) || !SSL_CTX_set_signing_algorithm_prefs(Context.get(), &Signature, 1)
+							!Context
+							|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
+							|| !SSL_CTX_set1_group_ids(Context.get(), &Group, 1)
+							|| !SSL_CTX_set_signing_algorithm_prefs(Context.get(), &Signature, 1)
 						)
 						{
 							DMibErrorCryptography(fg_GetExceptionStr("Could not prepare single-group server fixture"));
@@ -412,8 +411,11 @@ namespace
 						bssl::UniquePtr<EVP_PKEY> Signer(fg_LoadPrivateKey(_Signer.m_PrivateKeyData));
 						if
 						(
-							!RSAKey || !Key || !EVP_PKEY_set1_RSA(Key.get(), RSAKey.get())
-							|| !X509_set_pubkey(Certificate.get(), Key.get()) || !X509_sign(Certificate.get(), Signer.get(), EVP_sha512())
+							!RSAKey
+							|| !Key
+							|| !EVP_PKEY_set1_RSA(Key.get(), RSAKey.get())
+							|| !X509_set_pubkey(Certificate.get(), Key.get())
+							|| !X509_sign(Certificate.get(), Signer.get(), EVP_sha512())
 						)
 						{
 							DMibErrorCryptography(fg_GetExceptionStr("Could not prepare RSA certificate fixture"));
@@ -448,25 +450,14 @@ namespace
 			SignOptions.m_Digest = _Digest;
 			SignOptions.m_LeafRole = _bCA ? ECertificateLeafRole_Unrestricted : ECertificateLeafRole_ServerAuth;
 
-			CCertificate::fs_SignClientCertificate
-				(
-					_Issuer.m_PublicCertificateData, _Issuer.m_PrivateKeyData, Request, Settings.m_PublicCertificateData, SignOptions
-				)
-			;
+			CCertificate::fs_SignClientCertificate(_Issuer.m_PublicCertificateData, _Issuer.m_PrivateKeyData, Request, Settings.m_PublicCertificateData, SignOptions);
 
 			Settings.m_CACertificateData = _Issuer.m_PublicCertificateData;
 
 			return Settings;
 		}
 
-		static auto fs_CheckConnection
-			(
-				CSSLSettings _ClientSettings
-				, CSSLSettings _ServerSettings
-				, CStr _ExpectedProtocol
-				, uint16 _ExpectedKeyStrength
-				, bool _bExpectedRetry
-			)
+		static auto fs_CheckConnection(CSSLSettings _ClientSettings, CSSLSettings _ServerSettings, CStr _ExpectedProtocol, uint16 _ExpectedKeyStrength, bool _bExpectedRetry)
 			-> TCFuture<CStr>
 		{
 			TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, _ServerSettings);
@@ -499,15 +490,21 @@ namespace
 			auto Listen = co_await Server
 				(
 					&CAsyncSocketServerActor::f_StartListenAddress
-					, NContainer::fg_CreateVector<CNetAddress>(Address), ENetFlag_None
-					, fg_Move(Callbacks), CSocket_SSL::fs_GetFactory(pServerContext)
+					, NContainer::fg_CreateVector<CNetAddress>(Address)
+					, ENetFlag_None
+					, fg_Move(Callbacks)
+					, CSocket_SSL::fs_GetFactory(pServerContext)
 				)
 			;
 
 			auto Connection = co_await Client
 				(
 					&CAsyncSocketClientActor::f_Connect
-					, CStr("localhost"), CStr{}, ENetAddressType_TCPv4, Listen.m_ListenPorts[0], CSocket_SSL::fs_GetFactory(pClientContext)
+					, CStr("localhost")
+					, CStr{}
+					, ENetAddressType_TCPv4
+					, Listen.m_ListenPorts[0]
+					, CSocket_SSL::fs_GetFactory(pClientContext)
 				)
 			;
 
@@ -556,15 +553,21 @@ namespace
 			auto Listen = co_await Server
 				(
 					&CAsyncSocketServerActor::f_StartListenAddress
-					, NContainer::fg_CreateVector<CNetAddress>(Address), ENetFlag_None
-					, CAsyncSocketServerCallbacks{}, fg_Move(_ServerFactory)
+					, NContainer::fg_CreateVector<CNetAddress>(Address)
+					, ENetFlag_None
+					, CAsyncSocketServerCallbacks{}
+					, fg_Move(_ServerFactory)
 				)
 			;
 
 			auto Result = co_await Client
 				(
 					&CAsyncSocketClientActor::f_Connect
-					, CStr("localhost"), CStr{}, ENetAddressType_TCPv4, Listen.m_ListenPorts[0], CSocket_SSL::fs_GetFactory(pClientContext)
+					, CStr("localhost")
+					, CStr{}
+					, ENetAddressType_TCPv4
+					, Listen.m_ListenPorts[0]
+					, CSocket_SSL::fs_GetFactory(pClientContext)
 				)
 				.f_Timeout(10.0 * NTest::gc_TimeoutMultiplier, "TLS rejection timed out").f_Wrap()
 			;
@@ -610,15 +613,17 @@ namespace
 				};
 
 				CCase Cases[] =
-				{
-					{"Default", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS, "TLSv1.3"},
-					{"TLS12Server", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2"},
-					{"TLS12Client", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS, "TLSv1.2"},
-					{"TLS13Server", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3"},
-					{"TLS13Client", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS, "TLSv1.3"},
-					{"StrictTLS12", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2", true},
-					{"StrictTLS13", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3", true},
-				};
+					{
+						// malterlib-format table
+						  {"Default",     CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS,     "TLSv1.3"}
+						, {"TLS12Server", CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2"}
+						, {"TLS12Client", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS,     "TLSv1.2"}
+						, {"TLS13Server", CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3"}
+						, {"TLS13Client", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS,     "TLSv1.3"}
+						, {"StrictTLS12", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2", true}
+						, {"StrictTLS13", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3", true}
+					}
+				;
 				NContainer::TCMap<CStr, CStr> PreviousDigests;
 
 				for (auto const &Case : Cases)
@@ -667,56 +672,105 @@ namespace
 					};
 
 					CPreferenceCase PreferenceCases[] =
-					{
 						{
-							"P256", CompatibleServer, CStrength::mc_Compatible, SSL_SIGN_ECDSA_SECP256R1_SHA256
-							, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"P384", Medium, CStrength::mc_Compatible, SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"P521", StrongServer, CStrength::mc_Compatible, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"P256Minimum128", CompatibleServer, CStrength::mc_EquivalentSymmetric128bit, SSL_SIGN_ECDSA_SECP256R1_SHA256
-							, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}, SSL_GROUP_X25519
-						},
-						{
-							"P384Minimum128", Medium, CStrength::mc_EquivalentSymmetric128bit, SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}, SSL_GROUP_X25519
-						},
-						{
-							"P521Minimum192", StrongServer, CStrength::mc_EquivalentSymmetric192bit, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"P384Minimum192", Medium, CStrength::mc_EquivalentSymmetric192bit, SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"P521Minimum256", StrongServer, CStrength::mc_EquivalentSymmetric256bit, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, {SSL_GROUP_SECP521R1}, SSL_GROUP_SECP521R1
-						},
-						{
-							"NoLocalKey", {}, CStrength::mc_Compatible, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"NoLocalKeyMinimum128", {}, CStrength::mc_EquivalentSymmetric128bit, SSL_SIGN_ECDSA_SECP256R1_SHA256
-							, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}, SSL_GROUP_X25519
-						},
-						{
-							"NoLocalKeyMinimum192", {}, CStrength::mc_EquivalentSymmetric192bit, SSL_SIGN_ECDSA_SECP384R1_SHA384
-							, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}, SSL_GROUP_SECP384R1
-						},
-						{
-							"NoLocalKeyMinimum256", {}, CStrength::mc_EquivalentSymmetric256bit, SSL_SIGN_ECDSA_SECP521R1_SHA512
-							, {SSL_GROUP_SECP521R1}, SSL_GROUP_SECP521R1
-						},
-					};
+							{
+								"P256"
+								, CompatibleServer
+								, CStrength::mc_Compatible
+								, SSL_SIGN_ECDSA_SECP256R1_SHA256
+								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"P384"
+								, Medium
+								, CStrength::mc_Compatible
+								, SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"P521"
+								, StrongServer
+								, CStrength::mc_Compatible
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"P256Minimum128"
+								, CompatibleServer
+								, CStrength::mc_EquivalentSymmetric128bit
+								, SSL_SIGN_ECDSA_SECP256R1_SHA256
+								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
+								, SSL_GROUP_X25519
+							},
+							{
+								"P384Minimum128"
+								, Medium
+								, CStrength::mc_EquivalentSymmetric128bit
+								, SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
+								, SSL_GROUP_X25519
+							},
+							{
+								"P521Minimum192"
+								, StrongServer
+								, CStrength::mc_EquivalentSymmetric192bit
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"P384Minimum192"
+								, Medium
+								, CStrength::mc_EquivalentSymmetric192bit
+								, SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"P521Minimum256"
+								, StrongServer
+								, CStrength::mc_EquivalentSymmetric256bit
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, {SSL_GROUP_SECP521R1}
+								, SSL_GROUP_SECP521R1
+							},
+							{
+								"NoLocalKey"
+								, {}
+								, CStrength::mc_Compatible
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"NoLocalKeyMinimum128"
+								, {}
+								, CStrength::mc_EquivalentSymmetric128bit
+								, SSL_SIGN_ECDSA_SECP256R1_SHA256
+								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
+								, SSL_GROUP_X25519
+							},
+							{
+								"NoLocalKeyMinimum192"
+								, {}
+								, CStrength::mc_EquivalentSymmetric192bit
+								, SSL_SIGN_ECDSA_SECP384R1_SHA384
+								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
+								, SSL_GROUP_SECP384R1
+							},
+							{
+								"NoLocalKeyMinimum256"
+								, {}
+								, CStrength::mc_EquivalentSymmetric256bit
+								, SSL_SIGN_ECDSA_SECP521R1_SHA512
+								, {SSL_GROUP_SECP521R1}
+								, SSL_GROUP_SECP521R1
+							}
+						}
+					;
 
 					for (auto const &Case : PreferenceCases)
 					{
@@ -788,13 +842,15 @@ namespace
 					};
 
 					COfferCase Offers[] =
-					{
-						{"Default", 0, false},
-						{"Compatible", 0, true},
-						{"Minimum128", 128, true},
-						{"Minimum192", 192, true},
-						{"Minimum256", 256, true},
-					};
+						{
+							// malterlib-format table
+							  {"Default",      0, false}
+							, {"Compatible",   0, true}
+							, {"Minimum128", 128, true}
+							, {"Minimum192", 192, true}
+							, {"Minimum256", 256, true}
+						}
+					;
 
 					for (auto const &Offer : Offers)
 					{
@@ -834,8 +890,10 @@ namespace
 
 					CStrength Minimums[] =
 						{
-							CStrength::mc_Compatible, CStrength::mc_EquivalentSymmetric128bit
-							, CStrength::mc_EquivalentSymmetric192bit, CStrength::mc_EquivalentSymmetric256bit
+							CStrength::mc_Compatible
+							, CStrength::mc_EquivalentSymmetric128bit
+							, CStrength::mc_EquivalentSymmetric192bit
+							, CStrength::mc_EquivalentSymmetric256bit
 						}
 					;
 					uint16_t Groups[] = {SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1};
@@ -893,12 +951,13 @@ namespace
 					};
 
 					CRSAKeyCase Keys[] =
-					{
-						{6789, CStrength::mc_EquivalentSymmetric128bit, false},
-						{6790, CStrength::mc_EquivalentSymmetric128bit, true},
-						{8192, CStrength::mc_EquivalentSymmetric192bit, false},
-						{16384, CStrength::mc_EquivalentSymmetric256bit, false},
-					};
+						{
+							{6789, CStrength::mc_EquivalentSymmetric128bit, false}
+							, {6790, CStrength::mc_EquivalentSymmetric128bit, true}
+							, {8192, CStrength::mc_EquivalentSymmetric192bit, false}
+							, {16384, CStrength::mc_EquivalentSymmetric256bit, false}
+						}
+					;
 
 					for (auto const &Key : Keys)
 					{

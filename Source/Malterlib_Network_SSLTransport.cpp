@@ -224,7 +224,7 @@ namespace NMib::NNetwork
 	}
 
 	// Pin the oldest unsent generation. Move the fill elsewhere before later seals can write kernel-owned bytes.
-	bool CSSLTransport::f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer)
+	bool CSSLTransport::f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
 	{
 		if (mp_TransportError || mp_iUnsentHead < 0)
 			return false;

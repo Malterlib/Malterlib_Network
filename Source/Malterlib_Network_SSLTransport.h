@@ -71,7 +71,7 @@ namespace NMib::NNetwork
 		ETransferResult f_Write(void const *_pData, umint _nBytes, umint &o_nWritten);
 		ETransferResult f_Flush();
 
-		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);
+		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer);
 		void f_AbortSend(umint _iBuffer);
 		void f_SendCompleted(umint _iBuffer, umint _nBytes);
 		umint f_GetFillBuffer() const;

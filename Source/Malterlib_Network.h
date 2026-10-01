@@ -37,10 +37,13 @@
 						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, ENetAddressStringFlag _Flags);
 
 					// Connection Operations
-						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
+						// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
+						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
-						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
-						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
+						// Report to the supplied event when a new connection has arrived
+						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags);
+						// Report to the supplied event when new data is received or when we are ready to send new data
+						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags);
 
 						void fg_Close(void *_pSocket); // Closes the socket and connection
 
@@ -102,12 +105,12 @@ namespace NMib::NNetwork
 			m_IP[3] = _3;
 		}
 
-		CNetAddressIPv4(const CNetAddressIPv4 &_Src)
+		CNetAddressIPv4(CNetAddressIPv4 const &_Src)
 		{
 			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 		}
 
-		CNetAddressIPv4 &operator = (const CNetAddressIPv4 &_Src)
+		CNetAddressIPv4 &operator = (CNetAddressIPv4 const &_Src)
 		{
 			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 
@@ -140,27 +143,32 @@ namespace NMib::NNetwork
 
 		CNetAddressIPv6() = default;
 
-		CNetAddressIPv6(	uint8 _0, uint8 _1, uint8 _2, uint8 _3
-						,	uint8 _4, uint8 _5, uint8 _6, uint8 _7
-						,	uint8 _8, uint8 _9, uint8 _10, uint8 _11
-						,	uint8 _12, uint8 _13, uint8 _14, uint8 _15)
+		CNetAddressIPv6(uint8 _0, uint8 _1, uint8 _2, uint8 _3, uint8 _4, uint8 _5, uint8 _6, uint8 _7, uint8 _8, uint8 _9, uint8 _10, uint8 _11, uint8 _12, uint8 _13, uint8 _14, uint8 _15)
 		{
-			m_IP[0] = _0; m_IP[1] = _1;
-			m_IP[2] = _2; m_IP[3] = _3;
-			m_IP[4] = _4; m_IP[5] = _5;
-			m_IP[6] = _6; m_IP[7] = _7;
-			m_IP[8] = _8; m_IP[9] = _9;
-			m_IP[10] = _10; m_IP[11] = _11;
-			m_IP[12] = _12; m_IP[13] = _13;
-			m_IP[14] = _14; m_IP[15] = _15;
+			m_IP[0] = _0;
+			m_IP[1] = _1;
+			m_IP[2] = _2;
+			m_IP[3] = _3;
+			m_IP[4] = _4;
+			m_IP[5] = _5;
+			m_IP[6] = _6;
+			m_IP[7] = _7;
+			m_IP[8] = _8;
+			m_IP[9] = _9;
+			m_IP[10] = _10;
+			m_IP[11] = _11;
+			m_IP[12] = _12;
+			m_IP[13] = _13;
+			m_IP[14] = _14;
+			m_IP[15] = _15;
 		}
 
-		CNetAddressIPv6(const CNetAddressIPv6 &_Src)
+		CNetAddressIPv6(CNetAddressIPv6 const &_Src)
 		{
 			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 		}
 
-		CNetAddressIPv6 &operator = (const CNetAddressIPv6 &_Src)
+		CNetAddressIPv6 &operator = (CNetAddressIPv6 const &_Src)
 		{
 			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
 
@@ -195,7 +203,7 @@ namespace NMib::NNetwork
 		, ENetAddressStringFlag_IncludePort = DMibBit(1)
 	};
 
-	template<typename t_CIPAddress, ENetAddressType t_Type>
+	template <typename t_CIPAddress, ENetAddressType t_Type>
 	class TCNetAddressTCP : public t_CIPAddress
 	{
 	public:
@@ -208,32 +216,35 @@ namespace NMib::NNetwork
 		{
 		}
 
-		TCNetAddressTCP(const TCNetAddressTCP &_Src)
+		TCNetAddressTCP(TCNetAddressTCP const &_Src)
 		{
 			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
 		}
 
-		TCNetAddressTCP(const t_CIPAddress &_Src, uint16 _Port)
+		TCNetAddressTCP(t_CIPAddress const &_Src, uint16 _Port)
 			: t_CIPAddress(_Src)
 			, m_Port(_Port)
 		{
 		}
 
-		TCNetAddressTCP &operator = (const TCNetAddressTCP &_Src)
+		TCNetAddressTCP &operator = (TCNetAddressTCP const &_Src)
 		{
 			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
 
 			return *this;
 		}
 
-		TCNetAddressTCP &operator = (const t_CIPAddress &_Src)
+		TCNetAddressTCP &operator = (t_CIPAddress const &_Src)
 		{
 			(*this) = _Src;
 
 			return *this;
 		}
 
-		t_CIPAddress const& f_GetIP() const { return *this; }
+		t_CIPAddress const &f_GetIP() const
+		{
+			return *this;
+		}
 
 		static ENetAddressType fs_GetType()
 		{
@@ -246,13 +257,13 @@ namespace NMib::NNetwork
 
 	enum ENetTCPState
 	{
-		ENetTCPState_None			= 0
-		, ENetTCPState_Read			= DMibBit(0) // Data is awailable for reading
-		, ENetTCPState_Write		= DMibBit(1) // More data can now be sent
-		, ENetTCPState_Connection	= DMibBit(2) // A new connection is available for accept
-		, ENetTCPState_Connected	= DMibBit(3) // A async connection has completed
-		, ENetTCPState_Closed		= DMibBit(4) // The connection has been lost
-		, ENetTCPState_RemoteClosed	= DMibBit(5) // A connection closure was initiated by remote call f_Shutdown
+		ENetTCPState_None = 0
+		, ENetTCPState_Read = DMibBit(0) // Data is awailable for reading
+		, ENetTCPState_Write = DMibBit(1) // More data can now be sent
+		, ENetTCPState_Connection = DMibBit(2) // A new connection is available for accept
+		, ENetTCPState_Connected = DMibBit(3) // A async connection has completed
+		, ENetTCPState_Closed = DMibBit(4) // The connection has been lost
+		, ENetTCPState_RemoteClosed = DMibBit(5) // A connection closure was initiated by remote call f_Shutdown
 	};
 
 	enum ENetFlag
@@ -275,7 +286,7 @@ namespace NMib::NNetwork
 namespace NMib::NStream
 {
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4 >
+	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4>
 	{
 	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data)
@@ -292,7 +303,7 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4 >
+	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4>
 	{
 	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data)
@@ -307,7 +318,7 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6 >
+	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6>
 	{
 	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data)
@@ -324,7 +335,7 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6 >
+	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6>
 	{
 	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data)
@@ -349,14 +360,14 @@ namespace NMib::NSys::NNetwork
 // Addresses
 	using CAddress = void *;
 
-	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, umint _nDataBytes);
+	CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const *_pData, umint _nDataBytes);
 	CAddress fg_CreateAddressFromNative(void const *_pAddress, umint _Size);
 	CAddress fg_DuplicateAddress(CAddress _Address);
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
 	uint32 fg_GetAddressScopeID(CAddress _Address);
-	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
-	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
+	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void *_opRawData, umint _nDataBytes);
+	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const *_pRawData, umint _nDataBytes);
 
 	struct CResolveAddressParameters
 	{
@@ -367,7 +378,7 @@ namespace NMib::NSys::NNetwork
 
 	CAddress fg_PrepareResolveAddress(NStr::CStr const &_Address, CResolveAddressParameters &o_Parameters);
 
-	CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
+	CAddress fg_ResolveAddress(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
 	NContainer::TCVector<CAddress> fg_ResolveAddresses(NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType);
 
@@ -375,8 +386,8 @@ namespace NMib::NSys::NNetwork
 
 	umint fg_GetMaxUnixSocketNameLength();
 
-	void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
-	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
+	void *fg_AsyncResolveAddress_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
+	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress &_opAddress, NMib::NStr::CStr &_Error);
 	void fg_AsyncResolveAddress_Close(void *_pResolver);
 	void fg_AsyncResolveAddress_CloseAsync(void *_pResolver, NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
@@ -386,11 +397,9 @@ namespace NMib::NSys::NNetwork
 
 	NMib::NStr::CStr fg_GetAddressString(CAddress _Address, NMib::NNetwork::ENetAddressStringFlag _Flags);
 
-
 	// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
 	void *fg_AsyncConnect(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, CAddress _pBindAddr);
 	void fg_StartSocket(void *_pSocket); // Starts the event loop
-
 
 	// Report to the supplied event when a new connection has arrived
 	void *fg_Listen(CAddress _pAddr, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, NMib::NNetwork::ENetFlag _Flags);
@@ -404,9 +413,8 @@ namespace NMib::NSys::NNetwork
 	void fg_Close(void *_pSocket); // Closes the socket and connection
 
 	umint fg_Receive(void *_pSocket, void *_pData, umint _DataLen, bool &o_bEndOfStream);
-	umint fg_Send(void *_pSocket, const void *_pData, umint _DataLen); // Returns bytes sent
+	umint fg_Send(void *_pSocket, void const *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_SendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans);
-
 
 	NMib::NSys::ICIoLoop *fg_GetOwningIoLoop(void *_pSocket);
 	bool fg_SupportsCompletionIo(void *_pSocket);
@@ -420,7 +428,7 @@ namespace NMib::NSys::NNetwork
 	bool fg_QueryPathDeliveryRate(void *_pSocket, umint &o_nBytes, bool &o_bAppLimited);
 	bool fg_IsSendWindowFull(void *_pSocket, umint _nUnreleasedBytes, umint _nStartBytes);
 	umint fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
-	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, const void *_pData, umint _DataLen); // Returns bytes sent
+	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void const *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _Address, void *_pData, umint _DataLen); // Returns bytes received
 
 // Socket Properties & State
@@ -467,34 +475,35 @@ namespace NMib::NNetwork
 	public:
 		CNetAddress()
 			: mp_Address(nullptr)
-		{}
+		{
+		}
 
 		explicit CNetAddress(NMib::NSys::NNetwork::CAddress _Address)
 			: mp_Address(_Address)
 		{
 		}
 
-		CNetAddress(CNetAddress&& _ToMove)
+		CNetAddress(CNetAddress &&_ToMove)
 			: mp_Address(_ToMove.mp_Address)
 		{
 			_ToMove.mp_Address = nullptr;
 		}
 
-		CNetAddress(CNetAddress const& _ToCopy)
+		CNetAddress(CNetAddress const &_ToCopy)
 			: mp_Address(nullptr)
 		{
 			if (_ToCopy.mp_Address)
 				mp_Address = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_Address);
 		}
 
-		template<typename t_CAddress>
+		template <typename t_CAddress>
 		CNetAddress(t_CAddress const &_Address)
 			: mp_Address(NMib::NSys::NNetwork::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress)))
 		{
 		}
 
-		template<typename t_CAddress>
-		CNetAddress& operator= (t_CAddress const &_Address)
+		template <typename t_CAddress>
+		CNetAddress &operator = (t_CAddress const &_Address)
 		{
 			f_Clear();
 
@@ -503,7 +512,7 @@ namespace NMib::NNetwork
 			return *this;
 		}
 
-		CNetAddress& operator= (CNetAddress&& _ToMove)
+		CNetAddress &operator = (CNetAddress &&_ToMove)
 		{
 			f_Clear();
 
@@ -513,7 +522,7 @@ namespace NMib::NNetwork
 			return *this;
 		}
 
-		CNetAddress& operator= (CNetAddress const& _ToCopy)
+		CNetAddress &operator = (CNetAddress const &_ToCopy)
 		{
 			f_Clear();
 
@@ -568,8 +577,8 @@ namespace NMib::NNetwork
 
 		uint32 f_GetScopeID() const;
 
-		template<typename t_CAddress>
-		bool f_Get(t_CAddress& _oAddress) const
+		template <typename t_CAddress>
+		bool f_Get(t_CAddress &_oAddress) const
 		{
 			return NMib::NSys::NNetwork::fg_GetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_oAddress, sizeof(t_CAddress));
 		}
@@ -583,7 +592,7 @@ namespace NMib::NNetwork
 			return mp_Address != nullptr;
 		}
 
-		template<typename t_CAddress>
+		template <typename t_CAddress>
 		bool f_Set(t_CAddress const &_Address)
 		{
 			f_Clear();
@@ -601,31 +610,30 @@ namespace NMib::NNetwork
 			if (!mp_Address)
 				return false;
 
-			switch(NMib::NSys::NNetwork::fg_GetAddressType(mp_Address))
+			switch (NMib::NSys::NNetwork::fg_GetAddressType(mp_Address))
 			{
-				case ENetAddressType_TCPv4:
-					{
-						CNetAddressTCPv4 TCPv4;
-						if (!f_Get(TCPv4))
-							return false;
+			case ENetAddressType_TCPv4:
+				{
+					CNetAddressTCPv4 TCPv4;
+					if (!f_Get(TCPv4))
+						return false;
 
-						TCPv4.m_Port = _Port;
+					TCPv4.m_Port = _Port;
 
-						return f_Set(TCPv4);
-					}
+					return f_Set(TCPv4);
+				}
 
-				case ENetAddressType_TCPv6:
-					{
-						CNetAddressTCPv6 TCPv6;
-						if (!f_Get(TCPv6))
-							return false;
+			case ENetAddressType_TCPv6:
+				{
+					CNetAddressTCPv6 TCPv6;
+					if (!f_Get(TCPv6))
+						return false;
 
-						TCPv6.m_Port = _Port;
+					TCPv6.m_Port = _Port;
 
-						return f_Set(TCPv6);
-					}
-				default:
-					return false;
+					return f_Set(TCPv6);
+				}
+			default: return false;
 			}
 		}
 
@@ -634,41 +642,40 @@ namespace NMib::NNetwork
 			if (!mp_Address)
 				return 0;
 
-			switch(NMib::NSys::NNetwork::fg_GetAddressType(mp_Address))
+			switch (NMib::NSys::NNetwork::fg_GetAddressType(mp_Address))
 			{
-				case ENetAddressType_TCPv4:
-					{
-						CNetAddressTCPv4 TCPv4;
-						if (!f_Get(TCPv4))
-							return 0;
+			case ENetAddressType_TCPv4:
+				{
+					CNetAddressTCPv4 TCPv4;
+					if (!f_Get(TCPv4))
+						return 0;
 
-						return TCPv4.m_Port;
-					}
+					return TCPv4.m_Port;
+				}
 
-				case ENetAddressType_TCPv6:
-					{
-						CNetAddressTCPv6 TCPv6;
-						if (!f_Get(TCPv6))
-							return 0;
+			case ENetAddressType_TCPv6:
+				{
+					CNetAddressTCPv6 TCPv6;
+					if (!f_Get(TCPv6))
+						return 0;
 
-						return TCPv6.m_Port;
-					}
-				default:
-					return 0;
+					return TCPv6.m_Port;
+				}
+			default: return 0;
 			}
 		}
 
-		operator NMib::NSys::NNetwork::CAddress() const
+		operator NMib::NSys::NNetwork::CAddress () const
 		{
 			return mp_Address;
 		}
 
-		bool operator == (CNetAddress const& _Other) const
+		bool operator == (CNetAddress const &_Other) const
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) == 0;
 		}
 
-		COrdering_Weak operator <=> (CNetAddress const& _Other) const
+		COrdering_Weak operator <=> (CNetAddress const &_Other) const
 		{
 			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_Address, _Other.mp_Address) <=> 0;
 		}
@@ -691,8 +698,8 @@ namespace NMib::NNetwork
 	private:
 		void *mp_pResolver;
 		void fp_CheckValid() const;
-	public:
 
+	public:
 		CAsyncResolver(CAsyncResolver const &) = delete;
 		CAsyncResolver &operator = (CAsyncResolver const &) = delete;
 
@@ -708,9 +715,9 @@ namespace NMib::NNetwork
 
 		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
-		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
+		void f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
 
-		void f_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
+		void f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
 		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error);
 	};
@@ -758,8 +765,10 @@ namespace NMib::NNetwork
 			}
 			return NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
 		}
-		CSocket(CSocket const& _Other);
-		CSocket & operator =(CSocket const& _Other);
+
+		CSocket(CSocket const &_Other);
+		CSocket &operator = (CSocket const &_Other);
+
 	public:
 		CSocket()
 		{
@@ -781,7 +790,7 @@ namespace NMib::NNetwork
 		{
 		}
 
-		CSocket & operator =(CSocket &&_Other)
+		CSocket &operator = (CSocket &&_Other)
 		{
 			mp_pSocket = fg_Exchange(_Other.mp_pSocket, nullptr);
 			mp_nSendWindowBytes = _Other.mp_nSendWindowBytes;
@@ -1000,7 +1009,7 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen, o_bEndOfStream);
 		}
 
-		umint f_Send(const void *_pData, umint _DataLen)
+		umint f_Send(void const *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 
@@ -1088,7 +1097,7 @@ namespace NMib::NNetwork
 			return NMib::NSys::NNetwork::fg_SubmitSendVectored(mp_pSocket, _pSpans, _nSpans, fg_Move(_fOnComplete), fg_Move(_fOnBufferReleased));
 		}
 
-		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
+		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen)
 		{
 			fp_CheckSocket();
 
@@ -1124,14 +1133,13 @@ namespace NMib::NNetwork
 
 		static NContainer::TCVector<CNetAddress> fs_ResolveHost(NStr::CStr const &_Host, ENetAddressType _PreferType = ENetAddressType_None);
 
-		static NMib::NNetwork::CNetAddress fs_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None)
+		static NMib::NNetwork::CNetAddress fs_ResolveAddress(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None)
 		{
 			return fg_Move(CNetAddress(NMib::NSys::NNetwork::fg_ResolveAddress(_Address, _PreferType)));
 		}
 
 	private:
 		static NContainer::TCVector<CNetAddress> fsp_AdoptAddresses(NContainer::TCVector<NMib::NSys::NNetwork::CAddress> &&_Addresses);
-
 	};
 
 	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars = "", ch8 const *_pLabelChars = "");

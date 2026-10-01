@@ -9,7 +9,6 @@
 #include "Malterlib_Network_Exception.h"
 #include <Mib/Memory/Allocators/Secure>
 
-
 #ifndef DMibConfig_SSLCompletionIoSend
 	#define DMibConfig_SSLCompletionIoSend 1
 #endif
@@ -33,33 +32,32 @@ namespace NMib::NNetwork
 		enum EVerificationFlag
 		{
 			EVerificationFlag_None = 0
-			, EVerificationFlag_UserCanAcceptUntrusted				= DMibBit(0)
-			, EVerificationFlag_RememberTrustedCertificates			= DMibBit(1)
-			, EVerificationFlag_UseSpecificPeerCertificate			= DMibBit(2)
-			, EVerificationFlag_UseOSStoreIfNoCASpecified			= DMibBit(3)
-			, EVerificationFlag_VerifyHostnameMatches				= DMibBit(4)
-			, EVerificationFlag_UserCanIgnoreVerificationFailures	= DMibBit(5)
-			, EVerificationFlag_AllowInsecureSSL					= DMibBit(6)
-			, EVerificationFlag_AllowMissingPeerCertificate			= DMibBit(7)
-			, EVerificationFlag_IgnoreVerificationFailures			= DMibBit(8)
-			, EVerificationFlag_IgnoreTrustFailures					= DMibBit(9)
-			, EVerificationFlag_DisallowEllipticCurveDHKeyExchange	= DMibBit(10) // Unsupported by this TLS backend; rejected when set.
-			, EVerificationFlag_AllowInsecureCipherSuites			= DMibBit(11)
-			, EVerificationFlag_AllowInsecureSSLVersions			= DMibBit(12)
+			, EVerificationFlag_UserCanAcceptUntrusted = DMibBit(0)
+			, EVerificationFlag_RememberTrustedCertificates = DMibBit(1)
+			, EVerificationFlag_UseSpecificPeerCertificate = DMibBit(2)
+			, EVerificationFlag_UseOSStoreIfNoCASpecified = DMibBit(3)
+			, EVerificationFlag_VerifyHostnameMatches = DMibBit(4)
+			, EVerificationFlag_UserCanIgnoreVerificationFailures = DMibBit(5)
+			, EVerificationFlag_AllowInsecureSSL = DMibBit(6)
+			, EVerificationFlag_AllowMissingPeerCertificate = DMibBit(7)
+			, EVerificationFlag_IgnoreVerificationFailures = DMibBit(8)
+			, EVerificationFlag_IgnoreTrustFailures = DMibBit(9)
+			, EVerificationFlag_DisallowEllipticCurveDHKeyExchange = DMibBit(10) // Unsupported by this TLS backend; rejected when set.
+			, EVerificationFlag_AllowInsecureCipherSuites = DMibBit(11)
+			, EVerificationFlag_AllowInsecureSSLVersions = DMibBit(12)
 		};
 
 		enum EProtocol
 		{
-			EProtocol_SSL,
-			EProtocol_TLS,
-			EProtocol_TLS_1_2,
-			EProtocol_TLS_1_3,
+			EProtocol_SSL
+			, EProtocol_TLS
+			, EProtocol_TLS_1_2
+			, EProtocol_TLS_1_3
 		};
 
 		bool operator == (CSSLSettings const &_Other) const noexcept
 		{
-			return
-				m_PublicCertificateData == _Other.m_PublicCertificateData
+			return m_PublicCertificateData == _Other.m_PublicCertificateData
 				&& m_PrivateKeyData == _Other.m_PrivateKeyData
 				&& m_CRLData == _Other.m_CRLData
 				&& m_CACertificateData == _Other.m_CACertificateData
@@ -120,22 +118,22 @@ namespace NMib::NNetwork
 	public:
 		enum EMiscError
 		{
-			EMiscError_HostnameMisMatch = 5000,
-			EMiscError_InvalidCertificateAuthorityLocation,
-			EMiscError_InvalidPublicCertificate,
-			EMiscError_InvalidPrivateKey,
-			EMiscError_CertificatePrivateKeyMisMatch,
-			EMiscError_InvalidCRLData,
-			EMiscError_InvalidCRLPath,
-			EMiscError_InvalidCertificateAuthorityData,
-			EMiscError_InternalError,
-			EMiscError_MismatchingSpecificCertificate,
+			EMiscError_HostnameMisMatch = 5000
+			, EMiscError_InvalidCertificateAuthorityLocation
+			, EMiscError_InvalidPublicCertificate
+			, EMiscError_InvalidPrivateKey
+			, EMiscError_CertificatePrivateKeyMisMatch
+			, EMiscError_InvalidCRLData
+			, EMiscError_InvalidCRLPath
+			, EMiscError_InvalidCertificateAuthorityData
+			, EMiscError_InternalError
+			, EMiscError_MismatchingSpecificCertificate
 		};
 
 		struct CResultCertificate
 		{
 			NContainer::CByteVector m_Data;
-			NContainer::TCMap<int,int> m_Errors;
+			NContainer::TCMap<int, int> m_Errors;
 
 			bool operator == (CResultCertificate const &_Other) const noexcept
 			{
@@ -145,22 +143,38 @@ namespace NMib::NNetwork
 
 		bool operator == (CSSLConnectionResult const &_Other) const noexcept
 		{
-			return (mp_Certificates == _Other.mp_Certificates &&
-				mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured &&
-				mp_bVerificationErrorsOccured == _Other.mp_bVerificationErrorsOccured &&
-				mp_MiscErrors == _Other.mp_MiscErrors &&
-				mp_SSLErrors == _Other.mp_SSLErrors);
+			return
+				(
+					mp_Certificates == _Other.mp_Certificates
+					&& mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured
+					&& mp_bVerificationErrorsOccured == _Other.mp_bVerificationErrorsOccured
+					&& mp_MiscErrors == _Other.mp_MiscErrors
+					&& mp_SSLErrors == _Other.mp_SSLErrors
+				)
+			;
 		}
 
 		NContainer::CByteVector f_GetPeerCertificate() const;
 		NContainer::TCVector<NContainer::CByteVector> f_GetCertificateChain() const;
 
-		CSSLConnectionResult() : mp_bTrustErrorsOccured(false), mp_bVerificationErrorsOccured(false), mp_bConnectionRefused(false) {}
-		~CSSLConnectionResult() {}
+		CSSLConnectionResult()
+			: mp_bTrustErrorsOccured(false)
+			, mp_bVerificationErrorsOccured(false)
+			, mp_bConnectionRefused(false)
+		{
+		}
+
+		~CSSLConnectionResult()
+		{
+		}
 
 		void f_LogError(umint _Depth, int _Error);
 		void f_LogMiscError(EMiscError _Error);
-		bool f_HasLoggedCertificateChain() const { return !mp_Certificates.f_IsEmpty(); }
+		bool f_HasLoggedCertificateChain() const
+		{
+			return !mp_Certificates.f_IsEmpty();
+		}
+
 		void f_LogCertificate(umint _Depth, NContainer::CByteVector const &_Certificate);
 
 		NStr::CStr f_GetPeerCertificateName() const;
@@ -180,8 +194,8 @@ namespace NMib::NNetwork
 
 		enum EFormat
 		{
-			EHtml,
-			ECommaSeperated,
+			EHtml
+			, ECommaSeperated
 		};
 
 		NStr::CStr f_GetErrorMessage(EFormat _Format = ECommaSeperated) const;
@@ -208,21 +222,21 @@ namespace NMib::NNetwork
 
 		enum EAuthenticationResult
 		{
-			EAuthenticationResult_Success,
-			EAuthenticationResult_Failure,
-			EAuthenticationResult_SocketNotReady,
+			EAuthenticationResult_Success
+			, EAuthenticationResult_Failure
+			, EAuthenticationResult_SocketNotReady
 		};
 
 		enum EState
 		{
-			EState_None,
-			EState_InvalidContext,
-			EState_RequiresUserDecisionOnTrust,
-			EState_ConnectionFailed,
-			EState_ConnectionShutdown,
-			EState_WriteFailed,
-			EState_ReadFailed,
-			EState_ShutdownFailed,
+			EState_None
+			, EState_InvalidContext
+			, EState_RequiresUserDecisionOnTrust
+			, EState_ConnectionFailed
+			, EState_ConnectionShutdown
+			, EState_WriteFailed
+			, EState_ReadFailed
+			, EState_ShutdownFailed
 		};
 
 		using FAuthenticationResultCallback = NFunction::TCFunction<void (EAuthenticationResult _Result, CSSLConnectionResult const &_ConnectionResult)>;
@@ -269,7 +283,7 @@ namespace NMib::NNetwork
 		void f_SetSendWindow(umint _nBytes);
 		bool f_SupportsCompletionIoSend() const;
 		bool f_SupportsCompletionIoReceive() const;
-		bool f_BeginSend(void const *&o_pData, umint &o_nBytes, umint &o_iBuffer);
+		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer);
 		bool f_IsSendPinned() const;
 		bool f_CanBeginSend() const;
 		void f_ConsiderSendWindowGrowth();
@@ -309,12 +323,20 @@ namespace NMib::NNetwork
 		bool f_HandshakeInProgress() const;
 		bool f_Shutdown();
 
-		CSocketOperationResult f_Send(const void *_pData, umint _nLen);
+		CSocketOperationResult f_Send(void const *_pData, umint _nLen);
 		CSocketOperationResult f_Receive(void *_pData, umint _nLen);
 
 		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
-		CSSLConnectionResult &f_GetConnectionResult() { return mp_Result; }
-		CSSLConnectionResult const &f_GetConnectionResult() const { return mp_Result; }
+		CSSLConnectionResult &f_GetConnectionResult()
+		{
+			return mp_Result;
+		}
+
+		CSSLConnectionResult const &f_GetConnectionResult() const
+		{
+			return mp_Result;
+		}
+
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest() const;
 		NStr::CStr f_GetProtocolVersion() const;
 		uint16 f_GetCipherStrength() const;
@@ -331,20 +353,20 @@ namespace NMib::NNetwork
 	public:
 		enum EType
 		{
-			EType_Client,
-			EType_Server,
+			EType_Client
+			, EType_Server
 		};
 
 		enum EState
 		{
-			EState_None = 0,
-			EState_InvalidCertificateAuthorityLocation = DMibBit(1),
-			EState_InvalidPublicCertificate = DMibBit(2),
-			EState_InvalidPrivateKey = DMibBit(3),
-			EState_CertificatePrivateKeyMisMatch = DMibBit(4),
-			EState_InvalidCRLData = DMibBit(5),
-			EState_InvalidCRLPath = DMibBit(6),
-			EState_InvalidCertificateAuthorityData = DMibBit(7),
+			EState_None = 0
+			, EState_InvalidCertificateAuthorityLocation = DMibBit(1)
+			, EState_InvalidPublicCertificate = DMibBit(2)
+			, EState_InvalidPrivateKey = DMibBit(3)
+			, EState_CertificatePrivateKeyMisMatch = DMibBit(4)
+			, EState_InvalidCRLData = DMibBit(5)
+			, EState_InvalidCRLPath = DMibBit(6)
+			, EState_InvalidCertificateAuthorityData = DMibBit(7)
 		};
 
 		CSSLContext(EType _Type, CSSLSettings const &_Settings);

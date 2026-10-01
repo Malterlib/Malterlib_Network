@@ -80,8 +80,8 @@ namespace NMib::NNetwork
 			EAsyncSocketCloseOrigin m_Origin;
 		};
 
-		constexpr static umint gc_IncomingPageSize = 2048;
-		constexpr static umint gc_CopySmallDeliveryThreshold = 1024;
+		static constexpr umint gc_IncomingPageSize = 2048;
+		static constexpr umint gc_CopySmallDeliveryThreshold = 1024;
 	}
 
 	struct CAsyncSocketActor::CInternal
@@ -95,16 +95,7 @@ namespace NMib::NNetwork
 			uint32 m_iNextFree = mc_iNone;
 		};
 
-		CInternal
-			(
-				CAsyncSocketActor *_pThis
-				, bool _bClient
-				, umint _MaxMessageSize
-				, umint _FragmentationSize
-				, umint _SendWindowBytes
-				, fp64 _Timeout
-				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
-			)
+		CInternal(CAsyncSocketActor *_pThis, bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
 			: m_pThis(_pThis)
 			, m_IncomingData(gc_IncomingPageSize)
 			, m_UpgradeCheckData(gc_IncomingPageSize)
@@ -285,11 +276,7 @@ namespace NMib::NNetwork
 		return pCompletionIo && pCompletionIo->f_SupportsCompletionReceive() ? pCompletionIo : nullptr;
 	}
 
-	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueMessage
-		(
-			NContainer::CSharedByteVector const &_Data
-			, uint32 _Priority
-		)
+	COutgoingMessage &CAsyncSocketActor::CInternal::f_QueueMessage(NContainer::CSharedByteVector const &_Data, uint32 _Priority)
 	{
 		DMibFastCheck(!m_pThis->f_IsDestroyed());
 
@@ -539,7 +526,8 @@ namespace NMib::NNetwork
 		co_return {};
 	}
 
-	NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname)
+	auto CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname)
+		-> NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>>
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
@@ -1149,7 +1137,6 @@ namespace NMib::NNetwork
 			// Drain readiness-held bytes in a later actor job to avoid reentering the processing that started the stream.
 			DMibLogWarningOrDiscardResult(fg_ThisActor(this).f_Bind<&CAsyncSocketActor::fp_DrainHeldInput>(), "Mib/Network", "Draining the input the socket held failed");
 		}
-
 	}
 
 	void CAsyncSocketActor::fp_ReceiveWindowResume()
@@ -1237,7 +1224,6 @@ namespace NMib::NNetwork
 			return;
 		}
 
-
 		// Reservations outlive transport records until continuation chains settle; retry new batches when a slot is released.
 		if (!_bContinue)
 		{
@@ -1288,12 +1274,7 @@ namespace NMib::NNetwork
 		}
 
 		// Both completion and release functors retain the tracker until destruction, including refusal and exception paths.
-		NSys::FIoCompletion fOnComplete =
-			[
-				Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker)
-				, iReservation
-				, WeakThis = fg_ThisActor(this).f_Weak()
-			]
+		NSys::FIoCompletion fOnComplete = [Hold = NConcurrency::CIoCompletionOpHold(Internal.m_pOpTracker), iReservation, WeakThis = fg_ThisActor(this).f_Weak()]
 			(NSys::CIoCompletion _Result) mutable
 			{
 				if (auto This = WeakThis.f_Lock())
@@ -1359,8 +1340,6 @@ namespace NMib::NNetwork
 #endif
 
 		++Internal.m_nSendOpsInFlight;
-
-
 	}
 
 	void CAsyncSocketActor::fp_ReceiveSegment(NSys::CIoStreamSegment &&_Segment)
@@ -1520,15 +1499,7 @@ namespace NMib::NNetwork
 				}
 			}
 			else
-			{
-				bProduced = Internal.m_pCompletionIo->f_ResolveHeld
-					(
-						Internal.m_ReceiveData.f_GetArray() + Internal.m_nReceiveFill
-						, Capacity - Internal.m_nReceiveFill
-						, Result
-					)
-				;
-			}
+				bProduced = Internal.m_pCompletionIo->f_ResolveHeld(Internal.m_ReceiveData.f_GetArray() + Internal.m_nReceiveFill, Capacity - Internal.m_nReceiveFill, Result);
 
 			if (!bProduced || !Result.m_nBytes)
 				break;
@@ -1681,7 +1652,6 @@ namespace NMib::NNetwork
 		fp_UpdateSend();
 		fp_DrainSocketOutput();
 	}
-
 
 	bool CAsyncSocketActor::fp_ProcessIncomingMessage()
 	{
@@ -1853,8 +1823,7 @@ namespace NMib::NNetwork
 					Internal.m_IncomingData.f_RemoveFront(Internal.m_IncomingData.f_GetLen());
 				}
 				break;
-			case EState_None:
-				break; // Handshake still running
+			case EState_None: break; // Handshake still running
 			}
 		}
 	}
@@ -1988,7 +1957,8 @@ namespace NMib::NNetwork
 
 		if
 		(
-			Internal.m_bReceiveStreamActive && !Internal.m_bReceiveStreamEnded
+			Internal.m_bReceiveStreamActive
+			&& !Internal.m_bReceiveStreamEnded
 			&& Internal.m_State != EState_Disconnected
 			&& (_StateAdded & (NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed))
 		)
@@ -2274,7 +2244,7 @@ namespace NMib::NNetwork
 		auto Sequence = ++m_TimeoutTimerSubscriptionSequence;
 		fg_RegisterTimer
 			(
-				m_Timeout/2.0
+				m_Timeout / 2.0
 				, [this]() -> NConcurrency::TCFuture<void>
 				{
 					f_UpdateTimeout();
