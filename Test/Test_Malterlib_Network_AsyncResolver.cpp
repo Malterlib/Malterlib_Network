@@ -13,6 +13,26 @@ using namespace NMib::NStorage;
 
 namespace
 {
+	// The worker destroys a close callback only after calling it, which can be after the test has ended and the concurrency manager is
+	// gone. Close callbacks therefore signal an event, as a promise they kept alive would be reported as a leaked future
+	TCFuture<void> fg_WaitForClosed(TCSharedPointer<NThread::CEvent> _pClosed, NStr::CStr _Error)
+	{
+		auto BlockingActorCheckout = fg_BlockingActor();
+		bool bTimedOut = co_await
+			(
+				g_Dispatch(BlockingActorCheckout) / [_pClosed]
+				{
+					return _pClosed->f_WaitTimeout(5.0);
+				}
+			)
+		;
+
+		if (bTimedOut)
+			co_return DMibErrorInstance(_Error);
+
+		co_return {};
+	}
+
 	struct CAsyncResolver_Tests : NTest::CTest
 	{
 		void f_DoTests()
@@ -24,12 +44,12 @@ namespace
 					NThread::CEvent Release;
 					TCPromise<void> Started;
 					TCPromise<void> Finished;
-					TCPromise<void> Closed;
 					NAtomic::TCAtomic<uint32> PendingCallbacks{0};
 					NAtomic::TCAtomic<uint32> CloseCallbacks{0};
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
+				TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
 				pState->Release.f_ResetSignaled();
 				auto Cleanup = g_OnScopeExit / [pState]
 					{
@@ -96,18 +116,18 @@ namespace
 
 				Resolver.f_CloseAsync
 					(
-						[pState]
+						[pClosed]
 						{
-							pState->Closed.f_SetResult();
+							pClosed->f_SetSignaled();
 						}
 					)
 				;
 
 				DMibExpectFalse(pState->Finished.f_IsSet());
-				DMibExpectFalse(pState->Closed.f_IsSet());
+				DMibExpectFalse(pClosed->f_TryWait());
 
 				pState->Release.f_SetSignaled();
-				co_await pState->Closed.f_Future().f_Timeout(5.0, "Resolver close did not complete");
+				co_await fg_WaitForClosed(pClosed, "Resolver close did not complete");
 
 				DMibTestPath("AfterClose");
 				DMibExpectTrue(pState->Finished.f_IsSet());
@@ -128,10 +148,10 @@ namespace
 						TCPromise<void> Started;
 						TCPromise<void> Finished;
 						TCPromise<void> NextFinished;
-						TCPromise<void> Closed;
 					};
 
 					TCSharedPointer<CState> pState = fg_Construct();
+					TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
 					pState->Release.f_ResetSignaled();
 					auto Cleanup = g_OnScopeExit / [pState]
 						{
@@ -181,14 +201,14 @@ namespace
 
 					pResolver->f_CloseAsync
 						(
-							[pState]
+							[pClosed]
 							{
-								pState->Closed.f_SetResult();
+								pClosed->f_SetSignaled();
 							}
 						)
 					;
 
-					co_await pState->Closed.f_Future();
+					co_await fg_WaitForClosed(pClosed, "Resolver close did not complete");
 				}
 
 				co_return {};
@@ -201,23 +221,23 @@ namespace
 					CAsyncResolver Resolver;
 					NThread::CEvent Opened;
 					TCPromise<void> Finished;
-					TCPromise<void> Closed;
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
+				TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
 				pState->Opened.f_ResetSignaled();
 				pState->Resolver.f_Open
 					(
 						"127.0.0.1"
 						, ENetAddressType_TCPv4
-						, [pState]
+						, [pState, pClosed]
 						{
 							pState->Opened.f_Wait();
 							pState->Resolver.f_CloseAsync
 								(
-									[pState]
+									[pClosed]
 									{
-										pState->Closed.f_SetResult();
+										pClosed->f_SetSignaled();
 									}
 								)
 							;
@@ -228,7 +248,7 @@ namespace
 				;
 
 				pState->Opened.f_SetSignaled();
-				co_await pState->Closed.f_Future().f_Timeout(5.0, "Close from callback did not complete");
+				co_await fg_WaitForClosed(pClosed, "Close from callback did not complete");
 
 				DMibExpectTrue(pState->Finished.f_IsSet());
 
