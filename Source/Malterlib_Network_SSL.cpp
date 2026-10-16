@@ -950,10 +950,11 @@ namespace NMib::NNetwork
 
 			static constexpr CGroup s_Groups[] =
 				{
-					{256, SSL_GROUP_SECP521R1},
-					{192, SSL_GROUP_SECP384R1},
-					{128, SSL_GROUP_X25519},
-					{128, SSL_GROUP_SECP256R1},
+					// malterlib-format table
+					  {256, SSL_GROUP_SECP521R1}
+					, {192, SSL_GROUP_SECP384R1}
+					, {128, SSL_GROUP_X25519}
+					, {128, SSL_GROUP_SECP256R1},
 				}
 			;
 			NContainer::TCVector<uint16_t> AllowedGroups;
