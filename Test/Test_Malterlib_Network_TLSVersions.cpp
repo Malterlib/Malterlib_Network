@@ -610,15 +610,17 @@ namespace
 				};
 
 				CCase Cases[] =
-				{
-					{"Default", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS, "TLSv1.3"},
-					{"TLS12Server", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2"},
-					{"TLS12Client", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS, "TLSv1.2"},
-					{"TLS13Server", CSSLSettings::EProtocol_TLS, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3"},
-					{"TLS13Client", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS, "TLSv1.3"},
-					{"StrictTLS12", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2", true},
-					{"StrictTLS13", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3", true},
-				};
+					{
+						// malterlib-format table
+						  {"Default",     CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS,     "TLSv1.3"}
+						, {"TLS12Server", CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2"}
+						, {"TLS12Client", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS,     "TLSv1.2"}
+						, {"TLS13Server", CSSLSettings::EProtocol_TLS,     CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3"}
+						, {"TLS13Client", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS,     "TLSv1.3"}
+						, {"StrictTLS12", CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS_1_2, "TLSv1.2", true}
+						, {"StrictTLS13", CSSLSettings::EProtocol_TLS_1_3, CSSLSettings::EProtocol_TLS_1_3, "TLSv1.3", true}
+					}
+				;
 				NContainer::TCMap<CStr, CStr> PreviousDigests;
 
 				for (auto const &Case : Cases)
@@ -788,13 +790,15 @@ namespace
 					};
 
 					COfferCase Offers[] =
-					{
-						{"Default", 0, false},
-						{"Compatible", 0, true},
-						{"Minimum128", 128, true},
-						{"Minimum192", 192, true},
-						{"Minimum256", 256, true},
-					};
+						{
+							// malterlib-format table
+							  {"Default",      0, false}
+							, {"Compatible",   0, true}
+							, {"Minimum128", 128, true}
+							, {"Minimum192", 192, true}
+							, {"Minimum256", 256, true}
+						}
+					;
 
 					for (auto const &Offer : Offers)
 					{
