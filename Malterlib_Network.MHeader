@@ -49,12 +49,28 @@ Property
 		, "CARES_INSTALL=OFF"
 	]
 
+	// The macOS SDK declares pipe2 for macOS 27, so the symbol check finds it for older deployment targets too. Keep the import
+	// independent of the deployment target, and enable pipe2 below when the deployment target has it.
+	Import.CMake_Variables =+ ["HAVE_PIPE2=OFF"]
+	{
+		!!PlatformFamily "macOS"
+	}
+
 	Compile
 	{
 		!!CompileDialect "C"
 		Warnings_UnusedButSetVariable false
 		{
 			!!Compiler "Clang"
+		}
+
+		PreprocessorDefines += "HAVE_PIPE2=1"
+		{
+			&
+			{
+				PlatformFamily "macOS"
+				PlatformVersion >= 270000
+			}
 		}
 	}
 
