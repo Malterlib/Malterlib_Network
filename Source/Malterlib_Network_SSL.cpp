@@ -614,7 +614,8 @@ namespace NMib::NNetwork
 					// We must handle these because of our use of X509_V_FLAG_CB_ISSUER_CHECK:
 					// The X509_V_FLAG_CB_ISSUER_CHECK flag enables debugging of certificate issuer checks.
 					// It is not needed unless you are logging certificate verification.
-					// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard errors.
+					// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard
+					// errors.
 					return 0;
 				}
 			}

@@ -37,10 +37,13 @@
 						NMib::NStr::CStr fg_GetAddressString(CAddress _Address, ENetAddressStringFlag _Flags);
 
 					// Connection Operations
-						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo); // Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
+						// Report to the supplied event when new data is received or when we are ready to send new data and when the connection is connected
+						void *fg_AsyncConnect(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
-						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when a new connection has arrived
-						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags); // Report to the supplied event when new data is received or when we are ready to send new data
+						// Report to the supplied event when a new connection has arrived
+						void *fg_Listen(CAddress _pAddr, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags);
+						// Report to the supplied event when new data is received or when we are ready to send new data
+						void *fg_Accept(void *_pSocket, NMib::NThread::CSemaphoreAggregate *_pReportTo, NMib::NNetwork::ENetFlag _Flags);
 
 						void fg_Close(void *_pSocket); // Closes the socket and connection
 
