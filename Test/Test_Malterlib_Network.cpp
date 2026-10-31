@@ -876,6 +876,146 @@ public:
 #endif
 		};
 
+		DMibTestSuite("Unix Listener Staging")
+		{
+			using NFile::CFile;
+
+			// Emulated unix sockets listen on TCP and publish a port file instead
+			if (!NSys::NNetwork::fg_HasNativeUnixSockets())
+				return;
+
+			CStr Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStaging.socket");
+			CStr StagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path);
+			{
+				DMibTestPath("Staged path");
+				DMibExpect(StagedPath.f_GetLen(), ==, Path.f_GetLen());
+				DMibExpect(CFile::fs_GetPath(StagedPath), ==, CFile::fs_GetPath(Path));
+				DMibExpect(StagedPath, !=, Path);
+				DMibExpectTrue(NSys::NNetwork::fg_IsStagedUnixSocketPath(StagedPath));
+				DMibExpectFalse(NSys::NNetwork::fg_IsStagedUnixSocketPath(Path));
+
+				// Paths that only differ at the end stage apart, so listeners don't remove each other's staged files
+				CStr OtherStagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path.f_Extract(0, Path.f_GetLen() - 1) + "x");
+				DMibExpect(OtherStagedPath, !=, StagedPath);
+			}
+			{
+				DMibTestPath("Whole code points");
+
+				// The last 8 bytes of the name start inside é
+				CStr Utf8StagedName = NSys::NNetwork::fg_GetStagedUnixSocketPath("/Sockets/caf\xC3\xA9.socket");
+				DMibExpect(Utf8StagedName.f_GetLen(), ==, aint(fg_StrLen("/Sockets/caf\xC3\xA9.socket")));
+				DMibExpectTrue(Utf8StagedName.f_StartsWith("/Sockets/caf~"));
+
+				CStr Utf8Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "caf\xC3\xA9.socket");
+				CNetAddress Utf8Address = CSocket::fs_ResolveAddress("UNIX:" + Utf8Path);
+				CSocket Utf8Listener;
+				Utf8Listener.f_Listen(Utf8Address, nullptr, ENetFlag_None);
+				CSocket Utf8Client;
+				Utf8Client.f_Connect(Utf8Address);
+				DMibExpectTrue(Utf8Client.f_IsValid());
+				Utf8Client.f_Close();
+				Utf8Listener.f_Close();
+			}
+
+			// A listener that failed between bind and rename left its staged file
+			CFile::fs_WriteStringToFile(StagedPath, "Leftover", false);
+
+			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
+			CSocket Listener;
+			Listener.f_Listen(Address, nullptr, ENetFlag_None);
+			{
+				DMibTestPath("Renamed once listening");
+				DMibExpectTrue(CFile::fs_FileExists(Path));
+				DMibExpectFalse(CFile::fs_FileExists(StagedPath));
+
+				CSocket Client;
+				Client.f_Connect(Address);
+				DMibExpectTrue(Client.f_IsValid());
+
+				// The kernel names the listener by the path it bound, but connections report the path it listens on
+				DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", Address));
+
+				CSocket Accepted;
+				CTimeout Timeout(gc_Timeout);
+				while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
+				{
+					Accepted.f_Accept(&Listener, nullptr);
+					if (!Accepted.f_IsValid())
+						NSys::fg_Thread_Yield();
+				}
+				DMibAssertTrue(Accepted.f_IsValid());
+				DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", Address));
+
+				Accepted.f_Close();
+				Client.f_Close();
+			}
+			{
+				DMibTestPath("Other spelling");
+				CStr AliasDirectory = CFile::fs_GetProgramDirectory() / "ListenerStagingAlias";
+				if (CFile::fs_FileExists(AliasDirectory, NFile::EFileAttrib_Link))
+					CFile::fs_DeleteFile(AliasDirectory);
+				CFile::fs_CreateSymbolicLink(CFile::fs_GetPath(Path), AliasDirectory, NFile::EFileAttrib_Directory, NFile::ESymbolicLinkFlag_None);
+
+				CStr AliasPath = AliasDirectory / CFile::fs_GetFile(Path);
+				if (AliasPath.f_GetLen() <= aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()))
+				{
+					CNetAddress AliasAddress = CSocket::fs_ResolveAddress("UNIX:" + AliasPath);
+					CSocket Client;
+					Client.f_Connect(AliasAddress);
+					DMibExpectTrue(Client.f_IsValid());
+					DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", AliasAddress));
+
+					CSocket Accepted;
+					CTimeout Timeout(gc_Timeout);
+					while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
+					{
+						Accepted.f_Accept(&Listener, nullptr);
+						if (!Accepted.f_IsValid())
+							NSys::fg_Thread_Yield();
+					}
+					Accepted.f_Close();
+					Client.f_Close();
+				}
+
+				CFile::fs_DeleteFile(AliasDirectory);
+			}
+			{
+				DMibTestPath("Bound client");
+				// A name with the form of a staged path is still the client's own
+				CStr ClientPath = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStagingClient~abc");
+				if (CFile::fs_FileExists(ClientPath))
+					CFile::fs_DeleteFile(ClientPath);
+				CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
+
+				CSocket Client;
+				Client.f_Connect(Address, {}, ClientAddress);
+				DMibExpectTrue(Client.f_IsValid());
+
+				CSocket Accepted;
+				CTimeout Timeout(gc_Timeout);
+				while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
+				{
+					Accepted.f_Accept(&Listener, nullptr);
+					if (!Accepted.f_IsValid())
+						NSys::fg_Thread_Yield();
+				}
+				DMibAssertTrue(Accepted.f_IsValid());
+				DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", ClientAddress));
+
+				Accepted.f_Close();
+				Client.f_Close();
+				if (CFile::fs_FileExists(ClientPath))
+					CFile::fs_DeleteFile(ClientPath);
+			}
+
+			Listener.f_Close();
+			{
+				DMibTestPath("Closed");
+				DMibExpectFalse(CFile::fs_FileExists(Path));
+				DMibExpectFalse(CFile::fs_FileExists(StagedPath));
+			}
+		};
+
 		DMibTestSuite("Unix Listener Replacement")
 		{
 			CStr Path = fg_GetSafeUnixSocketPath(NFile::CFile::fs_GetProgramDirectory() / "ListenerReplacement.socket");

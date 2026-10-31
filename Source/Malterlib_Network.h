@@ -374,6 +374,9 @@ namespace NMib::NSys::NNetwork
 	NContainer::TCVector<CAddress> fg_ResolveHost(NStr::CStr const &_Host, ::NMib::NNetwork::ENetAddressType _PreferType);
 
 	umint fg_GetMaxUnixSocketNameLength();
+	NStr::CStr fg_GetStagedUnixSocketPath(NStr::CStr const &_Path);
+	bool fg_IsStagedUnixSocketPath(NStr::CStr const &_Path);
+	bool fg_HasNativeUnixSockets(); // False where TCP and a port file emulate unix sockets
 
 	void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
 	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
