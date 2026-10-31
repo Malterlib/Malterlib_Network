@@ -2081,7 +2081,17 @@ public:
 		{
 			UpgradeWithoutCheckError = _Exception.f_GetErrorStr();
 		}
-		DMibExpect(UpgradeWithoutCheckError, ==, CStr("Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return EAsyncSocketUpgradeCheckResult_Upgrade"));
+		DMibExpect
+			(
+				UpgradeWithoutCheckError
+				, ==
+				, CStr
+				(
+					"Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return "
+					"EAsyncSocketUpgradeCheckResult_Upgrade"
+				)
+			)
+		;
 
 		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Plain"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 		bool bPlainTimedOut = fWaitForCondition
