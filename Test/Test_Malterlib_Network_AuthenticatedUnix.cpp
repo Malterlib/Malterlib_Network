@@ -132,7 +132,13 @@ namespace
 
 		while (!Timeout.f_TimedOut())
 		{
-			auto pAccepted = _pListen->f_Accept([](ENetTCPState){});
+			auto pAccepted = _pListen->f_Accept
+				(
+					[](ENetTCPState)
+					{
+					}
+				)
+			;
 			if (pAccepted && pAccepted->f_IsValid())
 				return pAccepted;
 
@@ -330,10 +336,26 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
 
 				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen(Address, [](ENetTCPState){}, ENetFlag_None);
+				pListen->f_Listen
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, ENetFlag_None
+					)
+				;
 
 				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect(Address, [](ENetTCPState){}, CNetAddress());
+				pClient->f_Connect
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, CNetAddress()
+					)
+				;
 
 				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
 				DMibAssertTrue(pServer && pServer->f_IsValid());
@@ -357,10 +379,26 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
 
 				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen(Address, [](ENetTCPState){}, ENetFlag_None);
+				pListen->f_Listen
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, ENetFlag_None
+					)
+				;
 
 				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect(Address, [](ENetTCPState){}, CNetAddress());
+				pClient->f_Connect
+					(
+						Address
+						, [](ENetTCPState)
+						{
+						}
+						, CNetAddress()
+					)
+				;
 
 				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
 				DMibAssertTrue(pServer && pServer->f_IsValid());
@@ -402,7 +440,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				ListenAddress.f_Set(Loopback);
 
 				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen(ListenAddress, [](ENetTCPState){}, ENetFlag_None);
+				pListen->f_Listen
+					(
+						ListenAddress
+						, [](ENetTCPState)
+						{
+						}
+						, ENetFlag_None
+					)
+				;
 				uint32 Port = pListen->f_GetListenPort();
 				DMibAssert(Port, !=, 0u);
 
@@ -413,7 +459,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				ConnectAddress.f_Set(ConnectTo);
 
 				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect(ConnectAddress, [](ENetTCPState){}, CNetAddress());
+				pClient->f_Connect
+					(
+						ConnectAddress
+						, [](ENetTCPState)
+						{
+						}
+						, CNetAddress()
+					)
+				;
 
 				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
 				DMibAssertTrue(pServer && pServer->f_IsValid());
@@ -440,7 +494,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				ListenAddress.f_Set(Loopback);
 
 				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen(ListenAddress, [](ENetTCPState){}, ENetFlag_None);
+				pListen->f_Listen
+					(
+						ListenAddress
+						, [](ENetTCPState)
+						{
+						}
+						, ENetFlag_None
+					)
+				;
 				uint32 Port = pListen->f_GetListenPort();
 
 				CNetAddressTCPv4 ConnectTo;
@@ -450,7 +512,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				ConnectAddress.f_Set(ConnectTo);
 
 				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect(ConnectAddress, [](ENetTCPState){}, CNetAddress());
+				pClient->f_Connect
+					(
+						ConnectAddress
+						, [](ENetTCPState)
+						{
+						}
+						, CNetAddress()
+					)
+				;
 
 				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
 				DMibAssertTrue(pServer && pServer->f_IsValid());
@@ -461,7 +531,6 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				DMibExpectFalse(Outcome.m_bClientDone);
 				DMibExpectFalse(Outcome.m_bServerDone);
 			}
-
 		};
 
 		DMibTestSuite("Relay")
@@ -471,12 +540,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 
 			if (fg_TestReportFlags() & ETestReportFlag_ProcessRecursive)
 			{
-				fg_RunRelay
-					(
-						fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayClientPath")
-						, fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayServerPath")
-					)
-				;
+				fg_RunRelay(fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayClientPath"), fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayServerPath"));
 				return;
 			}
 
@@ -494,7 +558,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 			CNetAddress ServerAddress = CSocket::fs_ResolveAddress("UNIX:" + ServerPath);
 
 			auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-			pListen->f_Listen(ServerAddress, [](ENetTCPState){}, ENetFlag_None);
+			pListen->f_Listen
+				(
+					ServerAddress
+					, [](ENetTCPState)
+					{
+					}
+					, ENetFlag_None
+				)
+			;
 
 			NProcess::CProcessLaunchParams LaunchParams;
 			LaunchParams.m_Target = NFile::CFile::fs_GetProgramPath();
@@ -529,7 +601,15 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 					try
 					{
 						NException::CDisableExceptionTraceScope DisableTrace;
-						pAttempt->f_Connect(ClientAddress, [](ENetTCPState){}, CNetAddress());
+						pAttempt->f_Connect
+							(
+								ClientAddress
+								, [](ENetTCPState)
+								{
+								}
+								, CNetAddress()
+							)
+						;
 					}
 					catch (NException::CException const &)
 					{

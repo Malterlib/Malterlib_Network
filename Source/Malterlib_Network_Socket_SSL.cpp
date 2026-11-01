@@ -270,7 +270,7 @@ namespace NMib::NNetwork
 		return Return;
 	}
 
-	CSocketOperationResult CSocket_SSL::f_Send(const void *_pData, umint _DataLen)
+	CSocketOperationResult CSocket_SSL::f_Send(void const *_pData, umint _DataLen)
 	{
 		if (mp_State == EState_ShutdownSocket)
 			return {};
@@ -572,9 +572,7 @@ namespace NMib::NNetwork
 		umint nBytes = 0;
 		umint iBuffer = 0;
 		if (mp_SSLConnection.f_BeginSend(pData, nBytes, iBuffer))
-		{
 			return fp_SubmitPinnedSend(pData, nBytes, iBuffer, fg_Move(_fOnComplete), fg_Move(_fOnReleased));
-		}
 
 		// When no generation is pinnable, retain the batch until release drives another operation.
 		if (_iOperation >= 0)
@@ -635,16 +633,14 @@ namespace NMib::NNetwork
 			(
 				&Span
 				, 1
-				,
-				[fOnComplete = fg_Move(_fOnComplete), iBuffer = _iBuffer](NMib::NSys::CIoCompletion _Result) mutable
+				, [fOnComplete = fg_Move(_fOnComplete), iBuffer = _iBuffer](NMib::NSys::CIoCompletion _Result) mutable
 				{
 					// The loop only names the generation; resolve transport state on the actor thread.
 					_Result.m_iTransfer = iBuffer;
 
 					fOnComplete(_Result);
 				}
-				,
-				[fOnReleased = fg_Move(_fOnReleased), pKeepAlive = mp_SSLConnection.f_GetPinnedKeepAlive(_iBuffer), iBuffer = _iBuffer]() mutable
+				, [fOnReleased = fg_Move(_fOnReleased), pKeepAlive = mp_SSLConnection.f_GetPinnedKeepAlive(_iBuffer), iBuffer = _iBuffer]() mutable
 				{
 					// Retain generation storage until kernel release, which may follow completion; return the same generation ID.
 					fOnReleased(iBuffer);
@@ -780,9 +776,7 @@ namespace NMib::NNetwork
 					Operation.m_fOnComplete(Result);
 				}
 				else
-				{
 					o_nCarrierPlaintext += Operation.m_nPlaintext;
-				}
 
 				fp_TryFreeSendOperation(umint(iOperation));
 			}
@@ -1151,11 +1145,12 @@ namespace NMib::NNetwork
 		return Result;
 	}
 
-	umint CSocket_SSL::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, const void *_pData, umint _DataLen)
+	umint CSocket_SSL::f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
 		return 0;
 	}
+
 	umint CSocket_SSL::f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen)
 	{
 		DMibErrorNet("Datagrams not supported");
@@ -1172,12 +1167,13 @@ namespace NMib::NNetwork
 		return mp_Socket.f_GetListenPort();
 	}
 
-	FVirtualSocketFactory CSocket_SSL::fs_GetFactory
+	auto CSocket_SSL::fs_GetFactory
 		(
 			NStorage::TCSharedPointer<CSSLContext> const &_pContext
 			, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
 			, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
 		)
+		-> FVirtualSocketFactory
 	{
 		return [=](NStr::CStr const &_Hostname) -> NStorage::TCUniquePointer<ICSocket>
 			{
@@ -1196,15 +1192,12 @@ namespace NMib::NNetwork
 	{
 		switch (mp_State)
 		{
-		case EState_ShutdownSocket:
-			return false;
+		case EState_ShutdownSocket: return false;
 		case EState_Shutdown:
 			fp_ContinueShutdown();
 			return false;
-		case EState_Done:
-			return true;
-		case EState_Disconnected:
-			return false;
+		case EState_Done: return true;
+		case EState_Disconnected: return false;
 		case EState_Connect:
 			{
 				mp_State = EState_Connected;
@@ -1238,8 +1231,7 @@ namespace NMib::NNetwork
 				}
 			}
 			break;
-		default:
-			DMibNeverGetHere;
+		default: DMibNeverGetHere;
 		}
 		if (mp_SSLConnection.f_HandshakeInProgress())
 			return false;
@@ -1281,5 +1273,5 @@ namespace NMib::NNetwork
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+using namespace NMib::NNetwork;
 #endif

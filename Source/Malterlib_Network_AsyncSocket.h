@@ -191,8 +191,8 @@ namespace NMib::NNetwork
 		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection &&_Other);
 
 	private:
-		CAsyncSocketNewClientConnection &operator =(CAsyncSocketNewClientConnection const &);
-		CAsyncSocketNewClientConnection &operator =(CAsyncSocketNewClientConnection &&);
+		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection const &);
+		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection &&);
 		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection const &_Other);
 	};
 
@@ -204,8 +204,8 @@ namespace NMib::NNetwork
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection &&_Other);
 
 	private:
-		CAsyncSocketNewServerConnection &operator =(CAsyncSocketNewServerConnection const &);
-		CAsyncSocketNewServerConnection &operator =(CAsyncSocketNewServerConnection &&);
+		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection const &);
+		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection &&);
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection const &_Other);
 	};
 
@@ -223,22 +223,24 @@ namespace NMib::NNetwork
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
-		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_Connect
+		auto f_Connect
 			(
-				NStr::CStr _ConnectToAddress	// The server to connect to
-				, NStr::CStr _BindAddress	// The src address to bind to. Leave empty to not bind
+				NStr::CStr _ConnectToAddress // The server to connect to
+				, NStr::CStr _BindAddress // The src address to bind to. Leave empty to not bind
 				, NMib::NNetwork::ENetAddressType _PreferAddress // The preferred type of address to connect to
-				, uint16 _Port	// The port to connect to
+				, uint16 _Port // The port to connect to
 				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
+			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 		; // You will receive an exception if connection fails
-		NConcurrency::TCFuture<CAsyncSocketNewClientConnection> f_ConnectAddress
+		auto f_ConnectAddress
 			(
-				NNetwork::CNetAddress _ConnectToAddress	// The server to connect to
-				, NNetwork::CNetAddress _BindAddress	// The src address to bind to. Leave empty to not bind
+				NNetwork::CNetAddress _ConnectToAddress // The server to connect to
+				, NNetwork::CNetAddress _BindAddress // The src address to bind to. Leave empty to not bind
 				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 				, NStr::CStr _Hostname // Tthe hostname to use for SSL connections
 			)
+			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 		; // You will receive an exception if connection fails
 
 	private:
@@ -252,6 +254,7 @@ namespace NMib::NNetwork
 			NConcurrency::CIoLoopBinding m_IoBinding;
 			NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>> m_pDeleted = fg_Construct(false);
 		};
+
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;
 		umint mp_MaxMessageSize;
@@ -270,6 +273,7 @@ namespace NMib::NNetwork
 	class CAsyncSocketServerActor : public NConcurrency::CActor
 	{
 		friend class NAsyncSocket::CListenActor;
+
 	public:
 		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
@@ -282,23 +286,25 @@ namespace NMib::NNetwork
 			NContainer::TCVector<uint16> m_ListenPorts;
 		};
 
-		NConcurrency::TCFuture<CListenResult> f_StartListen
+		auto f_StartListen
 			(
-				uint16 _StartListen		// The port to listen to
-				, uint16 _nListen		// The number of ports to listen to. In consecutive order from the _StartListen port
+				uint16 _StartListen // The port to listen to
+				, uint16 _nListen // The number of ports to listen to. In consecutive order from the _StartListen port
 				, NMib::NNetwork::ENetFlag _ListenFlags
 				, CAsyncSocketServerCallbacks _Callbacks
 				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
+			-> NConcurrency::TCFuture<CListenResult>
 		;
 
-		NConcurrency::TCFuture<CListenResult> f_StartListenAddress
+		auto f_StartListenAddress
 			(
 				NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo // The addresses to listen to
 				, NMib::NNetwork::ENetFlag _ListenFlags
 				, CAsyncSocketServerCallbacks _Callbacks
 				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
+			-> NConcurrency::TCFuture<CListenResult>
 		;
 
 		void f_SetDefaultMaxMessageSize(umint _MaxMessageSize);
@@ -321,5 +327,5 @@ namespace NMib::NNetwork
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NNetwork;
+using namespace NMib::NNetwork;
 #endif

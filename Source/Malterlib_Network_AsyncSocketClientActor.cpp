@@ -12,8 +12,8 @@
 namespace NMib::NNetwork
 {
 	CAsyncSocketClientActor::CAsyncSocketClientActor()
-		: mp_MaxMessageSize(24*1024*1024)
-		, mp_FragmentationSize(32*1024)
+		: mp_MaxMessageSize(24 * 1024 * 1024)
+		, mp_FragmentationSize(32 * 1024)
 		, mp_Timeout(60.0)
 	{
 	}
@@ -60,7 +60,7 @@ namespace NMib::NNetwork
 		*m_pDeleted = true;
 	}
 
-	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_Connect
+	auto CAsyncSocketClientActor::f_Connect
 		(
 			NStr::CStr _ConnectToAddress
 			, NStr::CStr _BindToAddress
@@ -68,6 +68,7 @@ namespace NMib::NNetwork
 			, uint16 _Port
 			, NNetwork::FVirtualSocketFactory _SocketFactory
 		)
+		-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 	{
 		if (_ConnectToAddress.f_IsEmpty())
 			co_return DMibErrorInstance("Connect to address cannot be empty");
@@ -82,7 +83,7 @@ namespace NMib::NNetwork
 			)
 		;
 
-		auto [ConnectAddresses, BindAddresses] = co_await(fg_Move(ConnectLookup.m_Result) + fg_Move(BindLookup.m_Result));
+		auto [ConnectAddresses, BindAddresses] = co_await (fg_Move(ConnectLookup.m_Result) + fg_Move(BindLookup.m_Result));
 
 		auto ConnectToAddress = fg_Move(ConnectAddresses[0]);
 		auto BindToAddress = fg_Move(BindAddresses[0]);
@@ -93,13 +94,14 @@ namespace NMib::NNetwork
 		co_return co_await f_ConnectAddress(fg_Move(ConnectToAddress), fg_Move(BindToAddress), fg_Move(_SocketFactory), fg_Move(_ConnectToAddress));
 	}
 
-	NConcurrency::TCFuture<CAsyncSocketNewClientConnection> CAsyncSocketClientActor::f_ConnectAddress
+	auto CAsyncSocketClientActor::f_ConnectAddress
 		(
 			NNetwork::CNetAddress _ConnectToAddress
 			, NNetwork::CNetAddress _BindAddress
 			, NNetwork::FVirtualSocketFactory _SocketFactory
 			, NStr::CStr _Hostname
 		)
+		-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 	{
 		if (!_SocketFactory)
 			_SocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
@@ -197,15 +199,7 @@ namespace NMib::NNetwork
 							if (!This || pPendingDeleted->f_Load())
 								return (void)pCleanupPromise.f_Clear();
 
-							NConcurrency::g_Dispatch(This) /
-								[
-									this
-									, pPendingDeleted
-									, pPending
-									, Promise
-									, pCleanupPromise
-									, CleanupPending = fg_Move(CleanupPending)
-								]() mutable
+							NConcurrency::g_Dispatch(This) / [this, pPendingDeleted, pPending, Promise, pCleanupPromise, CleanupPending = fg_Move(CleanupPending)]() mutable
 								{
 									if (pPendingDeleted->f_Load())
 										return (void)pCleanupPromise.f_Clear();
@@ -240,8 +234,8 @@ namespace NMib::NNetwork
 											;
 
 											(
-												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor())
-												/ [ConnectionActor, pCleanupPromise]() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
+												NConcurrency::g_Dispatch(pManager->f_GetConcurrentActor()) / [ConnectionActor, pCleanupPromise]
+												() mutable -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 												{
 													auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
 

@@ -56,7 +56,6 @@ static fp32 const gc_Timeout = 60.0f;
 class CSysNet_Tests : public NMib::NTest::CTest
 {
 public:
-
 	template <typename t_CNetAddress, typename t_CNotNetAddress>
 	void f_TestAddress(t_CNetAddress const &_Localhost, t_CNotNetAddress const &_Other)
 	{
@@ -90,11 +89,11 @@ public:
 
 		t_CNetAddress Return;
 		DMibExpectTrue(Resolved.f_Get(Return));
-		DMibExpect(fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
+		DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 	}
 
 	template <typename t_CNetAddress>
-	void f_TestAsyncResolve(CStr const &_Address, t_CNetAddress const& _Result)
+	void f_TestAsyncResolve(CStr const &_Address, t_CNetAddress const &_Result)
 	{
 		NStorage::TCSharedPointer<CEventAutoReset> pResolveEvent = fg_Construct();
 
@@ -123,7 +122,7 @@ public:
 		{
 			t_CNetAddress Return;
 			DMibExpectTrue(Resolved.f_Get(Return));
-			DMibExpect(fg_MemCmp((uint8 const*)&Return.f_GetIP(), (uint8 const*)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
+			DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 		}
 	}
 
@@ -195,7 +194,7 @@ public:
 		if (!Socket.f_IsValid())
 			return;
 
-		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
+		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
 		static umint const nMessageBytes = sizeof(Message);
 
 		{
@@ -245,7 +244,7 @@ public:
 				return;
 		}
 
-		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
+		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
 		static umint const nMessageBytes = sizeof(Message);
 
 		CEventAutoReset ServerReady;
@@ -293,15 +292,15 @@ public:
 						umint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
-					catch (CExceptionNet const& _Exception)
+					catch (CExceptionNet const &_Exception)
 					{
 						(void)_Exception;
 						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
 					}
 
 					return 0;
-				},
-				"TestConnectListen_Server"
+				}
+				, "TestConnectListen_Server"
 			)
 		;
 
@@ -344,7 +343,7 @@ public:
 						DMibExpect(nReceived, ==, nMessageBytes);
 						DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 					}
-					catch (CExceptionNet const& _Exception)
+					catch (CExceptionNet const &_Exception)
 					{
 						(void)_Exception;
 						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
@@ -396,7 +395,7 @@ public:
 		if (!Socket.f_IsValid())
 			return;
 
-		static umint const nBufferBytes = 1024*1024*16;
+		static umint const nBufferBytes = 1024 * 1024 * 16;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
@@ -405,7 +404,7 @@ public:
 			umint nTotalSent = 0;
 			umint nSent = -1;
 
-			while(nTotalSent < nBufferBytes)
+			while (nTotalSent < nBufferBytes)
 			{
 				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
 				if (nSent == -1)
@@ -437,8 +436,7 @@ public:
 		}
 	}
 
-
-	template<typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename t_CNetAddress, ENetAddressType t_Type>
 	void f_TestConnectListenReportTo(CStr _Address, uint16 _Port, uint16 _ListenPort)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
@@ -457,7 +455,7 @@ public:
 				return;
 		}
 
-		static uint8 const Message[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n' };
+		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
 		static umint const nMessageBytes = sizeof(Message);
 
 		CEventAutoReset ServerReady;
@@ -517,7 +515,7 @@ public:
 						umint nSent = Client.f_Send(Message, nMessageBytes);
 						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
 					}
-					catch (CExceptionNet const& _Exception)
+					catch (CExceptionNet const &_Exception)
 					{
 						(void)_Exception;
 						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
@@ -569,7 +567,7 @@ public:
 							DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
 						}
 					}
-					catch (CExceptionNet const& _Exception)
+					catch (CExceptionNet const &_Exception)
 					{
 						(void)_Exception;
 						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
@@ -585,8 +583,7 @@ public:
 		ServerThread->f_Stop();
 	}
 
-
-	template<typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename t_CNetAddress, ENetAddressType t_Type>
 	void f_TestInherit(CStr _Address, uint16 _Port, bool _bInheritable)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
@@ -634,7 +631,7 @@ public:
 			;
 		}
 
-		static umint const nBufferBytes = 1024*1024*4;
+		static umint const nBufferBytes = 1024 * 1024 * 4;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
@@ -643,7 +640,7 @@ public:
 			umint nTotalSent = 0;
 			umint nSent = -1;
 
-			while(nTotalSent < nBufferBytes)
+			while (nTotalSent < nBufferBytes)
 			{
 				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
 				if (nSent == -1)
@@ -670,7 +667,7 @@ public:
 		}
 	}
 
-	template<typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename t_CNetAddress, ENetAddressType t_Type>
 	void f_TestAsyncConnectReportTo(CStr _Address, uint16 _Port)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
@@ -714,7 +711,7 @@ public:
 
 		DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
 
-		static umint const nBufferBytes = 1024*1024*4;
+		static umint const nBufferBytes = 1024 * 1024 * 4;
 		NContainer::CByteVector Buffer;
 		Buffer.f_SetLen(nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
@@ -752,12 +749,12 @@ public:
 
 	void f_DoTests()
 	{
-		static const uint16 Port = 20677;
+		static uint16 const Port = 20677;
 
-		CNetAddressTCPv4 const Localhost_TCPv4( CNetAddressIPv4(127,0,0,1), Port);
-		CNetAddressTCPv4 const Other_TCPv4( CNetAddressIPv4(127,0,0,2), Port);
-		CNetAddressTCPv6 const Localhost_TCPv6( CNetAddressIPv6(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1), Port);
-		CNetAddressTCPv6 const Other_TCPv6( CNetAddressIPv6(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2), Port);
+		CNetAddressTCPv4 const Localhost_TCPv4(CNetAddressIPv4(127, 0, 0, 1), Port);
+		CNetAddressTCPv4 const Other_TCPv4(CNetAddressIPv4(127, 0, 0, 2), Port);
+		CNetAddressTCPv6 const Localhost_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), Port);
+		CNetAddressTCPv6 const Other_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2), Port);
 
 		CStr RemoteMachine;
 		auto fRemoteMachine = [&]() -> CStr const &

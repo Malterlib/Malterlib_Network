@@ -336,9 +336,7 @@ namespace NMib::NNetwork
 
 		ares_fd_events_t Event{};
 		Event.fd = ares_socket_t(_Socket);
-		auto ReadEvents = NSys::EIoLoopEvent::mc_Read | NSys::EIoLoopEvent::mc_ReadClosed
-			| NSys::EIoLoopEvent::mc_WriteClosed | NSys::EIoLoopEvent::mc_Hup | NSys::EIoLoopEvent::mc_Error
-		;
+		auto ReadEvents = NSys::EIoLoopEvent::mc_Read | NSys::EIoLoopEvent::mc_ReadClosed | NSys::EIoLoopEvent::mc_WriteClosed | NSys::EIoLoopEvent::mc_Hup | NSys::EIoLoopEvent::mc_Error;
 		if (_Error || (_Events & ReadEvents) != NSys::EIoLoopEvent::mc_None)
 			Event.events |= ARES_FD_EVENT_READ;
 		if (fg_IsSet(_Events, NSys::EIoLoopEvent::mc_Write))

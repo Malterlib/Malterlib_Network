@@ -303,7 +303,14 @@ namespace
 							[&Blocker]() -> TCFuture<void>
 							{
 								TCPromise<void> Closed;
-								Blocker.f_CloseAsync([Closed]() mutable { Closed.f_SetResult(); });
+								Blocker.f_CloseAsync
+									(
+										[Closed]() mutable
+										{
+											Closed.f_SetResult();
+										}
+									)
+								;
 
 								co_await Closed.f_Future();
 								co_return {};
@@ -311,9 +318,29 @@ namespace
 						)
 					;
 					if (bUDP)
-						Blocker.f_ListenDatagram(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0), [](ENetTCPState) {}, ENetFlag_None);
+					{
+						Blocker.f_ListenDatagram
+							(
+								CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0)
+								, [](ENetTCPState)
+								{
+								}
+								, ENetFlag_None
+							)
+						;
+					}
 					else
-						Blocker.f_Listen(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0), [](ENetTCPState) {}, ENetFlag_None);
+					{
+						Blocker.f_Listen
+							(
+								CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0)
+								, [](ENetTCPState)
+								{
+								}
+								, ENetFlag_None
+							)
+						;
+					}
 					auto Port = uint16(Blocker.f_GetListenPort());
 
 					TCPromise<void> Started;
@@ -337,9 +364,8 @@ namespace
 			{
 				for (auto Mode : {CNameServer::EMode::mc_Reply, CNameServer::EMode::mc_DropFirst, CNameServer::EMode::mc_Truncate, CNameServer::EMode::mc_NotFound})
 				{
-					auto *pName = Mode == CNameServer::EMode::mc_Reply ? "UDP"
-						: Mode == CNameServer::EMode::mc_DropFirst ? "Retry"
-						: Mode == CNameServer::EMode::mc_Truncate ? "TCP" : "NXDOMAIN"
+					auto *pName
+						= Mode == CNameServer::EMode::mc_Reply ? "UDP" : Mode == CNameServer::EMode::mc_DropFirst ? "Retry" : Mode == CNameServer::EMode::mc_Truncate ? "TCP" : "NXDOMAIN"
 					;
 					DMibTestPath(pName);
 					TCPromise<void> Started;
@@ -472,7 +498,6 @@ namespace
 
 				co_return {};
 			};
-
 		}
 	};
 

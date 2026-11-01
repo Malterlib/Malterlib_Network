@@ -37,16 +37,16 @@ namespace NMib::NNetwork
 			if (*pParse == '.')
 				return false; // Empty label allowed?
 			while
+			(
+				*pParse
+				&&
 				(
-					*pParse
-					&&
-					(
-						(tf_bLowerCase ? NStr::fg_CharIsLowerCaseAnsiAlphabetical(*pParse) : NStr::fg_CharIsAnsiAlphabetical(*pParse))
-						|| NStr::fg_CharIsNumber(*pParse)
-						|| *pParse == '-'
-						|| NStr::fg_StrFindChar(_pLabelChars, *pParse) >= 0
-					)
+					(tf_bLowerCase ? NStr::fg_CharIsLowerCaseAnsiAlphabetical(*pParse) : NStr::fg_CharIsAnsiAlphabetical(*pParse))
+					|| NStr::fg_CharIsNumber(*pParse)
+					|| *pParse == '-'
+					|| NStr::fg_StrFindChar(_pLabelChars, *pParse) >= 0
 				)
+			)
 			{
 				LastChar = *pParse;
 				bEmptySegment = false;
