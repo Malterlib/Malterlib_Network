@@ -110,7 +110,7 @@ namespace NMib::NNetwork
 		virtual NMib::NSys::ICIoLoop *f_GetOwningIoLoop() override;
 		virtual bool f_SupportsCompletionReceive() const override;
 		virtual umint f_GetReceiveBufferBytes() const override;
-		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink) override;
+		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink) override;
 		virtual void f_ResumeReceiveStream() override;
 		virtual bool f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &_Segment, NContainer::CSharedByteVector &o_Data, NSys::CIoCompletion &o_Result) override;
 		virtual bool f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result) override;

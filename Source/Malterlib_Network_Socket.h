@@ -62,7 +62,7 @@ namespace NMib::NNetwork
 		virtual bool f_HasSendOperationInFlight() const;
 
 		virtual bool f_ReceiveStreamEndedByProtocol() const;
-		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink) = 0;
+		virtual bool f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink) = 0;
 		virtual void f_ResumeReceiveStream();
 		virtual umint f_GetReceiveBufferBytes() const;
 

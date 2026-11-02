@@ -380,7 +380,7 @@ public:
 			}
 		}
 
-		void f_StartListen(CNetAddress _ListenAddress, FVirtualSocketFactory const &_ServerFactory)
+		void f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_ServerFactory)
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
 			CAsyncSocketServerCallbacks ListenCallbacks;

@@ -28,7 +28,7 @@ namespace NMib::NNetwork::NAsyncSocket
 		;
 		~CListenActor();
 
-		void f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket);
+		void f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
 		void f_StateAdded(NNetwork::ENetTCPState _StateAdded);
 
 	private:

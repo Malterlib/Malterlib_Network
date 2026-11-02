@@ -210,7 +210,7 @@ namespace NMib::NNetwork
 		co_return {};
 	}
 
-	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, umint _ListenID)
+	void CAsyncSocketServerActor::fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, umint _ListenID)
 	{
 		self / [this, Connection = fg_Move(_Connection), _ListenID]() mutable -> NConcurrency::TCFuture<void>
 			{

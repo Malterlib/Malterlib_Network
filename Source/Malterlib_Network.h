@@ -423,7 +423,7 @@ namespace NMib::NSys::NNetwork
 	bool fg_SupportsCompletionIo(void *_pSocket);
 	bool fg_SendReleaseIsPrompt(void *_pSocket);
 	bool fg_SupportsReceiveStream(void *_pSocket);
-	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink);
+	bool fg_StartReceiveStream(void *_pSocket, umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink);
 	void fg_ResumeReceiveStream(void *_pSocket);
 	void fg_SetInheritable(void *_pSocket);
 	void fg_SetSendWindow(void *_pSocket, umint _nBytes, bool _bConfigured);
@@ -1053,7 +1053,7 @@ namespace NMib::NNetwork
 			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsReceiveStream(mp_pSocket);
 		}
 
-		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink)
 		{
 			fp_CheckSocket();
 

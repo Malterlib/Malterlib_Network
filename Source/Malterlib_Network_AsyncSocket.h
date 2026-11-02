@@ -123,8 +123,8 @@ namespace NMib::NNetwork
 
 		void fp_StateAdded(NNetwork::ENetTCPState _StateAdded);
 		void fp_Disconnect(EAsyncSocketStatus _Status, NStr::CStr const &_Reason, bool _bFatal, EAsyncSocketCloseOrigin _Origin);
-		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket);
-		void fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
+		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
+		void fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
 		void fp_ProcessIncoming();
 		bool fp_ProcessIncomingMessage();
 		void fp_ProcessState(NNetwork::ENetTCPState _StateAdded);
@@ -141,7 +141,7 @@ namespace NMib::NNetwork
 		void fp_SendCompleted(NSys::CIoCompletion _Result, umint _iReservation);
 		void fp_SendBufferReleased(umint _iTransfer, umint _nBytes);
 		void fp_Shutdown();
-		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks);
+		NConcurrency::CActorSubscription fp_AcceptConnection(CAsyncSocketCallbacks &&_Callbacks);
 		void fp_CheckHandshake(CInternal &_Internal);
 		void fp_RejectServerConnection(NStr::CStr _Error, NStr::CStr _Content = NStr::CStr());
 		void fp_StopDeferring();
@@ -316,7 +316,7 @@ namespace NMib::NNetwork
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
-		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> _Connection, umint _ListenID);
+		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, umint _ListenID);
 
 	public:
 		struct CInternal;

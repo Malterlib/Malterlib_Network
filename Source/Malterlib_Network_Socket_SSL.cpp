@@ -858,7 +858,7 @@ namespace NMib::NNetwork
 	}
 
 	// The loop delivers ciphertext; resolve records on the actor thread.
-	bool CSocket_SSL::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+	bool CSocket_SSL::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink)
 	{
 		if (mp_State == EState_ShutdownSocket || mp_SSLConnection.f_BrokenState())
 		{

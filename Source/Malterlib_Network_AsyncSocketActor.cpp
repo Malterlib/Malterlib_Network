@@ -1894,7 +1894,7 @@ namespace NMib::NNetwork
 		fp_ProcessState(State);
 	}
 
-	NConcurrency::CActorSubscription CAsyncSocketActor::fp_AcceptConnection(CAsyncSocketCallbacks _Callbacks)
+	NConcurrency::CActorSubscription CAsyncSocketActor::fp_AcceptConnection(CAsyncSocketCallbacks &&_Callbacks)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_Callbacks = fg_Move(_Callbacks);
@@ -2155,7 +2155,7 @@ namespace NMib::NNetwork
 		}
 	}
 
-	void CAsyncSocketActor::fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket)
+	void CAsyncSocketActor::fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_pSocket = fg_Move(_pSocket);
@@ -2189,7 +2189,7 @@ namespace NMib::NNetwork
 		fp_ProcessState(State);
 	}
 
-	void CAsyncSocketActor::fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
+	void CAsyncSocketActor::fp_SetSocketAndUpgradeCheck(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
 	{
 		auto &Internal = *mp_pInternal;
 		Internal.m_fCheckUpgrade = fg_Move(_fCheckUpgrade);

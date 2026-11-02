@@ -250,7 +250,7 @@ namespace NMib::NNetwork
 		return fg_Max(mp_nTransferSizeHint, umint(4096));
 	}
 
-	bool CSocket_TCP::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> _pBackpressure, NSys::FIoStreamSink &&_fSink)
+	bool CSocket_TCP::f_StartReceiveStream(NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink)
 	{
 		if (!mp_Socket.f_SupportsReceiveStream())
 			return false;

@@ -1404,13 +1404,13 @@ namespace NMib::NNetwork
 
 		// Sealed records that cannot be sent leave the connection with a gap in its record
 		// numbering, which the peer cannot recover from, so it is failed rather than continued
-		void f_FailSend(NStr::CStr _Error)
+		void f_FailSend(NStr::CStr &&_Error)
 		{
 			mp_LastError = fg_Move(_Error);
 			f_SetState(EState_WriteFailed);
 		}
 
-		void f_FailReceive(NStr::CStr _Error)
+		void f_FailReceive(NStr::CStr &&_Error)
 		{
 			mp_LastError = fg_Move(_Error);
 			f_SetState(EState_ReadFailed);
@@ -2498,7 +2498,7 @@ namespace NMib::NNetwork
 		mp_pInternal->f_SetCompletionReceive(_bCompletionReceive);
 	}
 
-	void CSSLConnection::f_FailReceive(NStr::CStr _Error)
+	void CSSLConnection::f_FailReceive(NStr::CStr &&_Error)
 	{
 		fg_RunProtectRegisters
 			(
@@ -2510,7 +2510,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	void CSSLConnection::f_FailSend(NStr::CStr _Error)
+	void CSSLConnection::f_FailSend(NStr::CStr &&_Error)
 	{
 		fg_RunProtectRegisters
 			(

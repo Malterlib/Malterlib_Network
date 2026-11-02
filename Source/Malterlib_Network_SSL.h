@@ -294,8 +294,8 @@ namespace NMib::NNetwork
 		bool f_IsCompletionSend() const;
 		void f_SetCompletionReceive(bool _bCompletionReceive);
 		umint f_GetInboundBufferSize() const;
-		void f_FailSend(NStr::CStr _Error);
-		void f_FailReceive(NStr::CStr _Error);
+		void f_FailSend(NStr::CStr &&_Error);
+		void f_FailReceive(NStr::CStr &&_Error);
 		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const;
 		void f_SendCompleted(umint _iBuffer, umint _nBytes);
 		umint f_GetFillBuffer() const;

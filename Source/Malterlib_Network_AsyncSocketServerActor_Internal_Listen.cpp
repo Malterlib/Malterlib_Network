@@ -33,7 +33,7 @@ namespace NMib::NNetwork::NAsyncSocket
 	{
 	}
 
-	void CListenActor::f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> _pSocket)
+	void CListenActor::f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket)
 	{
 		mp_pSocket = fg_Move(_pSocket);
 		fp_ProcessState();

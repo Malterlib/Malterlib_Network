@@ -161,7 +161,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType _Type>
-	void f_TestConnect(CStr _Address, uint16 _Port)
+	void f_TestConnect(CStr const &_Address, uint16 _Port)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, _Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -226,7 +226,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestConnectListen(CStr _Address, uint16 _Port, uint16 _ListenPort)
+	void f_TestConnectListen(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -360,7 +360,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestConnectReportTo(CStr _Address, uint16 _Port)
+	void f_TestConnectReportTo(CStr const &_Address, uint16 _Port)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -437,7 +437,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestConnectListenReportTo(CStr _Address, uint16 _Port, uint16 _ListenPort)
+	void f_TestConnectListenReportTo(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -584,7 +584,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestInherit(CStr _Address, uint16 _Port, bool _bInheritable)
+	void f_TestInherit(CStr const &_Address, uint16 _Port, bool _bInheritable)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
@@ -668,7 +668,7 @@ public:
 	}
 
 	template <typename t_CNetAddress, ENetAddressType t_Type>
-	void f_TestAsyncConnectReportTo(CStr _Address, uint16 _Port)
+	void f_TestAsyncConnectReportTo(CStr const &_Address, uint16 _Port)
 	{
 		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
