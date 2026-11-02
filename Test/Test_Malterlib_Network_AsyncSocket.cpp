@@ -9,6 +9,7 @@
 #include <Mib/Cryptography/Certificate>
 #include <Mib/Cryptography/RandomID>
 #include <Mib/Concurrency/Actor/Timer>
+#include <Mib/Concurrency/AsyncDestroy>
 #include <Mib/Time/Timeout>
 #include <Mib/Concurrency/DistributedActorTestHelpers>
 
@@ -471,12 +472,7 @@ public:
 					;
 
 					auto Actor = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
-					auto Cleanup2 = g_OnScopeExit / [&Actor]
-						{
-							if (Actor)
-								fg_Move(Actor).f_Destroy().f_DiscardResult();
-						}
-					;
+					auto Cleanup2 = co_await fg_AsyncDestroy(Actor);
 
 					auto pState = pStateWeak.f_Lock();
 					if (!pState)
