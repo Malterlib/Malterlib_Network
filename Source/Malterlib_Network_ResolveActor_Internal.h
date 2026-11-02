@@ -10,7 +10,7 @@
 
 namespace NMib::NNetwork
 {
-	struct CResolveActor::CInternal
+	struct CResolveActor::CInternal : public NConcurrency::CActorInternal
 	{
 		enum class EState : umint
 		{

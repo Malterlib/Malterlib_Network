@@ -84,7 +84,7 @@ namespace NMib::NNetwork
 		static constexpr umint gc_CopySmallDeliveryThreshold = 1024;
 	}
 
-	struct CAsyncSocketActor::CInternal
+	struct CAsyncSocketActor::CInternal : public NConcurrency::CActorInternal
 	{
 		// Indexed send reservations support out-of-order reports. Bounded gathers/windows fit 32-bit counts; free entries form an index list.
 		struct CSendReservation
