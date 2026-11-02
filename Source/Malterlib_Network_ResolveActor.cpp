@@ -50,7 +50,7 @@ namespace NMib::NNetwork
 	void CResolveActor::fp_Construct()
 	{
 		auto &Internal = *mp_pInternal;
-		Internal.m_pActor = this;
+		Internal.m_pThis = this;
 		if (!mp_fHostResolver)
 		{
 			auto Binding = f_ConcurrencyManager().f_PickIoLoopBinding(self.m_pThis->f_GetPriority());

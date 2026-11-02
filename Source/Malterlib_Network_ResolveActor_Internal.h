@@ -70,7 +70,7 @@ namespace NMib::NNetwork
 
 		uint64 m_NextSocketGeneration = 0;
 		uint64 m_TimerGeneration = 0;
-		CResolveActor *m_pActor = nullptr;
+		CResolveActor *m_pThis = nullptr;
 		NSys::ICIoLoop *m_pLoop = nullptr;
 		NStorage::TCUniquePointer<CChannel> m_Channel;
 		NStorage::TCSharedPointer<CDrain> m_Drain = fg_Construct();

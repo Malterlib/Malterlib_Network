@@ -112,7 +112,7 @@ namespace NMib::NNetwork
 			Socket = fg_Move(NewSocket);
 			Socket->m_Handle = _Socket;
 			Socket->m_Generation = ++m_NextSocketGeneration;
-			Socket->m_Actor = fg_ThisActor(m_pActor).f_Weak();
+			Socket->m_Actor = fg_ThisActor(m_pThis).f_Weak();
 			Socket->m_pRegistration = m_pLoop->f_Register
 				(
 					NSys::CIoLoopHandle(_Socket)
@@ -227,7 +227,7 @@ namespace NMib::NNetwork
 		timeval Timeout;
 		auto *pTimeout = ares_timeout(m_Channel->m_pChannel, nullptr, &Timeout);
 		fp64 Seconds = pTimeout ? fp64(pTimeout->tv_sec) + fp64(pTimeout->tv_usec) / 1000000.0 : -1.0;
-		m_pActor->fp_SetTimer(++m_TimerGeneration, Seconds).f_DiscardResult();
+		m_pThis->fp_SetTimer(++m_TimerGeneration, Seconds).f_DiscardResult();
 	}
 
 	TCFuture<void> CResolveActor::fp_Initialize()
