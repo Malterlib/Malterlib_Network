@@ -26,7 +26,7 @@ malterlib_format = malterlib-buildsystem
 max_line_length = unset
 
 # YAML indentation must use spaces, including clang configuration files.
-[{*.yaml,*.yml,.clangd,.clang-format,.malterlib-format}]
+[{*.yaml,*.yml,.clangd,.clang-format,.clang-tidy,.malterlib-format}]
 indent_style = space
 indent_size = 2
 tab_width = 2
