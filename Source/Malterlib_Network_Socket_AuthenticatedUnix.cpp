@@ -571,9 +571,6 @@ namespace NMib::NNetwork
 	// Only terminal segments reach this path; payload uses retaining shared views.
 	bool CSocket_AuthenticatedUnix::f_ResolveReceiveSegment(NSys::CIoStreamSegment &_Segment, void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result)
 	{
-		(void)_pDestination;
-		(void)_nDestination;
-
 		o_Result.m_Status = _Segment.m_Status;
 		o_Result.m_Error = _Segment.m_Error;
 		o_Result.m_nBytes = 0;
