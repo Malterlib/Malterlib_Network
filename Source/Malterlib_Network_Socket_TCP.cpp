@@ -119,9 +119,9 @@ namespace NMib::NNetwork
 	{
 		mp_Socket.f_GiveUpForInheritAsync
 			(
-				[_fOnHandle = fg_Move(_fOnHandle)](void *_pSocketHandle) mutable
+				[fOnHandle = fg_Move(_fOnHandle)](void *_pSocketHandle) mutable
 				{
-					_fOnHandle(CInheritedSocketHandle(_pSocketHandle));
+					fOnHandle(CInheritedSocketHandle(_pSocketHandle));
 				}
 			)
 		;

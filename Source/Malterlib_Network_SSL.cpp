@@ -533,8 +533,8 @@ namespace NMib::NNetwork
 		{
 			NContainer::CByteVector CertData = fg_ConvertX509ToBinary(_pCertificate);
 
-			NContainer::TCVector<NStr::CStr> lHostnames = CCertificate::fs_GetCertificateHostnames(CertData);
-			for (auto const &CertHostName : lHostnames)
+			NContainer::TCVector<NStr::CStr> Hostnames = CCertificate::fs_GetCertificateHostnames(CertData);
+			for (auto const &CertHostName : Hostnames)
 			{
 				if (_Hostname.f_CmpNoCase(CertHostName) == 0)
 					return true;
@@ -605,9 +605,9 @@ namespace NMib::NNetwork
 				auto nCertificates = sk_X509_num(pChain);
 				bool bTrustedRoot = nCertificates && fg_IsTrustedSelfIssuedRoot(_pStoreContext, sk_X509_value(pChain, nCertificates - 1));
 
-				for (umint i = 0; i < nCertificates; ++i)
+				for (umint iCertificate = 0; iCertificate < nCertificates; ++iCertificate)
 				{
-					if (!fg_CertificateMeetsStrength(sk_X509_value(pChain, i), Minimum, bTrustedRoot && i + 1 == nCertificates))
+					if (!fg_CertificateMeetsStrength(sk_X509_value(pChain, iCertificate), Minimum, bTrustedRoot && iCertificate + 1 == nCertificates))
 					{
 						Result.f_AddSSLError("Peer certificate chain does not meet the minimum cryptographic strength");
 						X509_STORE_CTX_set_error(_pStoreContext, X509_V_ERR_APPLICATION_VERIFICATION);
@@ -728,10 +728,10 @@ namespace NMib::NNetwork
 				STACK_OF(X509) * pChain = nullptr;
 				SSL_CTX_get0_chain_certs(mp_pContext, &pChain);
 
-				for (umint i = 0; i < sk_X509_num(pChain); ++i)
+				for (umint iCertificate = 0; iCertificate < sk_X509_num(pChain); ++iCertificate)
 				{
-					auto *pCertificate = sk_X509_value(pChain, i);
-					bool bTrustAnchor = i + 1 == sk_X509_num(pChain) && fg_IsSelfIssuedCertificate(pCertificate);
+					auto *pCertificate = sk_X509_value(pChain, iCertificate);
+					bool bTrustAnchor = iCertificate + 1 == sk_X509_num(pChain) && fg_IsSelfIssuedCertificate(pCertificate);
 					if (!fg_CertificateMeetsStrength(pCertificate, Minimum, bTrustAnchor))
 						DMibErrorCryptography("Local certificate chain does not meet the minimum cryptographic strength");
 				}
@@ -752,12 +752,12 @@ namespace NMib::NNetwork
 					DMibErrorCryptography(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
 				else
 				{
-					NContainer::TCVector<NStr::CStr> lCertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
+					NContainer::TCVector<NStr::CStr> CertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
 
-					if (lCertificateFiles.f_IsEmpty())
+					if (CertificateFiles.f_IsEmpty())
 						DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
 
-					for (auto Iter = lCertificateFiles.f_GetIterator(); Iter; ++Iter)
+					for (auto Iter = CertificateFiles.f_GetIterator(); Iter; ++Iter)
 					{
 						NContainer::CByteVector CertificateData = NFile::CFile::fs_ReadFile(*Iter);
 						if (CertificateData.f_IsEmpty())
@@ -861,10 +861,10 @@ namespace NMib::NNetwork
 				if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
 					DMibErrorCryptography(fg_Format("CRL path '{}' does not exist", mp_Settings.m_PathToCRLs));
 
-				NContainer::TCVector<NStr::CStr> lCRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+				NContainer::TCVector<NStr::CStr> CRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
 
 				bool bAdded = false;
-				for (auto Iter = lCRLFiles.f_GetIterator(); Iter; ++Iter)
+				for (auto Iter = CRLFiles.f_GetIterator(); Iter; ++Iter)
 				{
 					NContainer::CByteVector CRLData = NFile::CFile::fs_ReadFile(*Iter);
 					if (CRLData.f_IsEmpty())
@@ -921,7 +921,7 @@ namespace NMib::NNetwork
 				uint16_t m_ID;
 			};
 
-			static constexpr CGroup s_Groups[] =
+			static constexpr CGroup c_Groups[] =
 				{
 					// malterlib-format table
 					  {256, SSL_GROUP_SECP521R1}
@@ -938,7 +938,7 @@ namespace NMib::NNetwork
 				if (Strength < Minimum)
 					continue;
 
-				for (auto const &Group : s_Groups)
+				for (auto const &Group : c_Groups)
 				{
 					if (Group.m_Strength == Strength)
 						AllowedGroups.f_InsertLast(Group.m_ID);
@@ -2777,7 +2777,7 @@ namespace NMib::NNetwork
 		if (mp_Certificates.f_IsEmpty())
 			return false;
 
-		auto fl_VerifyAgainstLocalTrust = [=, this](NContainer::CByteVector const &_Certificate) -> bool
+		auto fVerifyAgainstLocalTrust = [=, this](NContainer::CByteVector const &_Certificate) -> bool
 			{
 				if (_Certificate.f_IsEmpty())
 					return false;
@@ -2788,7 +2788,7 @@ namespace NMib::NNetwork
 
 		for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
 		{
-			if (fl_VerifyAgainstLocalTrust(*Iter))
+			if (fVerifyAgainstLocalTrust(*Iter))
 				return true;
 		}
 
@@ -2820,7 +2820,7 @@ namespace NMib::NNetwork
 	{
 		NStr::CStr ErrorMessage;
 
-		auto fl_AppendError = [&](NStr::CStr const &_Error)
+		auto fAppendError = [&](NStr::CStr const &_Error)
 			{
 				if (_Format == EFormat_CommaSeperated)
 				{
@@ -2844,16 +2844,16 @@ namespace NMib::NNetwork
 		{
 			CResultCertificate const &Certificate = (*Iter);
 			for (auto EIter = Certificate.m_Errors.f_GetIterator(); EIter; ++EIter)
-				fl_AppendError(fp_StringForError(EIter.f_GetKey()));
+				fAppendError(fp_StringForError(EIter.f_GetKey()));
 		}
 
 		// Add misc errors.
 		for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
-			fl_AppendError(fp_StringForError(Iter.f_GetKey()));
+			fAppendError(fp_StringForError(Iter.f_GetKey()));
 
 		// Add system errors.
 		if (!mp_SSLErrors.f_IsEmpty())
-			fl_AppendError(mp_SSLErrors);
+			fAppendError(mp_SSLErrors);
 
 		if (_Format == EFormat_Html)
 			ErrorMessage += "</ul>";

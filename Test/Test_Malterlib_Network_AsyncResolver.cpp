@@ -41,19 +41,19 @@ namespace
 			{
 				struct CState
 				{
-					NThread::CEvent Release;
-					TCPromise<void> Started;
-					TCPromise<void> Finished;
-					NAtomic::TCAtomic<uint32> PendingCallbacks{0};
-					NAtomic::TCAtomic<uint32> CloseCallbacks{0};
+					NThread::CEvent m_Release;
+					TCPromise<void> m_Started;
+					TCPromise<void> m_Finished;
+					NAtomic::TCAtomic<uint32> m_PendingCallbacks{0};
+					NAtomic::TCAtomic<uint32> m_CloseCallbacks{0};
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
 				TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
-				pState->Release.f_ResetSignaled();
+				pState->m_Release.f_ResetSignaled();
 				auto Cleanup = g_OnScopeExit / [pState]
 					{
-						pState->Release.f_SetSignaled();
+						pState->m_Release.f_SetSignaled();
 					}
 				;
 
@@ -64,14 +64,14 @@ namespace
 						, ENetAddressType_TCPv4
 						, [pState]
 						{
-							pState->Started.f_SetResult();
-							(void)pState->Release.f_WaitTimeout(5.0);
-							pState->Finished.f_SetResult();
+							pState->m_Started.f_SetResult();
+							(void)pState->m_Release.f_WaitTimeout(5.0);
+							pState->m_Finished.f_SetResult();
 						}
 					)
 				;
 
-				co_await pState->Started.f_Future().f_Timeout(5.0, "Resolver did not start");
+				co_await pState->m_Started.f_Future().f_Timeout(5.0, "Resolver did not start");
 
 				// The worker is inside the first callback, so these requests stay queued.
 				CAsyncResolver Pending;
@@ -81,7 +81,7 @@ namespace
 						, ENetAddressType_TCPv4
 						, [pState]
 						{
-							pState->PendingCallbacks.f_FetchAdd(1);
+							pState->m_PendingCallbacks.f_FetchAdd(1);
 						}
 					)
 				;
@@ -90,24 +90,24 @@ namespace
 					(
 						[pState]
 						{
-							pState->CloseCallbacks.f_FetchAdd(1);
+							pState->m_CloseCallbacks.f_FetchAdd(1);
 						}
 					)
 				;
 
-				DMibExpect(pState->CloseCallbacks.f_Load(), ==, 1u);
-				DMibExpect(pState->PendingCallbacks.f_Load(), ==, 0u);
+				DMibExpect(pState->m_CloseCallbacks.f_Load(), ==, 1u);
+				DMibExpect(pState->m_PendingCallbacks.f_Load(), ==, 0u);
 
 				Pending.f_CloseAsync
 					(
 						[pState]
 						{
-							pState->CloseCallbacks.f_FetchAdd(1);
+							pState->m_CloseCallbacks.f_FetchAdd(1);
 						}
 					)
 				;
 
-				DMibExpect(pState->CloseCallbacks.f_Load(), ==, 2u);
+				DMibExpect(pState->m_CloseCallbacks.f_Load(), ==, 2u);
 
 				CNetAddress Address;
 				NStr::CStr Error;
@@ -123,15 +123,15 @@ namespace
 					)
 				;
 
-				DMibExpectFalse(pState->Finished.f_IsSet());
+				DMibExpectFalse(pState->m_Finished.f_IsSet());
 				DMibExpectFalse(pClosed->f_TryWait());
 
-				pState->Release.f_SetSignaled();
+				pState->m_Release.f_SetSignaled();
 				co_await fg_WaitForClosed(pClosed, "Resolver close did not complete");
 
 				DMibTestPath("AfterClose");
-				DMibExpectTrue(pState->Finished.f_IsSet());
-				DMibExpect(pState->PendingCallbacks.f_Load(), ==, 0u);
+				DMibExpectTrue(pState->m_Finished.f_IsSet());
+				DMibExpect(pState->m_PendingCallbacks.f_Load(), ==, 0u);
 
 				co_return {};
 			};
@@ -144,18 +144,18 @@ namespace
 
 					struct CState
 					{
-						NThread::CEvent Release;
-						TCPromise<void> Started;
-						TCPromise<void> Finished;
-						TCPromise<void> NextFinished;
+						NThread::CEvent m_Release;
+						TCPromise<void> m_Started;
+						TCPromise<void> m_Finished;
+						TCPromise<void> m_NextFinished;
 					};
 
 					TCSharedPointer<CState> pState = fg_Construct();
 					TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
-					pState->Release.f_ResetSignaled();
+					pState->m_Release.f_ResetSignaled();
 					auto Cleanup = g_OnScopeExit / [pState]
 						{
-							pState->Release.f_SetSignaled();
+							pState->m_Release.f_SetSignaled();
 						}
 					;
 
@@ -166,14 +166,14 @@ namespace
 							, ENetAddressType_TCPv4
 							, [pState]
 							{
-								pState->Started.f_SetResult();
-								(void)pState->Release.f_WaitTimeout(5.0);
-								pState->Finished.f_SetResult();
+								pState->m_Started.f_SetResult();
+								(void)pState->m_Release.f_WaitTimeout(5.0);
+								pState->m_Finished.f_SetResult();
 							}
 						)
 					;
 
-					co_await pState->Started.f_Future().f_Timeout(5.0, "Resolver did not start");
+					co_await pState->m_Started.f_Future().f_Timeout(5.0, "Resolver did not start");
 
 					if (!bReopen)
 					{
@@ -187,17 +187,17 @@ namespace
 							, ENetAddressType_TCPv4
 							, [pState]
 							{
-								pState->NextFinished.f_SetResult();
+								pState->m_NextFinished.f_SetResult();
 							}
 						)
 					;
 
-					DMibExpectFalse(pState->Finished.f_IsSet());
+					DMibExpectFalse(pState->m_Finished.f_IsSet());
 
-					pState->Release.f_SetSignaled();
-					co_await pState->NextFinished.f_Future().f_Timeout(5.0, "Next lookup did not finish");
+					pState->m_Release.f_SetSignaled();
+					co_await pState->m_NextFinished.f_Future().f_Timeout(5.0, "Next lookup did not finish");
 
-					DMibExpectTrue(pState->Finished.f_IsSet());
+					DMibExpectTrue(pState->m_Finished.f_IsSet());
 
 					pResolver->f_CloseAsync
 						(
@@ -218,22 +218,22 @@ namespace
 			{
 				struct CState
 				{
-					CAsyncResolver Resolver;
-					NThread::CEvent Opened;
-					TCPromise<void> Finished;
+					CAsyncResolver m_Resolver;
+					NThread::CEvent m_Opened;
+					TCPromise<void> m_Finished;
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
 				TCSharedPointer<NThread::CEvent> pClosed = fg_Construct();
-				pState->Opened.f_ResetSignaled();
-				pState->Resolver.f_Open
+				pState->m_Opened.f_ResetSignaled();
+				pState->m_Resolver.f_Open
 					(
 						"127.0.0.1"
 						, ENetAddressType_TCPv4
 						, [pState, pClosed]
 						{
-							pState->Opened.f_Wait();
-							pState->Resolver.f_CloseAsync
+							pState->m_Opened.f_Wait();
+							pState->m_Resolver.f_CloseAsync
 								(
 									[pClosed]
 									{
@@ -242,15 +242,15 @@ namespace
 								)
 							;
 
-							pState->Finished.f_SetResult();
+							pState->m_Finished.f_SetResult();
 						}
 					)
 				;
 
-				pState->Opened.f_SetSignaled();
+				pState->m_Opened.f_SetSignaled();
 				co_await fg_WaitForClosed(pClosed, "Close from callback did not complete");
 
-				DMibExpectTrue(pState->Finished.f_IsSet());
+				DMibExpectTrue(pState->m_Finished.f_IsSet());
 
 				co_return {};
 			};

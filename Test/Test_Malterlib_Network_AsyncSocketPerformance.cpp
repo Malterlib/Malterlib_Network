@@ -362,7 +362,7 @@ namespace
 				TargetBytes = _pState->m_nClientReceivedBytes;
 			}
 
-			for (umint i = 0; i < _nRoundTrips; ++i)
+			for (umint iRoundTrip = 0; iRoundTrip < _nRoundTrips; ++iRoundTrip)
 			{
 				TargetBytes += 8;
 				_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(Chunk), 0).f_DiscardResult();
@@ -510,8 +510,8 @@ namespace
 									, _Address
 									, _ServerFactory
 									, _ClientFactory
-									, mc_nPingRoundTrips
-									, mc_nRepetitions
+									, mcp_nPingRoundTrips
+									, mcp_nRepetitions
 								)
 							;
 
@@ -523,8 +523,8 @@ namespace
 									, _Address
 									, _ServerFactory
 									, _ClientFactory
-									, mc_nPingRoundTrips
-									, mc_nRepetitions
+									, mcp_nPingRoundTrips
+									, mcp_nRepetitions
 								)
 							;
 						}
@@ -538,8 +538,8 @@ namespace
 
 				CTestPerformance PerfTest(0.015);
 
-				uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mc_ChunkSize);
-				uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mc_nTransferBytes);
+				uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
+				uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
 
 				fsp_MeasureTransports
 					(
@@ -552,7 +552,7 @@ namespace
 							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
 							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
-							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mc_nRepetitions, g_Timeout);
+							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mcp_nRepetitions, g_Timeout);
 						}
 					)
 				;
@@ -623,8 +623,8 @@ namespace
 					else if (TicketString.f_StartsWith("tcp://"))
 						Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
 
-					uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mc_ChunkSize);
-					uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mc_nTransferBytes);
+					uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
+					uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
 					fp64 CallTimeout = fg_GetSys()->f_GetEnvironmentVariable("BenchCallTimeout").f_ToFloat(fp64(600.0));
 
 					CActorRunLoopTestHelper RunLoopHelper;
@@ -646,7 +646,7 @@ namespace
 					fg_SetupClient(RunLoopHelper, pState, Address, ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 					DMibTestPath("Remote");
-					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mc_nRepetitions, CallTimeout);
+					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mcp_nRepetitions, CallTimeout);
 
 					DMibExpectTrue(PerfTest);
 				}
@@ -655,15 +655,15 @@ namespace
 
 	private:
 #if defined(DMibDebug) || defined(DMibSanitizerEnabled)
-		static constexpr uint64 mc_nTransferBytes = 8ull << 20;
-		static constexpr umint mc_nPingRoundTrips = 128;
-		static constexpr umint mc_nRepetitions = 3;
+		static constexpr uint64 mcp_nTransferBytes = 8ull << 20;
+		static constexpr umint mcp_nPingRoundTrips = 128;
+		static constexpr umint mcp_nRepetitions = 3;
 #else
-		static constexpr uint64 mc_nTransferBytes = 8 * (1024ull << 20);
-		static constexpr umint mc_nPingRoundTrips = 4 * 16384;
-		static constexpr umint mc_nRepetitions = 5;
+		static constexpr uint64 mcp_nTransferBytes = 8 * (1024ull << 20);
+		static constexpr umint mcp_nPingRoundTrips = 4 * 16384;
+		static constexpr umint mcp_nRepetitions = 5;
 #endif
-		static constexpr uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
+		static constexpr uint32 mcp_ChunkSize = NFile::gc_IdealIoSize;
 
 		static bool fsp_BenchSchemeEnabled(CStr const &_Tag)
 		{

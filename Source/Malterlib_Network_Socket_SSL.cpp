@@ -452,11 +452,11 @@ namespace NMib::NNetwork
 				mp_iBufferOperationHead[iHead] = -1;
 		}
 
-		int32 *piLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
-		while (*piLink >= 0)
-			piLink = &mp_SendOperations[umint(*piLink)].m_iNextForBuffer;
+		int32 *pLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+		while (*pLink >= 0)
+			pLink = &mp_SendOperations[umint(*pLink)].m_iNextForBuffer;
 
-		*piLink = int32(_iOperation);
+		*pLink = int32(_iOperation);
 		Operation.m_iNextForBuffer = -1;
 		Operation.m_bLinked = true;
 	}
@@ -467,12 +467,12 @@ namespace NMib::NNetwork
 
 		if (Operation.m_bLinked)
 		{
-			int32 *piLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
-			while (*piLink >= 0 && umint(*piLink) != _iOperation)
-				piLink = &mp_SendOperations[umint(*piLink)].m_iNextForBuffer;
+			int32 *pLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+			while (*pLink >= 0 && umint(*pLink) != _iOperation)
+				pLink = &mp_SendOperations[umint(*pLink)].m_iNextForBuffer;
 
-			DMibFastCheck(*piLink >= 0);
-			*piLink = Operation.m_iNextForBuffer;
+			DMibFastCheck(*pLink >= 0);
+			*pLink = Operation.m_iNextForBuffer;
 		}
 
 		Operation = CSendOperation{};

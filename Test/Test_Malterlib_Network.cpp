@@ -51,7 +51,7 @@ using namespace NMib::NThread;
 using namespace NMib::NMemory;
 using namespace NMib::NTime;
 
-static fp32 const gc_Timeout = 60.0f;
+static constexpr fp32 gc_Timeout = 60.0f;
 
 struct CSysNet_Tests : public NMib::NTest::CTest
 {
@@ -193,24 +193,24 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		if (!Socket.f_IsValid())
 			return;
 
-		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static umint const nMessageBytes = sizeof(Message);
+		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+		static constexpr umint c_nMessageBytes = sizeof(c_Message);
 
 		{
-			umint nSent = Socket.f_Send(Message, nMessageBytes);
-			DMibExpect(nSent, ==, nMessageBytes);
+			umint nSent = Socket.f_Send(c_Message, c_nMessageBytes);
+			DMibExpect(nSent, ==, c_nMessageBytes);
 		}
 
 		{
 			umint nReceived = 0;
 			umint nBytes = -1;
-			uint8 Incoming[nMessageBytes];
-			fg_MemClear(Incoming, nMessageBytes);
+			uint8 Incoming[c_nMessageBytes];
+			fg_MemClear(Incoming, c_nMessageBytes);
 			CTimeout Timeout(gc_Timeout);
 			bool bEndOfStream = false;
-			while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
+			while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
 			{
-				nBytes = Socket.f_Receive(Incoming + nReceived, nMessageBytes - nReceived, bEndOfStream);
+				nBytes = Socket.f_Receive(Incoming + nReceived, c_nMessageBytes - nReceived, bEndOfStream);
 
 				if (nBytes == -1)
 					break;
@@ -219,8 +219,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 			}
 
 			DMibExpect(nBytes, !=, -1);
-			DMibExpect(nReceived, ==, nMessageBytes);
-			DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+			DMibExpect(nReceived, ==, c_nMessageBytes);
+			DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
 		}
 	}
 
@@ -243,8 +243,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 				return;
 		}
 
-		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static umint const nMessageBytes = sizeof(Message);
+		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+		static constexpr umint c_nMessageBytes = sizeof(c_Message);
 
 		CEventAutoReset ServerReady;
 
@@ -288,8 +288,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 						if (!Client.f_IsValid())
 							return -1;
 
-						umint nSent = Client.f_Send(Message, nMessageBytes);
-						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
+						umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
+						DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
 					}
 					catch (CExceptionNet const &_Exception)
 					{
@@ -323,14 +323,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 							return -1;
 
 						umint nReceived = 0, nBytes;
-						uint8 Incoming[nMessageBytes];
-						fg_MemClear(Incoming, nMessageBytes);
+						uint8 Incoming[c_nMessageBytes];
+						fg_MemClear(Incoming, c_nMessageBytes);
 						CTimeout Timeout(gc_Timeout);
 						bool bEndOfStream = false;
 
-						while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
+						while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
 						{
-							nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived, bEndOfStream);
+							nBytes = Client.f_Receive(&Incoming[nReceived], c_nMessageBytes - nReceived, bEndOfStream);
 
 							if (nBytes == -1)
 								break;
@@ -339,8 +339,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 						}
 
 						DMibExpect(nBytes, !=, -1);
-						DMibExpect(nReceived, ==, nMessageBytes);
-						DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+						DMibExpect(nReceived, ==, c_nMessageBytes);
+						DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
 					}
 					catch (CExceptionNet const &_Exception)
 					{
@@ -394,22 +394,22 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		if (!Socket.f_IsValid())
 			return;
 
-		static umint const nBufferBytes = 1024 * 1024 * 16;
+		static constexpr umint c_nBufferBytes = 1024 * 1024 * 16;
 		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(nBufferBytes);
+		Buffer.f_SetLen(c_nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			umint nTotalSent = 0;
 			umint nSent = -1;
 
-			while (nTotalSent < nBufferBytes)
+			while (nTotalSent < c_nBufferBytes)
 			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
 
-				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -431,7 +431,7 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 			}
 
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
+			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
 		}
 	}
 
@@ -454,8 +454,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 				return;
 		}
 
-		static uint8 const Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static umint const nMessageBytes = sizeof(Message);
+		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+		static constexpr umint c_nMessageBytes = sizeof(c_Message);
 
 		CEventAutoReset ServerReady;
 
@@ -511,8 +511,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 						if (!Client.f_IsValid())
 							return -1;
 
-						umint nSent = Client.f_Send(Message, nMessageBytes);
-						DMibTest(DMibExpr(nSent) == DMibExpr(nMessageBytes));
+						umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
+						DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
 					}
 					catch (CExceptionNet const &_Exception)
 					{
@@ -546,14 +546,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 
 						{
 							umint nReceived = 0, nBytes;
-							uint8 Incoming[nMessageBytes];
-							fg_MemClear(Incoming, nMessageBytes);
+							uint8 Incoming[c_nMessageBytes];
+							fg_MemClear(Incoming, c_nMessageBytes);
 							CTimeout Timeout(gc_Timeout);
 							bool bEndOfStream = false;
 
-							while (nReceived < nMessageBytes && !Timeout.f_TimedOut())
+							while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
 							{
-								nBytes = Client.f_Receive(&Incoming[nReceived], nMessageBytes - nReceived, bEndOfStream);
+								nBytes = Client.f_Receive(&Incoming[nReceived], c_nMessageBytes - nReceived, bEndOfStream);
 
 								if (nBytes == -1)
 									break;
@@ -562,8 +562,8 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 							}
 
 							DMibExpect(nBytes, !=, -1);
-							DMibExpect(nReceived, ==, nMessageBytes);
-							DMibExpect(fg_MemCmp(Incoming, Message, nMessageBytes), ==, 0);
+							DMibExpect(nReceived, ==, c_nMessageBytes);
+							DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
 						}
 					}
 					catch (CExceptionNet const &_Exception)
@@ -630,22 +630,22 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 			;
 		}
 
-		static umint const nBufferBytes = 1024 * 1024 * 4;
+		static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
 		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(nBufferBytes);
+		Buffer.f_SetLen(c_nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			umint nTotalSent = 0;
 			umint nSent = -1;
 
-			while (nTotalSent < nBufferBytes)
+			while (nTotalSent < c_nBufferBytes)
 			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
 
-				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -662,7 +662,7 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 			}
 
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
+			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
 		}
 	}
 
@@ -710,22 +710,22 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 
 		DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
 
-		static umint const nBufferBytes = 1024 * 1024 * 4;
+		static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
 		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(nBufferBytes);
+		Buffer.f_SetLen(c_nBufferBytes);
 		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
 
 		{
 			umint nTotalSent = 0;
 			umint nSent = -1;
 
-			while (nTotalSent < nBufferBytes)
+			while (nTotalSent < c_nBufferBytes)
 			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, nBufferBytes - nTotalSent);
+				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
 				if (nSent == -1)
 					break;
 
-				bool bStuffed = nSent < (nBufferBytes - nTotalSent);
+				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
 
 				nTotalSent += nSent;
 
@@ -742,18 +742,18 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 			}
 
 			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(nBufferBytes));
+			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
 		}
 	}
 
 	void f_DoTests()
 	{
-		static uint16 const Port = 20677;
+		static constexpr uint16 c_Port = 20677;
 
-		CNetAddressTCPv4 const Localhost_TCPv4(CNetAddressIPv4(127, 0, 0, 1), Port);
-		CNetAddressTCPv4 const Other_TCPv4(CNetAddressIPv4(127, 0, 0, 2), Port);
-		CNetAddressTCPv6 const Localhost_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), Port);
-		CNetAddressTCPv6 const Other_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2), Port);
+		CNetAddressTCPv4 const Localhost_TCPv4(CNetAddressIPv4(127, 0, 0, 1), c_Port);
+		CNetAddressTCPv4 const Other_TCPv4(CNetAddressIPv4(127, 0, 0, 2), c_Port);
+		CNetAddressTCPv6 const Localhost_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), c_Port);
+		CNetAddressTCPv6 const Other_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2), c_Port);
 
 		CStr RemoteMachine;
 		auto fRemoteMachine = [&]() -> CStr const &

@@ -18,7 +18,7 @@ using namespace NMib::NTime;
 
 namespace
 {
-	fp32 const gc_Timeout = 30.0f;
+	constexpr fp32 gc_Timeout = 30.0f;
 
 	struct CSendRecordingSocket : public ICSocket
 	{
@@ -249,12 +249,12 @@ namespace
 				Part1.f_SetLen(2000);
 				CByteVector Part2;
 				Part2.f_SetLen(500);
-				for (umint i = 0; i < 1000; ++i)
-					Part0[i] = uint8(i);
-				for (umint i = 0; i < 2000; ++i)
-					Part1[i] = uint8(i * 3);
-				for (umint i = 0; i < 500; ++i)
-					Part2[i] = uint8(i * 7);
+				for (umint iByte = 0; iByte < 1000; ++iByte)
+					Part0[iByte] = uint8(iByte);
+				for (umint iByte = 0; iByte < 2000; ++iByte)
+					Part1[iByte] = uint8(iByte * 3);
+				for (umint iByte = 0; iByte < 500; ++iByte)
+					Part2[iByte] = uint8(iByte * 7);
 				Expected.f_Insert(Part0.f_GetArray(), 1000);
 				Expected.f_Insert(Part1.f_GetArray(), 2000);
 				Expected.f_Insert(Part2.f_GetArray(), 500);
@@ -276,13 +276,13 @@ namespace
 					{
 						NSys::CIoSpan Remaining[4];
 						umint nRemaining = 0;
-						for (umint i = iSpan; i < 4; ++i)
+						for (umint iRemainingSpan = iSpan; iRemainingSpan < 4; ++iRemainingSpan)
 						{
-							umint Offset = i == iSpan ? SpanOffset : 0;
+							umint Offset = iRemainingSpan == iSpan ? SpanOffset : 0;
 							// The span set deliberately includes a null zero length span; offsetting
 							// a null pointer is undefined even by zero
-							Remaining[nRemaining].m_pData = Offset ? (uint8 const *)Spans[i].m_pData + Offset : Spans[i].m_pData;
-							Remaining[nRemaining].m_nBytes = Spans[i].m_nBytes - Offset;
+							Remaining[nRemaining].m_pData = Offset ? (uint8 const *)Spans[iRemainingSpan].m_pData + Offset : Spans[iRemainingSpan].m_pData;
+							Remaining[nRemaining].m_nBytes = Spans[iRemainingSpan].m_nBytes - Offset;
 							++nRemaining;
 						}
 

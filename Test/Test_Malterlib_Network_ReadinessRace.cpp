@@ -18,7 +18,7 @@ using namespace NMib::NTime;
 
 namespace
 {
-	fp32 const gc_Timeout = 30.0f;
+	constexpr fp32 gc_Timeout = 30.0f;
 
 	// Exercise data arrival between a would-block readiness request and kernel arming; level-at-arm must report it.
 	struct CReadinessRace_Tests : public NMib::NTest::CTest

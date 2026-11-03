@@ -22,7 +22,7 @@ using namespace NMib::NTime;
 
 namespace
 {
-	fp32 const gc_Timeout = 30.0f;
+	constexpr fp32 gc_Timeout = 30.0f;
 
 	void fg_MakeSelfSigned(CByteVector &o_Certificate, CSecureByteVector &o_PrivateKey)
 	{

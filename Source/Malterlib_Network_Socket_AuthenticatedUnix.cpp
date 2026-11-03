@@ -860,7 +860,7 @@ namespace NMib::NNetwork
 		if (nCertificates > gc_MaxCertificateChainLength)
 			return fp_FailHandshake("Too many certificates in handshake");
 
-		for (umint i = 0; i < nCertificates; ++i)
+		for (umint iCertificate = 0; iCertificate < nCertificates; ++iCertificate)
 		{
 			if (fRemaining() < sizeof(uint32))
 				return fp_FailHandshake("Invalid handshake certificate chain");

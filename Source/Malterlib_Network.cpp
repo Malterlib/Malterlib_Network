@@ -102,9 +102,9 @@ namespace NMib::NNetwork
 		if (_Address.f_Get(TCPv6))
 		{
 			bool bMappedPrefix = true;
-			for (umint i = 0; i < 10; ++i)
+			for (umint iByte = 0; iByte < 10; ++iByte)
 			{
-				if (TCPv6.m_IP[i] != 0)
+				if (TCPv6.m_IP[iByte] != 0)
 					bMappedPrefix = false;
 			}
 

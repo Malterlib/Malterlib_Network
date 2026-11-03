@@ -160,8 +160,8 @@ namespace
 			Reply.f_Insert(_pQuery, End);
 			Reply[2] = 0x81;
 			Reply[3] = m_Mode == EMode::mc_NotFound ? 0x83 : 0x80;
-			for (umint i = 6; i < 12; ++i)
-				Reply[i] = 0;
+			for (umint iByte = 6; iByte < 12; ++iByte)
+				Reply[iByte] = 0;
 
 			if (m_Mode == EMode::mc_Truncate && !_bTCP)
 			{

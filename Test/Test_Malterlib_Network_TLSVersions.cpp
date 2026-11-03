@@ -702,11 +702,11 @@ namespace
 							auto Groups = fs_ClientHelloIDs(Hello, TLSEXT_TYPE_supported_groups);
 
 							DMibAssert(Groups.f_GetLen(), ==, Case.m_Groups.f_GetLen());
-							for (umint i = 0; i < Groups.f_GetLen(); ++i)
+							for (umint iGroup = 0; iGroup < Groups.f_GetLen(); ++iGroup)
 							{
-								DMibTestPath("Group {}"_f << i);
+								DMibTestPath("Group {}"_f << iGroup);
 
-								DMibExpect(Groups[i], ==, Case.m_Groups[i]);
+								DMibExpect(Groups[iGroup], ==, Case.m_Groups[iGroup]);
 							}
 
 							if (Protocol == CSSLSettings::EProtocol_TLS_1_3)
@@ -766,18 +766,18 @@ namespace
 						umint CipherBytes = (umint(Hello[Offset]) << 8) + Hello[Offset + 1];
 
 						NContainer::TCVector<uint16> Offered;
-						for (umint i = 0; i < CipherBytes; i += 2)
-							Offered.f_InsertLast(uint16((uint16(Hello[Offset + 2 + i]) << 8) + Hello[Offset + 3 + i]));
+						for (umint iByte = 0; iByte < CipherBytes; iByte += 2)
+							Offered.f_InsertLast(uint16((uint16(Hello[Offset + 2 + iByte]) << 8) + Hello[Offset + 3 + iByte]));
 
 						NContainer::TCVector<uint16> Expected = {0x1302, 0x1303};
 						if (Offer.m_Minimum <= 128)
 							Expected.f_InsertLast(0x1301);
 
 						DMibAssert(Offered.f_GetLen(), ==, Expected.f_GetLen());
-						for (umint i = 0; i < Expected.f_GetLen(); ++i)
+						for (umint iCipher = 0; iCipher < Expected.f_GetLen(); ++iCipher)
 						{
-							DMibTestPath("Cipher {}"_f << i);
-							DMibExpect(Offered[i], ==, Expected[i]);
+							DMibTestPath("Cipher {}"_f << iCipher);
+							DMibExpect(Offered[iCipher], ==, Expected[iCipher]);
 						}
 					}
 
@@ -803,13 +803,13 @@ namespace
 					;
 					uint16_t Groups[] = {SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1};
 
-					for (umint i = 0; i < fg_ArraySize(Minimums); ++i)
+					for (umint iMinimum = 0; iMinimum < fg_ArraySize(Minimums); ++iMinimum)
 					{
-						DMibTestPath("{}"_f << uint16(Minimums[i]));
+						DMibTestPath("{}"_f << uint16(Minimums[iMinimum]));
 
 						CSSLSettings Settings;
 						Settings.m_Protocol = CSSLSettings::EProtocol_TLS_1_3;
-						Settings.m_MinimumCryptoStrength = Minimums[i];
+						Settings.m_MinimumCryptoStrength = Minimums[iMinimum];
 
 						auto Blocking = fg_BlockingActor();
 						auto Hello = co_await
@@ -821,7 +821,7 @@ namespace
 							)
 						;
 
-						fs_CheckInitialKeyShare(StrongServer, Hello, Groups[i]);
+						fs_CheckInitialKeyShare(StrongServer, Hello, Groups[iMinimum]);
 					}
 
 					co_return {};

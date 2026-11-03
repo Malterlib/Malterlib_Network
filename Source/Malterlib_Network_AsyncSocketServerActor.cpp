@@ -106,11 +106,11 @@ namespace NMib::NNetwork
 
 			Listen.m_ListenSockets.f_SetLen(nListenTo);
 
-			for (umint i = 0; i < nListenTo; ++i)
+			for (umint iAddress = 0; iAddress < nListenTo; ++iAddress)
 			{
-				NNetwork::CNetAddress &Address = _AddressesToListenTo[i];
+				NNetwork::CNetAddress &Address = _AddressesToListenTo[iAddress];
 
-				NConcurrency::TCActor<CListenActor> &ListenActor = Listen.m_ListenSockets[i];
+				NConcurrency::TCActor<CListenActor> &ListenActor = Listen.m_ListenSockets[iAddress];
 
 				ListenActor = f_ConcurrencyManager().f_ConstructActor
 					(
@@ -174,10 +174,10 @@ namespace NMib::NNetwork
 		-> NConcurrency::TCFuture<CListenResult>
 	{
 		NContainer::TCVector<NNetwork::CNetAddress> AddressesToListenTo;
-		for (umint i = 0; i < _nListen; ++i)
+		for (umint iListen = 0; iListen < _nListen; ++iListen)
 		{
 			NNetwork::CNetAddressTCPv4 AnyAddress;
-			AnyAddress.m_Port = _StartListen + i;
+			AnyAddress.m_Port = _StartListen + iListen;
 			NNetwork::CNetAddress Address;
 			Address.f_Set(AnyAddress);
 			AddressesToListenTo.f_Insert(fg_Move(Address));

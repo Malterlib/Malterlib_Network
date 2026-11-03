@@ -150,28 +150,28 @@ namespace
 			{
 				struct CState
 				{
-					NThread::CEvent Release;
-					TCPromise<void> Saturated;
-					NAtomic::TCAtomic<uint32> Started{0};
-					NAtomic::TCAtomic<uint32> CancelledStarted{0};
+					NThread::CEvent m_Release;
+					TCPromise<void> m_Saturated;
+					NAtomic::TCAtomic<uint32> m_Started{0};
+					NAtomic::TCAtomic<uint32> m_CancelledStarted{0};
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
-				pState->Release.f_ResetSignaled();
+				pState->m_Release.f_ResetSignaled();
 				auto Cleanup = g_OnScopeExit / [pState]
 					{
-						pState->Release.f_SetSignaled();
+						pState->m_Release.f_SetSignaled();
 					}
 				;
 
 				CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
 					{
 						if (_Host == "cancelled.test")
-							pState->CancelledStarted.f_FetchAdd(1);
-						if (pState->Started.f_FetchAdd(1) == 1)
-							pState->Saturated.f_SetResult();
+							pState->m_CancelledStarted.f_FetchAdd(1);
+						if (pState->m_Started.f_FetchAdd(1) == 1)
+							pState->m_Saturated.f_SetResult();
 
-						(void)pState->Release.f_WaitTimeout(5.0);
+						(void)pState->m_Release.f_WaitTimeout(5.0);
 
 						return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
 					}
@@ -180,7 +180,7 @@ namespace
 				auto Resolver = fg_ConstructActor<CResolveActor>(fResolve, 2);
 				auto First = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("first.test"), ENetAddressType_None);
 				auto Second = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("second.test"), ENetAddressType_None);
-				co_await pState->Saturated.f_Future().f_Timeout(5.0, "Resolver did not fill its slots");
+				co_await pState->m_Saturated.f_Future().f_Timeout(5.0, "Resolver did not fill its slots");
 
 				auto Cancelled = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("cancelled.test"), ENetAddressType_None);
 				auto Queued = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("queued.test"), ENetAddressType_None);
@@ -206,14 +206,14 @@ namespace
 
 				DMibExpectFalse(bool(CancelledResult));
 				DMibExpectFalse(bool(FirstResult));
-				DMibExpect(pState->Started.f_Load(), ==, 2u);
+				DMibExpect(pState->m_Started.f_Load(), ==, 2u);
 
-				pState->Release.f_SetSignaled();
+				pState->m_Release.f_SetSignaled();
 				co_await fg_Move(Second.m_Result);
 				co_await fg_Move(Queued.m_Result);
 
-				DMibExpect(pState->Started.f_Load(), ==, 3u);
-				DMibExpect(pState->CancelledStarted.f_Load(), ==, 0u);
+				DMibExpect(pState->m_Started.f_Load(), ==, 3u);
+				DMibExpect(pState->m_CancelledStarted.f_Load(), ==, 0u);
 
 				co_await fg_Move(Resolver).f_Destroy();
 
@@ -228,24 +228,24 @@ namespace
 
 					struct CState
 					{
-						NThread::CEvent Release;
-						TCPromise<void> Started;
-						TCPromise<void> Finished;
+						NThread::CEvent m_Release;
+						TCPromise<void> m_Started;
+						TCPromise<void> m_Finished;
 					};
 
 					TCSharedPointer<CState> pState = fg_Construct();
-					pState->Release.f_ResetSignaled();
+					pState->m_Release.f_ResetSignaled();
 					auto Cleanup = g_OnScopeExit / [pState]
 						{
-							pState->Release.f_SetSignaled();
+							pState->m_Release.f_SetSignaled();
 						}
 					;
 
 					CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
 						{
-							pState->Started.f_SetResult();
-							pState->Release.f_Wait();
-							pState->Finished.f_SetResult();
+							pState->m_Started.f_SetResult();
+							pState->m_Release.f_Wait();
+							pState->m_Finished.f_SetResult();
 
 							return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
 						}
@@ -253,7 +253,7 @@ namespace
 
 					auto Resolver = fg_ConstructActor<CResolveActor>(fResolve);
 					auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("pending.test"), ENetAddressType_None);
-					co_await pState->Started.f_Future();
+					co_await pState->m_Started.f_Future();
 
 					// Release the backend if cancellation fails to deliver the result.
 					auto Watchdog = co_await fg_OneshotTimerAbortable
@@ -261,7 +261,7 @@ namespace
 							5.0
 							, [pState]() -> TCFuture<void>
 							{
-								pState->Release.f_SetSignaled();
+								pState->m_Release.f_SetSignaled();
 
 								co_return {};
 							}
@@ -277,10 +277,10 @@ namespace
 					auto Result = co_await fg_Move(Lookup.m_Result).f_Wrap();
 
 					DMibExpectFalse(bool(Result));
-					DMibExpectFalse(pState->Finished.f_IsSet());
+					DMibExpectFalse(pState->m_Finished.f_IsSet());
 
-					pState->Release.f_SetSignaled();
-					co_await pState->Finished.f_Future();
+					pState->m_Release.f_SetSignaled();
+					co_await pState->m_Finished.f_Future();
 					if (Destroy.f_IsValid())
 						co_await fg_Move(Destroy);
 					co_await Watchdog->f_Destroy();
