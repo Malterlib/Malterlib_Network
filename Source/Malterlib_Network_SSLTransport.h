@@ -84,13 +84,10 @@ namespace NMib::NNetwork
 		uint8 *f_BeginSeal(umint _nWanted, umint &o_nRoom);
 		void f_CommitSeal(umint _nBytes);
 
-		static umint fsp_RecordFramingAllowance(umint _nBytes);
-
 		void f_SetOutboundCap(umint _nBytes);
 		void f_SetInboundSize(umint _nBytes);
 
 		ETransferResult f_FillCipher();
-		void fp_AppendOwnedCipher(umint _nRead);
 
 		uint8 *f_BeginHold(umint &o_nRoom);
 		void f_CommitHold(umint _nBytes);
@@ -99,7 +96,6 @@ namespace NMib::NNetwork
 
 		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner);
 		void f_CompactCipherIfStalled();
-		umint fp_GetCipherQueueLen() const;
 		umint f_GetCipherQueueEntries() const;
 		umint f_GetCipherFragments(CRYPTO_IVEC *o_pFragments) const;
 		umint f_GetCipherPending() const;
@@ -116,9 +112,13 @@ namespace NMib::NNetwork
 		static constexpr umint mc_nMaxCipherFragments = mc_nCipherQueueCapacity;
 
 	protected:
+		static umint fsp_RecordFramingAllowance(umint _nBytes);
+
+		void fp_AppendOwnedCipher(umint _nRead);
 		void fp_PushCipherSegment(CCipherSegment &&_Segment);
 		void fp_ReclaimCipherConsumed();
 		void fp_CompactCipher();
+		umint fp_GetCipherQueueLen() const;
 
 		ETransferResult fp_Receive(void *_pData, umint _nBytes, umint &o_nRead);
 		void fp_ReleasePin(umint _iBuffer);

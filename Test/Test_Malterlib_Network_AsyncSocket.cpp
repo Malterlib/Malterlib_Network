@@ -225,6 +225,7 @@ void fg_SendBeneathRecordLayer(void *_pOSSocket, uint8 const *_pData, umint _nBy
 
 struct CAsyncSocket_Tests : public CTest
 {
+private:
 	void fp_Test(TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories, CStr const &_AcceptError, CStr const &_ConnectError, bool _bTestTimeout = false)
 	{
 		{
@@ -700,7 +701,8 @@ struct CAsyncSocket_Tests : public CTest
 		return bTimedOut;
 	}
 
-	static CAsyncSocketUpgradeCheckResult fp_CheckUpgradeMessage(CPagedByteVector const &_Data, CStr const &_UpgradeMessage)
+public:
+	static CAsyncSocketUpgradeCheckResult fs_CheckUpgradeMessage(CPagedByteVector const &_Data, CStr const &_UpgradeMessage)
 	{
 		CAsyncSocketUpgradeCheckResult Result;
 		if (_Data.f_IsEmpty())
@@ -741,6 +743,7 @@ struct CAsyncSocket_Tests : public CTest
 		return Result;
 	}
 
+private:
 	void fp_TestUpgradeCheckDeferredBytes()
 	{
 		DMibTestPath("Upgrade Check Deferred Bytes");
@@ -798,7 +801,7 @@ struct CAsyncSocket_Tests : public CTest
 			{
 				return [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 					{
-						CAsyncSocketUpgradeCheckResult Result = fp_CheckUpgradeMessage(_Data, "STARTTLS");
+						CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
 						if (Result.m_Result == EAsyncSocketUpgradeCheckResult_Upgrade)
 						{
 							if (auto pState = pStateWeak.f_Lock())
@@ -945,7 +948,7 @@ struct CAsyncSocket_Tests : public CTest
 		;
 		auto fCheckUpgradePrefix = [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 			{
-				CAsyncSocketUpgradeCheckResult Result = fp_CheckUpgradeMessage(_Data, "STARTTLS");
+				CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
 
 				if (Result.m_Result == EAsyncSocketUpgradeCheckResult_MoreDataNeeded && !Result.m_nBytesConsumed && _Data.f_GetLen() == CStr("STAR").f_GetLen())
 				{
@@ -1378,9 +1381,11 @@ struct CAsyncSocket_Tests : public CTest
 		};
 	}
 
+public:
 	// Keep TCP open after corrupting a record so only protocol termination can finish the receive stream.
 	static constexpr umint gc_RetainedDeliveriesMessageBytes = 4 * 1024 * 1024;
 
+private:
 	// A consumer that keeps every delivery until a message is whole must still get the whole message
 	void fp_TestRetainedDeliveries()
 	{
@@ -1757,7 +1762,7 @@ struct CAsyncSocket_Tests : public CTest
 		;
 		auto fUpgradeCheckMessage = [](CPagedByteVector const &_Data, CStr const &_UpgradeMessage) -> CAsyncSocketUpgradeCheckResult
 			{
-				return fp_CheckUpgradeMessage(_Data, _UpgradeMessage);
+				return fs_CheckUpgradeMessage(_Data, _UpgradeMessage);
 			}
 		;
 
@@ -2116,6 +2121,7 @@ struct CAsyncSocket_Tests : public CTest
 		}
 	}
 
+public:
 	void f_DoTests()
 	{
 		DMibTestSuite("Tests")

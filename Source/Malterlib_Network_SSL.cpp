@@ -485,7 +485,7 @@ namespace NMib::NNetwork
 			return mp_Type == CSSLContext::EType_Client;
 		}
 
-		NStorage::TCUniquePointer<CSSLContext::CSession> fp_CreateSession()
+		NStorage::TCUniquePointer<CSSLContext::CSession> f_CreateSession()
 		{
 			return fg_Construct(mp_pContext);
 		}
@@ -1048,7 +1048,7 @@ namespace NMib::NNetwork
 			(
 				[&]() -> decltype(auto)
 				{
-					return mp_pInternal->fp_CreateSession();
+					return mp_pInternal->f_CreateSession();
 				}
 			)
 		;

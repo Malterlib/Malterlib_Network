@@ -157,55 +157,6 @@ namespace
 			;
 		}
 
-		static NContainer::CByteVector fsp_ClientHello(uint32 _MinimumBits, bool _bConfigurePolicy)
-		{
-			using namespace NCryptography::NBoringSSL;
-
-			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_client_method()));
-			if
-			(
-				!Context
-				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
-				|| (_bConfigurePolicy && !SSL_CTX_set_tls13_cipher_policy(Context.get(), _MinimumBits, 1))
-			)
-			{
-				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS client fixture"));
-			}
-
-			bssl::SSL_CTX_set_aes_hw_override_for_testing(Context.get(), true);
-
-			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
-			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
-			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
-			if (!Connection || !Read || !Write)
-				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
-
-			auto *pWrite = Write.get();
-			SSL_set_bio(Connection.get(), Read.release(), Write.release());
-			SSL_set_connect_state(Connection.get());
-
-			ERR_clear_error();
-			auto Result = SSL_connect(Connection.get());
-			if (Result >= 0 || SSL_get_error(Connection.get(), Result) != SSL_ERROR_WANT_READ)
-				DMibErrorCryptography(fg_GetExceptionStr("Could not generate ClientHello fixture"));
-
-			char *pData = nullptr;
-			auto Length = BIO_get_mem_data(pWrite, &pData);
-			if (Length < 5 || uint8(pData[0]) != 22)
-				DMibError("Expected a TLS handshake record");
-
-			umint RecordLength = (umint(uint8(pData[3])) << 8) + uint8(pData[4]) + 5;
-			if (RecordLength > umint(Length))
-				DMibError("Incomplete ClientHello fixture");
-
-			NContainer::CByteVector Bytes;
-			Bytes.f_SetLen(RecordLength);
-			NMemory::fg_MemCopy(Bytes.f_GetArray(), pData, RecordLength);
-
-			return Bytes;
-		}
-
 		static umint fs_CipherOffset(NContainer::CByteVector const &_Hello)
 		{
 			if (_Hello.f_GetLen() < 46 || _Hello[5] != 1)
@@ -258,63 +209,6 @@ namespace
 					}
 				)
 			;
-		}
-
-		static void fsp_CheckServerCipherFilter(CSSLSettings const &_Credentials, bool _bStrict)
-		{
-			using namespace NCryptography::NBoringSSL;
-
-			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_server_method()));
-			if
-			(
-				!Context
-				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_tls13_cipher_policy(Context.get(), _bStrict ? 256 : 0, 1)
-			)
-			{
-				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS server fixture"));
-			}
-
-			bssl::UniquePtr<X509> Certificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
-			bssl::UniquePtr<EVP_PKEY> Key(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
-			if (!SSL_CTX_use_certificate(Context.get(), Certificate.get()) || !SSL_CTX_use_PrivateKey(Context.get(), Key.get()))
-				DMibErrorCryptography(fg_GetExceptionStr("Could not install TLS fixture credentials"));
-
-			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
-			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
-			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
-			if (!Connection || !Read || !Write)
-				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
-
-			auto Hello = fs_AES128OnlyHello();
-			if (BIO_write(Read.get(), Hello.f_GetArray(), int(Hello.f_GetLen())) != int(Hello.f_GetLen()))
-				DMibErrorCryptography(fg_GetExceptionStr("Could not feed ClientHello fixture"));
-
-			SSL_set_bio(Connection.get(), Read.release(), Write.release());
-			SSL_set_accept_state(Connection.get());
-
-			ERR_clear_error();
-			auto Result = SSL_accept(Connection.get());
-			auto Error = SSL_get_error(Connection.get(), Result);
-			auto Reason = ERR_GET_REASON(ERR_peek_last_error());
-			auto Details = fg_GetErrors();
-
-			if (_bStrict)
-			{
-				DMibExpect(Error, ==, SSL_ERROR_SSL)(Details);
-				DMibExpect(Reason, ==, SSL_R_NO_SHARED_CIPHER)(Details);
-			}
-			else
-			{
-				DMibExpect(Error, ==, SSL_ERROR_WANT_READ)(Details);
-
-				auto *pCipher = SSL_get_pending_cipher(Connection.get());
-				DMibAssertTrue(pCipher != nullptr);
-				DMibExpect(SSL_CIPHER_get_bits(pCipher, nullptr), ==, 128);
-			}
-
-			ERR_clear_error();
 		}
 
 		static void fs_CheckInitialKeyShare(CSSLSettings const &_Credentials, NContainer::CByteVector const &_Hello, uint16_t _Group)
@@ -1085,6 +979,113 @@ namespace
 
 				co_return {};
 			};
+		}
+
+	private:
+		static NContainer::CByteVector fsp_ClientHello(uint32 _MinimumBits, bool _bConfigurePolicy)
+		{
+			using namespace NCryptography::NBoringSSL;
+
+			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_client_method()));
+			if
+			(
+				!Context
+				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
+				|| (_bConfigurePolicy && !SSL_CTX_set_tls13_cipher_policy(Context.get(), _MinimumBits, 1))
+			)
+			{
+				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS client fixture"));
+			}
+
+			bssl::SSL_CTX_set_aes_hw_override_for_testing(Context.get(), true);
+
+			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
+			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
+			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
+			if (!Connection || !Read || !Write)
+				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
+
+			auto *pWrite = Write.get();
+			SSL_set_bio(Connection.get(), Read.release(), Write.release());
+			SSL_set_connect_state(Connection.get());
+
+			ERR_clear_error();
+			auto Result = SSL_connect(Connection.get());
+			if (Result >= 0 || SSL_get_error(Connection.get(), Result) != SSL_ERROR_WANT_READ)
+				DMibErrorCryptography(fg_GetExceptionStr("Could not generate ClientHello fixture"));
+
+			char *pData = nullptr;
+			auto Length = BIO_get_mem_data(pWrite, &pData);
+			if (Length < 5 || uint8(pData[0]) != 22)
+				DMibError("Expected a TLS handshake record");
+
+			umint RecordLength = (umint(uint8(pData[3])) << 8) + uint8(pData[4]) + 5;
+			if (RecordLength > umint(Length))
+				DMibError("Incomplete ClientHello fixture");
+
+			NContainer::CByteVector Bytes;
+			Bytes.f_SetLen(RecordLength);
+			NMemory::fg_MemCopy(Bytes.f_GetArray(), pData, RecordLength);
+
+			return Bytes;
+		}
+
+		static void fsp_CheckServerCipherFilter(CSSLSettings const &_Credentials, bool _bStrict)
+		{
+			using namespace NCryptography::NBoringSSL;
+
+			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_server_method()));
+			if
+			(
+				!Context
+				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_tls13_cipher_policy(Context.get(), _bStrict ? 256 : 0, 1)
+			)
+			{
+				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS server fixture"));
+			}
+
+			bssl::UniquePtr<X509> Certificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
+			bssl::UniquePtr<EVP_PKEY> Key(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
+			if (!SSL_CTX_use_certificate(Context.get(), Certificate.get()) || !SSL_CTX_use_PrivateKey(Context.get(), Key.get()))
+				DMibErrorCryptography(fg_GetExceptionStr("Could not install TLS fixture credentials"));
+
+			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
+			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
+			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
+			if (!Connection || !Read || !Write)
+				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
+
+			auto Hello = fs_AES128OnlyHello();
+			if (BIO_write(Read.get(), Hello.f_GetArray(), int(Hello.f_GetLen())) != int(Hello.f_GetLen()))
+				DMibErrorCryptography(fg_GetExceptionStr("Could not feed ClientHello fixture"));
+
+			SSL_set_bio(Connection.get(), Read.release(), Write.release());
+			SSL_set_accept_state(Connection.get());
+
+			ERR_clear_error();
+			auto Result = SSL_accept(Connection.get());
+			auto Error = SSL_get_error(Connection.get(), Result);
+			auto Reason = ERR_GET_REASON(ERR_peek_last_error());
+			auto Details = fg_GetErrors();
+
+			if (_bStrict)
+			{
+				DMibExpect(Error, ==, SSL_ERROR_SSL)(Details);
+				DMibExpect(Reason, ==, SSL_R_NO_SHARED_CIPHER)(Details);
+			}
+			else
+			{
+				DMibExpect(Error, ==, SSL_ERROR_WANT_READ)(Details);
+
+				auto *pCipher = SSL_get_pending_cipher(Connection.get());
+				DMibAssertTrue(pCipher != nullptr);
+				DMibExpect(SSL_CIPHER_get_bits(pCipher, nullptr), ==, 128);
+			}
+
+			ERR_clear_error();
 		}
 	};
 }

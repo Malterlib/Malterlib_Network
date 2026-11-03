@@ -494,7 +494,7 @@ namespace
 
 				CTestPerformance PerfTest(0.015);
 
-				fs_MeasureTransports
+				fsp_MeasureTransports
 					(
 						"Ping"
 						, PerfTest
@@ -541,7 +541,7 @@ namespace
 				uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mc_ChunkSize);
 				uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mc_nTransferBytes);
 
-				fs_MeasureTransports
+				fsp_MeasureTransports
 					(
 						"Thr"
 						, PerfTest
@@ -665,7 +665,7 @@ namespace
 #endif
 		static constexpr uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
 
-		static bool fs_BenchSchemeEnabled(CStr const &_Tag)
+		static bool fsp_BenchSchemeEnabled(CStr const &_Tag)
 		{
 			CStr Schemes = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
 			if (Schemes.f_IsEmpty())
@@ -675,7 +675,7 @@ namespace
 		}
 
 		template <typename tf_FMeasure>
-		static void fs_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
+		static void fsp_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
 		{
 			CStr RootDirectory = NFile::CFile::fs_GetProgramDirectory() / ("AsyncSocketPerf_{}"_f << _SuiteTag);
 			fg_TestAddCleanupPath(RootDirectory);
@@ -686,10 +686,10 @@ namespace
 				}
 			;
 
-			if (fs_BenchSchemeEnabled("unix"))
+			if (fsp_BenchSchemeEnabled("unix"))
 				_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
 
-			if (fs_BenchSchemeEnabled("tcp"))
+			if (fsp_BenchSchemeEnabled("tcp"))
 				_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
 
 			CSSLSettings ServerSettings;
@@ -705,7 +705,7 @@ namespace
 			ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 			TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
 
-			if (fs_BenchSchemeEnabled("tls"))
+			if (fsp_BenchSchemeEnabled("tls"))
 				_fMeasure("tls", fAddress("tls"), CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext));
 
 			DMibExpectTrue(_PerfTest);

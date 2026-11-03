@@ -23,6 +23,7 @@ namespace
 	// Exercise data arrival between a would-block readiness request and kernel arming; level-at-arm must report it.
 	struct CReadinessRace_Tests : public NMib::NTest::CTest
 	{
+	private:
 		void fp_Test(CNetAddress const &_ListenAddress, bool _bTcp)
 		{
 			auto pListen = CSocket_TCP::fs_GetFactory()("");
@@ -122,6 +123,7 @@ namespace
 			pListen->f_Close();
 		}
 
+	public:
 		void f_DoTests()
 		{
 			DMibTestSuite("ReadinessRace Tcp")
