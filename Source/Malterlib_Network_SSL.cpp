@@ -319,9 +319,8 @@ namespace NMib::NNetwork
 	}
 
 	// CSSLContext::CSession methods.
-	class CSSLContext::CSession
+	struct CSSLContext::CSession
 	{
-	public:
 		CSession(SSL_CTX *_pContext)
 			: mp_pSSL(nullptr)
 			, mp_pContext(_pContext)
@@ -366,9 +365,8 @@ namespace NMib::NNetwork
 	};
 
 	// CSSLContext methods
-	class CSSLContext::CInternal
+	struct CSSLContext::CInternal
 	{
-	public:
 		CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 			: mp_pContext(nullptr)
 			, mp_Type(_Type)
@@ -1141,9 +1139,8 @@ namespace NMib::NNetwork
 	}
 
 	// CSSLConnection methods.
-	class CSSLConnection::CInternal
+	struct CSSLConnection::CInternal
 	{
-	public:
 		CInternal
 			(
 				CSSLConnection *_pSSL

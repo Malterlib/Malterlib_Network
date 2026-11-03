@@ -223,9 +223,8 @@ void fg_SendBeneathRecordLayer(void *_pOSSocket, uint8 const *_pData, umint _nBy
 	}
 }
 
-class CAsyncSocket_Tests : public CTest
+struct CAsyncSocket_Tests : public CTest
 {
-public:
 	void fp_Test(TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories, CStr const &_AcceptError, CStr const &_ConnectError, bool _bTestTimeout = false)
 	{
 		{

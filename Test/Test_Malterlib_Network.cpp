@@ -53,9 +53,8 @@ using namespace NMib::NTime;
 
 static fp32 const gc_Timeout = 60.0f;
 
-class CSysNet_Tests : public NMib::NTest::CTest
+struct CSysNet_Tests : public NMib::NTest::CTest
 {
-public:
 	template <typename t_CNetAddress, typename t_CNotNetAddress>
 	void f_TestAddress(t_CNetAddress const &_Localhost, t_CNotNetAddress const &_Other)
 	{

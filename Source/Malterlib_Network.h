@@ -90,9 +90,8 @@
 
 namespace NMib::NNetwork
 {
-	class CNetAddressIPv4
+	struct CNetAddressIPv4
 	{
-	public:
 		uint8 m_IP[4] = {};
 
 		CNetAddressIPv4() = default;
@@ -136,9 +135,8 @@ namespace NMib::NNetwork
 		}
 	};
 
-	class CNetAddressIPv6
+	struct CNetAddressIPv6
 	{
-	public:
 		uint8 m_IP[16] = {};
 
 		CNetAddressIPv6() = default;
@@ -204,9 +202,8 @@ namespace NMib::NNetwork
 	};
 
 	template <typename t_CIPAddress, ENetAddressType t_Type>
-	class TCNetAddressTCP : public t_CIPAddress
+	struct TCNetAddressTCP : public t_CIPAddress
 	{
-	public:
 		uint16 m_Port;
 
 		static constexpr ENetAddressType mc_Type = t_Type;
@@ -272,7 +269,7 @@ namespace NMib::NNetwork
 		, ENetFlag_ReusePort = DMibBit(0) // Reuse port, allowing several sockets to bind to the same port
 	};
 
-	class CNetAddress;
+	struct CNetAddress;
 
 	// Runs when send buffers are reusable, carrying the submitter's transfer ID or mc_iTransferNone.
 	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
@@ -286,9 +283,8 @@ namespace NMib::NNetwork
 namespace NMib::NStream
 {
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4>
+	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4>
 	{
-	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
@@ -303,9 +299,8 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4>
+	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4>
 	{
-	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
@@ -318,9 +313,8 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6>
+	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6>
 	{
-	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
@@ -335,9 +329,8 @@ namespace NMib::NStream
 	};
 
 	template <typename t_CStream>
-	class TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6>
+	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6>
 	{
-	public:
 		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data)
 		{
 			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
@@ -470,7 +463,7 @@ namespace NMib::NSys::NNetwork
 
 namespace NMib::NNetwork
 {
-	class CNetAddress
+	struct CNetAddress
 	{
 	protected:
 		NMib::NSys::NNetwork::CAddress mp_Address;
@@ -698,11 +691,6 @@ namespace NMib::NNetwork
 
 	struct CAsyncResolver
 	{
-	private:
-		void *mp_pResolver;
-		void fp_CheckValid() const;
-
-	public:
 		CAsyncResolver(CAsyncResolver const &) = delete;
 		CAsyncResolver &operator = (CAsyncResolver const &) = delete;
 
@@ -723,6 +711,10 @@ namespace NMib::NNetwork
 		void f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
 		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error);
+
+	private:
+		void *mp_pResolver;
+		void fp_CheckValid() const;
 	};
 
 	struct CSocketOperationResult
@@ -734,45 +726,8 @@ namespace NMib::NNetwork
 		CSocketOperationResult &operator += (CSocketOperationResult const &_Other);
 	};
 
-	class CSocket
+	struct CSocket
 	{
-		void *mp_pSocket;
-
-		umint mp_nSendWindowBytes = 0; // Retained before creation, then applied to the platform socket.
-		bool mp_bSendWindowConfigured = false;
-		bool mp_bInheritable = false;
-
-		void fp_ApplyInheritable()
-		{
-			if (mp_pSocket && mp_bInheritable)
-				NMib::NSys::NNetwork::fg_SetInheritable(mp_pSocket);
-		}
-
-		void fp_ApplySendWindow()
-		{
-			if (mp_pSocket && mp_nSendWindowBytes)
-				NMib::NSys::NNetwork::fg_SetSendWindow(mp_pSocket, mp_nSendWindowBytes, mp_bSendWindowConfigured);
-		}
-
-		void fp_CheckSocket() const;
-
-		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			if (_pReportTo)
-			{
-				return [_pReportTo](::NMib::NNetwork::ENetTCPState _StateAdded)
-					{
-						_pReportTo->f_Signal();
-					}
-				;
-			}
-			return NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
-		}
-
-		CSocket(CSocket const &_Other);
-		CSocket &operator = (CSocket const &_Other);
-
-	public:
 		CSocket()
 		{
 			mp_pSocket = nullptr;
@@ -1142,6 +1097,42 @@ namespace NMib::NNetwork
 		}
 
 	private:
+		void *mp_pSocket;
+
+		umint mp_nSendWindowBytes = 0; // Retained before creation, then applied to the platform socket.
+		bool mp_bSendWindowConfigured = false;
+		bool mp_bInheritable = false;
+
+		void fp_ApplyInheritable()
+		{
+			if (mp_pSocket && mp_bInheritable)
+				NMib::NSys::NNetwork::fg_SetInheritable(mp_pSocket);
+		}
+
+		void fp_ApplySendWindow()
+		{
+			if (mp_pSocket && mp_nSendWindowBytes)
+				NMib::NSys::NNetwork::fg_SetSendWindow(mp_pSocket, mp_nSendWindowBytes, mp_bSendWindowConfigured);
+		}
+
+		void fp_CheckSocket() const;
+
+		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
+		{
+			if (_pReportTo)
+			{
+				return [_pReportTo](::NMib::NNetwork::ENetTCPState _StateAdded)
+					{
+						_pReportTo->f_Signal();
+					}
+				;
+			}
+			return NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
+		}
+
+		CSocket(CSocket const &_Other);
+		CSocket &operator = (CSocket const &_Other);
+
 		static NContainer::TCVector<CNetAddress> fsp_AdoptAddresses(NContainer::TCVector<NMib::NSys::NNetwork::CAddress> &&_Addresses);
 	};
 

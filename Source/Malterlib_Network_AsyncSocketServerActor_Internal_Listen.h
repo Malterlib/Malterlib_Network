@@ -10,9 +10,8 @@
 
 namespace NMib::NNetwork::NAsyncSocket
 {
-	class CListenActor : public NConcurrency::CActor
+	struct CListenActor : public NConcurrency::CActor
 	{
-	public:
 		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep accept work on the connection actors' pool.
 
 		CListenActor

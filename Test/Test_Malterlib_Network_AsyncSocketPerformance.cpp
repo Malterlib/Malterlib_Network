@@ -484,66 +484,8 @@ namespace
 		Driver->f_BlockDestroy(_RunLoopHelper.m_pRunLoop->f_ActorDestroyLoop());
 	}
 
-	class CAsyncSocketPerformance_Tests : public CTest
+	struct CAsyncSocketPerformance_Tests : public CTest
 	{
-#if defined(DMibDebug) || defined(DMibSanitizerEnabled)
-		static constexpr uint64 mc_nTransferBytes = 8ull << 20;
-		static constexpr umint mc_nPingRoundTrips = 128;
-		static constexpr umint mc_nRepetitions = 3;
-#else
-		static constexpr uint64 mc_nTransferBytes = 8 * (1024ull << 20);
-		static constexpr umint mc_nPingRoundTrips = 4 * 16384;
-		static constexpr umint mc_nRepetitions = 5;
-#endif
-		static constexpr uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
-
-		static bool fs_BenchSchemeEnabled(CStr const &_Tag)
-		{
-			CStr Schemes = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
-			if (Schemes.f_IsEmpty())
-				return true;
-
-			return ("," + Schemes + ",").f_Find("," + _Tag + ",") >= 0;
-		}
-
-		template <typename tf_FMeasure>
-		static void fs_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
-		{
-			CStr RootDirectory = NFile::CFile::fs_GetProgramDirectory() / ("AsyncSocketPerf_{}"_f << _SuiteTag);
-			fg_TestAddCleanupPath(RootDirectory);
-
-			auto fAddress = [&](CStr const &_Tag)
-				{
-					return "UNIX:" + fg_GetSafeUnixSocketPath("{}/{}_{}.socket"_f << RootDirectory << _SuiteTag << _Tag);
-				}
-			;
-
-			if (fs_BenchSchemeEnabled("unix"))
-				_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
-
-			if (fs_BenchSchemeEnabled("tcp"))
-				_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
-
-			CSSLSettings ServerSettings;
-			CCertificateOptions Options;
-			Options.m_CommonName = "Malterlib async socket benchmark";
-			Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-			Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
-			CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-			TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-			CSSLSettings ClientSettings;
-			ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-			ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-			TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-			if (fs_BenchSchemeEnabled("tls"))
-				_fMeasure("tls", fAddress("tls"), CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext));
-
-			DMibExpectTrue(_PerfTest);
-		}
-
-	public:
 		void f_DoTests()
 		{
 			DMibTestSuite(CTestCategory("AsyncSocketPing") << CTestGroup("Performance"))
@@ -709,6 +651,64 @@ namespace
 					DMibExpectTrue(PerfTest);
 				}
 			};
+		}
+
+	private:
+#if defined(DMibDebug) || defined(DMibSanitizerEnabled)
+		static constexpr uint64 mc_nTransferBytes = 8ull << 20;
+		static constexpr umint mc_nPingRoundTrips = 128;
+		static constexpr umint mc_nRepetitions = 3;
+#else
+		static constexpr uint64 mc_nTransferBytes = 8 * (1024ull << 20);
+		static constexpr umint mc_nPingRoundTrips = 4 * 16384;
+		static constexpr umint mc_nRepetitions = 5;
+#endif
+		static constexpr uint32 mc_ChunkSize = NFile::gc_IdealIoSize;
+
+		static bool fs_BenchSchemeEnabled(CStr const &_Tag)
+		{
+			CStr Schemes = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
+			if (Schemes.f_IsEmpty())
+				return true;
+
+			return ("," + Schemes + ",").f_Find("," + _Tag + ",") >= 0;
+		}
+
+		template <typename tf_FMeasure>
+		static void fs_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
+		{
+			CStr RootDirectory = NFile::CFile::fs_GetProgramDirectory() / ("AsyncSocketPerf_{}"_f << _SuiteTag);
+			fg_TestAddCleanupPath(RootDirectory);
+
+			auto fAddress = [&](CStr const &_Tag)
+				{
+					return "UNIX:" + fg_GetSafeUnixSocketPath("{}/{}_{}.socket"_f << RootDirectory << _SuiteTag << _Tag);
+				}
+			;
+
+			if (fs_BenchSchemeEnabled("unix"))
+				_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
+
+			if (fs_BenchSchemeEnabled("tcp"))
+				_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
+
+			CSSLSettings ServerSettings;
+			CCertificateOptions Options;
+			Options.m_CommonName = "Malterlib async socket benchmark";
+			Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+			Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
+			CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+			TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+			CSSLSettings ClientSettings;
+			ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+			ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+			TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+			if (fs_BenchSchemeEnabled("tls"))
+				_fMeasure("tls", fAddress("tls"), CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext));
+
+			DMibExpectTrue(_PerfTest);
 		}
 	};
 

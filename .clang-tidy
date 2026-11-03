@@ -6,7 +6,6 @@ Checks: >-
   -*,
   malterlib-*,
   -malterlib-header-declarations-only,
-  -malterlib-struct-not-class,
   -malterlib-variable-naming,
   -malterlib-function-naming,
   -malterlib-parameter-naming,

@@ -19,12 +19,8 @@ namespace NMib::NNetwork
 	NStr::CStr fg_FormatSocketIoError(int32 _Error);
 
 	// Owns a handed-off descriptor until adoption; dropping an abandoned upgrade closes it.
-	class CInheritedSocketHandle
+	struct CInheritedSocketHandle
 	{
-		CInheritedSocketHandle(CInheritedSocketHandle const &) = delete;
-		CInheritedSocketHandle &operator = (CInheritedSocketHandle const &) = delete;
-
-	public:
 		CInheritedSocketHandle() = default;
 		explicit CInheritedSocketHandle(void *_pSocketHandle);
 		CInheritedSocketHandle(CInheritedSocketHandle &&_Other);
@@ -34,6 +30,9 @@ namespace NMib::NNetwork
 		void *f_Detach();
 
 	private:
+		CInheritedSocketHandle(CInheritedSocketHandle const &) = delete;
+		CInheritedSocketHandle &operator = (CInheritedSocketHandle const &) = delete;
+
 		void *mp_pSocketHandle = nullptr;
 		bool mp_bOwned = false;
 	};
@@ -82,9 +81,8 @@ namespace NMib::NNetwork
 		virtual bool f_HasPendingOutput() const;
 	};
 
-	class ICSocket
+	struct ICSocket
 	{
-	public:
 		virtual ~ICSocket()
 		{
 		}

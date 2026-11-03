@@ -48,10 +48,10 @@ namespace NMib::NNetwork
 
 	namespace NAsyncSocket
 	{
-		class CListenActor;
+		struct CListenActor;
 	}
-	class CAsyncSocketServerActor;
-	class CAsyncSocketClientActor;
+	struct CAsyncSocketServerActor;
+	struct CAsyncSocketClientActor;
 
 	struct CAsyncSocketNewConnection;
 	struct CAsyncSocketNewServerConnection;
@@ -63,9 +63,8 @@ namespace NMib::NNetwork
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
 	};
 
-	class CAsyncSocketActor : public NConcurrency::CActor
+	struct CAsyncSocketActor : public NConcurrency::CActor
 	{
-	public:
 		struct CCloseInfo
 		{
 			EAsyncSocketStatus m_Status = EAsyncSocketStatus_None;
@@ -100,12 +99,12 @@ namespace NMib::NNetwork
 		NConcurrency::TCFuture<void> f_DebugStopProcessing(fp64 _Timeout);
 #endif
 	private:
-		friend class NAsyncSocket::CListenActor;
-		friend class CAsyncSocketServerActor;
+		friend struct NAsyncSocket::CListenActor;
+		friend struct CAsyncSocketServerActor;
 		friend struct CAsyncSocketNewConnection;
 		friend struct CAsyncSocketNewServerConnection;
 		friend struct CAsyncSocketNewClientConnection;
-		friend class CAsyncSocketClientActor;
+		friend struct CAsyncSocketClientActor;
 
 		enum EFinishConnectionResult
 		{
@@ -209,9 +208,8 @@ namespace NMib::NNetwork
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection const &_Other);
 	};
 
-	class CAsyncSocketClientActor : public NConcurrency::CActor
+	struct CAsyncSocketClientActor : public NConcurrency::CActor
 	{
-	public:
 		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
 		CAsyncSocketClientActor();
@@ -270,11 +268,8 @@ namespace NMib::NNetwork
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketActor::CConnectionInfo _ConnectionInfo)> m_fFailedConnection;
 	};
 
-	class CAsyncSocketServerActor : public NConcurrency::CActor
+	struct CAsyncSocketServerActor : public NConcurrency::CActor
 	{
-		friend class NAsyncSocket::CListenActor;
-
-	public:
 		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
 		CAsyncSocketServerActor();
@@ -322,6 +317,8 @@ namespace NMib::NNetwork
 		struct CInternal;
 
 	private:
+		friend struct NAsyncSocket::CListenActor;
+
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 	};
 }

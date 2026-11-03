@@ -21,12 +21,8 @@ namespace NMib::NNetwork
 		bool m_bHelloRetryRequest = false;
 	};
 
-	class CSocket_SSL final : public ICSocket, public ICSocketCompletionIo
+	struct CSocket_SSL final : public ICSocket, public ICSocketCompletionIo
 	{
-		CSocket_SSL(CSocket_SSL const &) = delete;
-		CSocket_SSL &operator = (CSocket_SSL const &) = delete;
-
-	public:
 		CSocket_SSL
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
@@ -130,6 +126,9 @@ namespace NMib::NNetwork
 		;
 
 	private:
+		CSocket_SSL(CSocket_SSL const &) = delete;
+		CSocket_SSL &operator = (CSocket_SSL const &) = delete;
+
 		enum EState
 		{
 			EState_None

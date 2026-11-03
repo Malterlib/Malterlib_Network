@@ -113,9 +113,8 @@ namespace NMib::NNetwork
 		NCryptography::ECryptoStrength m_MinimumCryptoStrength = NCryptography::ECryptoStrength::mc_Compatible;
 	};
 
-	class CSSLConnectionResult
+	struct CSSLConnectionResult
 	{
-	public:
 		enum EMiscError
 		{
 			EMiscError_HostnameMisMatch = 5000
@@ -213,12 +212,11 @@ namespace NMib::NNetwork
 		bool mp_bConnectionRefused;
 	};
 
-	class CSSLContext;
+	struct CSSLContext;
 
-	class CSSLConnection
+	struct CSSLConnection
 	{
-	public:
-		class CInternal;
+		struct CInternal;
 
 		enum EAuthenticationResult
 		{
@@ -348,9 +346,8 @@ namespace NMib::NNetwork
 		CSSLConnectionResult mp_Result;
 	};
 
-	class CSSLContext
+	struct CSSLContext
 	{
-	public:
 		enum EType
 		{
 			EType_Client
@@ -383,14 +380,14 @@ namespace NMib::NNetwork
 		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 		bool f_CanAskUserToTrustServers() const;
 
-		class CInternal;
+		struct CInternal;
 
 	protected:
-		class CSession;
+		struct CSession;
 		NStorage::TCUniquePointer<CSession> fp_CreateSession();
 
-		friend class CSSLConnectionResult;
-		friend class CSSLConnection::CInternal;
+		friend struct CSSLConnectionResult;
+		friend struct CSSLConnection::CInternal;
 
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 	};

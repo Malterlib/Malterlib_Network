@@ -8,12 +8,8 @@
 
 namespace NMib::NNetwork
 {
-	class CSocket_TCP final : public ICSocket, public ICSocketCompletionIo
+	struct CSocket_TCP final : public ICSocket, public ICSocketCompletionIo
 	{
-		CSocket_TCP(CSocket_TCP const &) = delete;
-		CSocket_TCP &operator = (CSocket_TCP const &) = delete;
-
-	public:
 		CSocket_TCP();
 		virtual ~CSocket_TCP() override;
 		CSocket_TCP(CSocket_TCP &&_Other);
@@ -96,6 +92,9 @@ namespace NMib::NNetwork
 		static FVirtualSocketFactory fs_GetFactory();
 
 	private:
+		CSocket_TCP(CSocket_TCP const &) = delete;
+		CSocket_TCP &operator = (CSocket_TCP const &) = delete;
+
 		CSocket mp_Socket;
 		umint mp_nTransferSizeHint = 0;
 	};
