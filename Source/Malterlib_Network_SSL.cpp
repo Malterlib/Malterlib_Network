@@ -49,22 +49,22 @@ namespace NMib::NNetwork
 			return NSys::fg_ResolveIoKnob(_pIo->f_SslCompletionIoReceive(), DMibConfig_SSLCompletionIoReceive != 0);
 		}
 #else
-		constexpr bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *)
+		constexpr bool fg_SendBatchingEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
 			return DMibConfig_SSLSendBatching != 0;
 		}
 
-		constexpr bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *)
+		constexpr bool fg_ZeroCopyEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
 			return DMibConfig_SSLZeroCopy != 0;
 		}
 
-		constexpr bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *)
+		constexpr bool fg_CompletionIoSendEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
 			return DMibConfig_SSLCompletionIoSend != 0;
 		}
 
-		constexpr bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *)
+		constexpr bool fg_CompletionIoReceiveEnabled(NMib::NSys::CIoSubSystem *_pIo)
 		{
 			return DMibConfig_SSLCompletionIoReceive != 0;
 		}

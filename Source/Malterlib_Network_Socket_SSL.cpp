@@ -367,7 +367,7 @@ namespace NMib::NNetwork
 		return NMib::NSys::fg_ResolveIoKnob(_pIo->f_SslSealAhead(), true);
 	}
 #else
-	static constexpr bool fsg_SealAheadEnabled(NMib::NSys::CIoSubSystem *)
+	static constexpr bool fsg_SealAheadEnabled(NMib::NSys::CIoSubSystem *_pIo)
 	{
 		return true;
 	}
