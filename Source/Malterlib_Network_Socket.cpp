@@ -91,7 +91,7 @@ namespace NMib::NNetwork
 	}
 
 	// Continue the retained transfer with no new plaintext; false is terminal refusal.
-	bool ICSocketCompletionIo::f_ContinueSend(NSys::FIoCompletion &&, FSocketSendReleased &&)
+	bool ICSocketCompletionIo::f_ContinueSend(NSys::FIoCompletion &&_fOnComplete, FSocketSendReleased &&_fOnReleased)
 	{
 		return false;
 	}
@@ -103,7 +103,7 @@ namespace NMib::NNetwork
 	}
 
 	// Ask before gathering and after release; a staging transport applies its own window and returns false.
-	bool ICSocketCompletionIo::f_IsSendWindowFull(umint, umint)
+	bool ICSocketCompletionIo::f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
 	{
 		return false;
 	}
@@ -131,24 +131,24 @@ namespace NMib::NNetwork
 	}
 
 	// Resolve wire progress on the owner thread; false requests continuation without releasing the retained transfer.
-	bool ICSocketCompletionIo::f_ResolveSend(NSys::CIoCompletion &)
+	bool ICSocketCompletionIo::f_ResolveSend(NSys::CIoCompletion &_Result)
 	{
 		return true;
 	}
 
 	// Release transport pins on the owner thread after the kernel release callback.
-	void ICSocketCompletionIo::f_ResolveSendRelease(umint)
+	void ICSocketCompletionIo::f_ResolveSendRelease(umint _iTransfer)
 	{
 	}
 
 	// Returns a retaining payload view for pass-through data segments; false for terminal or processing segments.
-	bool ICSocketCompletionIo::f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &, NContainer::CSharedByteVector &, NSys::CIoCompletion &)
+	bool ICSocketCompletionIo::f_ResolveReceiveSegmentShared(NSys::CIoStreamSegment &_Segment, NContainer::CSharedByteVector &o_Data, NSys::CIoCompletion &o_Result)
 	{
 		return false;
 	}
 
 	// Drain held plaintext before accepting the next segment; false means no more held output.
-	bool ICSocketCompletionIo::f_ResolveHeld(void *, umint, NSys::CIoCompletion &)
+	bool ICSocketCompletionIo::f_ResolveHeld(void *_pDestination, umint _nDestination, NSys::CIoCompletion &o_Result)
 	{
 		return false;
 	}
@@ -194,12 +194,12 @@ namespace NMib::NNetwork
 	}
 
 	// Sizes transport-owned buffering from a typical payload transfer; pass-through transports ignore it.
-	void ICSocket::f_SetTransferSizeHint(umint)
+	void ICSocket::f_SetTransferSizeHint(umint _nBytes)
 	{
 	}
 
 	// Bounds unreleased bytes and platform buffers. A default window leaves adequate platform autotuning alone; listeners propagate settings.
-	void ICSocket::f_SetSendWindow(umint, bool)
+	void ICSocket::f_SetSendWindow(umint _nBytes, bool _bConfigured)
 	{
 	}
 
@@ -216,13 +216,13 @@ namespace NMib::NNetwork
 	}
 
 	// Adopt an already-connected platform socket while retaining its registration.
-	void ICSocket::f_AdoptSocket(CSocket &&, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&)
+	void ICSocket::f_AdoptSocket(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		DMibErrorNet("This transport cannot take over a socket");
 	}
 
 	// Returns false until delivery-rate data is available. Application-limited samples must not shrink the window.
-	bool ICSocket::f_QueryPathDeliveryRate(umint &, bool &)
+	bool ICSocket::f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
 	{
 		return false;
 	}

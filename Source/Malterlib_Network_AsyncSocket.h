@@ -190,8 +190,8 @@ namespace NMib::NNetwork
 		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection &&_Other);
 
 	private:
-		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection const &);
-		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection &&);
+		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection const &_Other);
+		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection &&_Other);
 		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection const &_Other);
 	};
 
@@ -203,8 +203,8 @@ namespace NMib::NNetwork
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection &&_Other);
 
 	private:
-		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection const &);
-		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection &&);
+		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection const &_Other);
+		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection &&_Other);
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection const &_Other);
 	};
 

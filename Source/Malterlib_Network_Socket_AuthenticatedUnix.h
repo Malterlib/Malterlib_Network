@@ -41,8 +41,8 @@ namespace NMib::NNetwork
 	// Completion requires mutual acceptance; connection info uses CSocketConnectionInfo_SSL.
 	struct CSocket_AuthenticatedUnix final : public ICSocket, public ICSocketCompletionIo
 	{
-		CSocket_AuthenticatedUnix(CSocket_AuthenticatedUnix const &) = delete;
-		CSocket_AuthenticatedUnix &operator = (CSocket_AuthenticatedUnix const &) = delete;
+		CSocket_AuthenticatedUnix(CSocket_AuthenticatedUnix const &_Other) = delete;
+		CSocket_AuthenticatedUnix &operator = (CSocket_AuthenticatedUnix const &_Other) = delete;
 
 		CSocket_AuthenticatedUnix(NStorage::TCSharedPointer<CAuthenticatedUnixContext> const &_pContext);
 		virtual ~CSocket_AuthenticatedUnix() override;

@@ -15,7 +15,7 @@ namespace NMib::NNetwork
 		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
 
 		using CAddresses = NContainer::TCVector<CNetAddress>;
-		using FHostResolver = NFunction::TCFunction<CAddresses (NStr::CStr const &, ENetAddressType)>;
+		using FHostResolver = NFunction::TCFunction<CAddresses (NStr::CStr const &_Host, ENetAddressType _PreferType)>;
 
 		CResolveActor(FHostResolver const &_fHostResolver = {}, umint _MaxConcurrent = 4, CNetAddress const &_NameServer = {});
 		~CResolveActor();
@@ -45,11 +45,11 @@ namespace NMib::NNetwork
 		void fp_SocketReady(smint _Socket, uint64 _Generation, NSys::EIoLoopEvent _Events, int _Error);
 		NConcurrency::TCFuture<void> fp_SetTimer(uint64 _Generation, fp64 _Seconds);
 
-		template <typename t_CResult, typename tf_FResolve>
-		TCLookup<t_CResult> fp_Start(tf_FResolve &&_fResolve);
+		template <typename tf_CResult, typename tf_FResolve>
+		TCLookup<tf_CResult> fp_Start(tf_FResolve &&_fResolve);
 
-		template <typename t_CResult, typename tf_FResolve>
-		NConcurrency::TCFuture<t_CResult> fp_Resolve(uint64 _ID, tf_FResolve _fResolve);
+		template <typename tf_CResult, typename tf_FResolve>
+		NConcurrency::TCFuture<tf_CResult> fp_Resolve(uint64 _ID, tf_FResolve _fResolve);
 
 		void fp_Cancel(uint64 _ID);
 		NConcurrency::TCFuture<void> fp_Destroy() override;

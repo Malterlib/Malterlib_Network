@@ -246,8 +246,8 @@ namespace NMib::NNetwork
 			CSendBatch(CSSLConnection &_Connection);
 			~CSendBatch();
 
-			CSendBatch(CSendBatch const &) = delete;
-			CSendBatch &operator = (CSendBatch const &) = delete;
+			CSendBatch(CSendBatch const &_Other) = delete;
+			CSendBatch &operator = (CSendBatch const &_Other) = delete;
 
 		protected:
 			CSSLConnection &mp_Connection;

@@ -72,32 +72,32 @@ namespace
 			m_pSocket->f_SetAbortOnClose();
 		}
 
-		void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
+		void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
 		{
 			m_pSocket->f_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
 		}
 
-		void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
+		void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
 		{
 			m_pSocket->f_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
 		}
 
-		void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, ENetFlag _Flags) override
+		void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
 		{
 			m_pSocket->f_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
 		}
 
-		void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange, ENetFlag _Flags) override
+		void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
 		{
 			m_pSocket->f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
 		}
 
-		TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 			return m_pSocket->f_Accept(fg_Move(_fOnStateChange));
 		}
 
-		void f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		void f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 			m_pSocket->f_InheritHandle(_pHandle, fg_Move(_fOnStateChange));
 		}
@@ -112,7 +112,7 @@ namespace
 			return m_pSocket->f_GetOSSocket();
 		}
 
-		void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 			m_pSocket->f_SetOnStateChange(fg_Move(_fOnStateChange));
 		}
@@ -180,7 +180,7 @@ namespace
 			m_pSocket->f_SetSendWindow(_nBytes, _bConfigured);
 		}
 
-		void f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState)> &&_fOnStateChange) override
+		void f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 			m_pSocket->f_AdoptSocket(fg_Move(_Socket), fg_Move(_fOnStateChange));
 		}
@@ -1643,7 +1643,7 @@ private:
 		pClient->f_Connect
 			(
 				CNetAddress(ConnectAddress)
-				, [](ENetTCPState)
+				, [](ENetTCPState _StateAdded)
 				{
 				}
 				, CNetAddress()

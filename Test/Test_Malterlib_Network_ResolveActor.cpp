@@ -164,7 +164,7 @@ namespace
 					}
 				;
 
-				CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType)
+				CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
 					{
 						if (_Host == "cancelled.test")
 							pState->CancelledStarted.f_FetchAdd(1);
@@ -241,7 +241,7 @@ namespace
 						}
 					;
 
-					CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &, ENetAddressType)
+					CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
 						{
 							pState->Started.f_SetResult();
 							pState->Release.f_Wait();

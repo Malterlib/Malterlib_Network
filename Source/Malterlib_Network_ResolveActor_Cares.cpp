@@ -174,7 +174,7 @@ namespace NMib::NNetwork
 		;
 	}
 
-	void CResolveActor::CInternal::fs_Reply(void *_pData, int _Status, int, ares_addrinfo *_pResult) noexcept
+	void CResolveActor::CInternal::fs_Reply(void *_pData, int _Status, int _Timeouts, ares_addrinfo *_pResult) noexcept
 	{
 		TCUniquePointer<CQuery> Query = fg_Explicit(static_cast<CQuery *>(_pData));
 		auto Cleanup = g_OnScopeExit / [_pResult]

@@ -134,7 +134,7 @@ namespace
 		{
 			auto pAccepted = _pListen->f_Accept
 				(
-					[](ENetTCPState)
+					[](ENetTCPState _StateAdded)
 					{
 					}
 				)
@@ -339,7 +339,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pListen->f_Listen
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, ENetFlag_None
@@ -350,7 +350,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pClient->f_Connect
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, CNetAddress()
@@ -382,7 +382,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pListen->f_Listen
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, ENetFlag_None
@@ -393,7 +393,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pClient->f_Connect
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, CNetAddress()
@@ -443,7 +443,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pListen->f_Listen
 					(
 						ListenAddress
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, ENetFlag_None
@@ -462,7 +462,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pClient->f_Connect
 					(
 						ConnectAddress
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, CNetAddress()
@@ -497,7 +497,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pListen->f_Listen
 					(
 						ListenAddress
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, ENetFlag_None
@@ -515,7 +515,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				pClient->f_Connect
 					(
 						ConnectAddress
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, CNetAddress()
@@ -561,7 +561,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 			pListen->f_Listen
 				(
 					ServerAddress
-					, [](ENetTCPState)
+					, [](ENetTCPState _StateAdded)
 					{
 					}
 					, ENetFlag_None
@@ -604,7 +604,7 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 						pAttempt->f_Connect
 							(
 								ClientAddress
-								, [](ENetTCPState)
+								, [](ENetTCPState _StateAdded)
 								{
 								}
 								, CNetAddress()

@@ -30,7 +30,7 @@ namespace
 			pListen->f_Listen
 				(
 					_ListenAddress
-					, [](ENetTCPState)
+					, [](ENetTCPState _StateAdded)
 					{
 					}
 					, ENetFlag_None
@@ -50,7 +50,7 @@ namespace
 			pClient->f_Connect
 				(
 					ConnectAddress
-					, [](ENetTCPState)
+					, [](ENetTCPState _StateAdded)
 					{
 					}
 					, CNetAddress()

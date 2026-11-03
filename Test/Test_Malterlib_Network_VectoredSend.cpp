@@ -66,28 +66,28 @@ namespace
 		{
 		}
 
-		virtual void f_Connect(CNetAddress const &, NFunction::TCFunctionMovable<void (ENetTCPState)> &&, CNetAddress const &) override
+		virtual void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
 		{
 		}
 
-		virtual void f_AsyncConnect(CNetAddress const &, NFunction::TCFunctionMovable<void (ENetTCPState)> &&, CNetAddress const &) override
+		virtual void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
 		{
 		}
 
-		virtual void f_Listen(CNetAddress const &, NFunction::TCFunctionMovable<void (ENetTCPState)> &&, ENetFlag) override
+		virtual void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
 		{
 		}
 
-		virtual void f_ListenDatagram(CNetAddress const &, NFunction::TCFunctionMovable<void (ENetTCPState)> &&, ENetFlag) override
+		virtual void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
 		{
 		}
 
-		virtual TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState)> &&) override
+		virtual TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 			return nullptr;
 		}
 
-		virtual void f_InheritHandle(void *, NFunction::TCFunctionMovable<void (ENetTCPState)> &&) override
+		virtual void f_InheritHandle(void *_pSocketHandle, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 		}
 
@@ -101,7 +101,7 @@ namespace
 			return nullptr;
 		}
 
-		virtual void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState)> &&) override
+		virtual void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
 		{
 		}
 
@@ -115,17 +115,17 @@ namespace
 			return {};
 		}
 
-		virtual CSocketOperationResult f_Receive(void *, umint) override
+		virtual CSocketOperationResult f_Receive(void *_pData, umint _DataLen) override
 		{
 			return {};
 		}
 
-		virtual umint f_SendDatagram(CNetAddress const &, void const *, umint) override
+		virtual umint f_SendDatagram(CNetAddress const &_Address, void const *_pData, umint _DataLen) override
 		{
 			return 0;
 		}
 
-		virtual umint f_ReceiveDatagram(CNetAddress &, void *, umint) override
+		virtual umint f_ReceiveDatagram(CNetAddress &_Address, void *_pData, umint _DataLen) override
 		{
 			return 0;
 		}
@@ -204,7 +204,7 @@ namespace
 				pListen->f_Listen
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, ENetFlag_None
@@ -215,7 +215,7 @@ namespace
 				pClient->f_Connect
 					(
 						Address
-						, [](ENetTCPState)
+						, [](ENetTCPState _StateAdded)
 						{
 						}
 						, CNetAddress()
@@ -229,7 +229,7 @@ namespace
 					{
 						pServer = pListen->f_Accept
 							(
-								[](ENetTCPState)
+								[](ENetTCPState _StateAdded)
 								{
 								}
 							)

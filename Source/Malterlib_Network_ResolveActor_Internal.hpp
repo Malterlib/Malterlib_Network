@@ -8,11 +8,11 @@ namespace NMib::NNetwork
 	using namespace NConcurrency;
 	using namespace NStorage;
 
-	template <typename t_CResult, typename tf_FResolve>
-	auto CResolveActor::fp_Start(tf_FResolve &&_fResolve) -> TCLookup<t_CResult>
+	template <typename tf_CResult, typename tf_FResolve>
+	auto CResolveActor::fp_Start(tf_FResolve &&_fResolve) -> TCLookup<tf_CResult>
 	{
-		TCPromise<t_CResult> Promise;
-		TCLookup<t_CResult> Lookup;
+		TCPromise<tf_CResult> Promise;
+		TCLookup<tf_CResult> Lookup;
 		Lookup.m_Result = Promise.f_Future();
 
 		if (f_IsDestroyed())
@@ -35,7 +35,7 @@ namespace NMib::NNetwork
 			}
 		;
 
-		_fResolve(ID) > [this, ID, Promise](TCAsyncResult<t_CResult> &&_Result)
+		_fResolve(ID) > [this, ID, Promise](TCAsyncResult<tf_CResult> &&_Result)
 			{
 				if (!mp_Pending.f_FindEqual(ID))
 					return;
@@ -48,8 +48,8 @@ namespace NMib::NNetwork
 		return Lookup;
 	}
 
-	template <typename t_CResult, typename tf_FResolve>
-	TCFuture<t_CResult> CResolveActor::fp_Resolve(uint64 _ID, tf_FResolve _fResolve)
+	template <typename tf_CResult, typename tf_FResolve>
+	TCFuture<tf_CResult> CResolveActor::fp_Resolve(uint64 _ID, tf_FResolve _fResolve)
 	{
 		auto Sequence = co_await mp_Sequencer.f_Sequence();
 		if (!mp_Pending.f_FindEqual(_ID))

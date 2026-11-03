@@ -61,7 +61,7 @@ namespace NMib::NNetwork
 		struct COutgoingDataPromise
 		{
 			COutgoingDataPromise() = default;
-			COutgoingDataPromise(COutgoingDataPromise &&) = default;
+			COutgoingDataPromise(COutgoingDataPromise &&_Other) = default;
 
 			~COutgoingDataPromise()
 			{

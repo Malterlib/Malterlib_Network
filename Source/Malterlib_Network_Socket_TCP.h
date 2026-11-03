@@ -92,8 +92,8 @@ namespace NMib::NNetwork
 		static FVirtualSocketFactory fs_GetFactory();
 
 	private:
-		CSocket_TCP(CSocket_TCP const &) = delete;
-		CSocket_TCP &operator = (CSocket_TCP const &) = delete;
+		CSocket_TCP(CSocket_TCP const &_Other) = delete;
+		CSocket_TCP &operator = (CSocket_TCP const &_Other) = delete;
 
 		CSocket mp_Socket;
 		umint mp_nTransferSizeHint = 0;

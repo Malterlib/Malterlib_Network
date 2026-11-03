@@ -21,13 +21,13 @@
 						CAddress fg_CreateAddress(::NMib::NNetwork::ENetAddressType _Type, void const* _pData, umint _nDataBytes);
 
 						::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
-						bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* _opRawData, umint _nDataBytes);
+						bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void* o_pRawData, umint _nDataBytes);
 						CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const* _pRawData, umint _nDataBytes);
 
 						CAddress fg_ResolveAddress(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
 						void *fg_AsyncResolveAddress_Open(const NMib::NStr::CStr &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
-						bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& _opAddress, NMib::NStr::CStr &_Error);
+						bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress& o_pAddress, NMib::NStr::CStr &_Error);
 						void fg_AsyncResolveAddress_Close(void *_pResolver);
 
 						int fg_CompareAddresses(CAddress _pFirst, CAddress _pSecond);
@@ -96,12 +96,12 @@ namespace NMib::NNetwork
 
 		CNetAddressIPv4() = default;
 
-		CNetAddressIPv4(uint8 _0, uint8 _1, uint8 _2, uint8 _3)
+		CNetAddressIPv4(uint8 _Octet0, uint8 _Octet1, uint8 _Octet2, uint8 _Octet3)
 		{
-			m_IP[0] = _0;
-			m_IP[1] = _1;
-			m_IP[2] = _2;
-			m_IP[3] = _3;
+			m_IP[0] = _Octet0;
+			m_IP[1] = _Octet1;
+			m_IP[2] = _Octet2;
+			m_IP[3] = _Octet3;
 		}
 
 		CNetAddressIPv4(CNetAddressIPv4 const &_Src)
@@ -141,24 +141,42 @@ namespace NMib::NNetwork
 
 		CNetAddressIPv6() = default;
 
-		CNetAddressIPv6(uint8 _0, uint8 _1, uint8 _2, uint8 _3, uint8 _4, uint8 _5, uint8 _6, uint8 _7, uint8 _8, uint8 _9, uint8 _10, uint8 _11, uint8 _12, uint8 _13, uint8 _14, uint8 _15)
+		CNetAddressIPv6
+			(
+				uint8 _Octet0
+				, uint8 _Octet1
+				, uint8 _Octet2
+				, uint8 _Octet3
+				, uint8 _Octet4
+				, uint8 _Octet5
+				, uint8 _Octet6
+				, uint8 _Octet7
+				, uint8 _Octet8
+				, uint8 _Octet9
+				, uint8 _Octet10
+				, uint8 _Octet11
+				, uint8 _Octet12
+				, uint8 _Octet13
+				, uint8 _Octet14
+				, uint8 _Octet15
+			)
 		{
-			m_IP[0] = _0;
-			m_IP[1] = _1;
-			m_IP[2] = _2;
-			m_IP[3] = _3;
-			m_IP[4] = _4;
-			m_IP[5] = _5;
-			m_IP[6] = _6;
-			m_IP[7] = _7;
-			m_IP[8] = _8;
-			m_IP[9] = _9;
-			m_IP[10] = _10;
-			m_IP[11] = _11;
-			m_IP[12] = _12;
-			m_IP[13] = _13;
-			m_IP[14] = _14;
-			m_IP[15] = _15;
+			m_IP[0] = _Octet0;
+			m_IP[1] = _Octet1;
+			m_IP[2] = _Octet2;
+			m_IP[3] = _Octet3;
+			m_IP[4] = _Octet4;
+			m_IP[5] = _Octet5;
+			m_IP[6] = _Octet6;
+			m_IP[7] = _Octet7;
+			m_IP[8] = _Octet8;
+			m_IP[9] = _Octet9;
+			m_IP[10] = _Octet10;
+			m_IP[11] = _Octet11;
+			m_IP[12] = _Octet12;
+			m_IP[13] = _Octet13;
+			m_IP[14] = _Octet14;
+			m_IP[15] = _Octet15;
 		}
 
 		CNetAddressIPv6(CNetAddressIPv6 const &_Src)
@@ -359,7 +377,7 @@ namespace NMib::NSys::NNetwork
 
 	::NMib::NNetwork::ENetAddressType fg_GetAddressType(CAddress _Address);
 	uint32 fg_GetAddressScopeID(CAddress _Address);
-	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void *_opRawData, umint _nDataBytes);
+	bool fg_GetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _ExpectedType, void *o_pRawData, umint _nDataBytes);
 	CAddress fg_SetAddressRaw(CAddress _Address, ::NMib::NNetwork::ENetAddressType _Type, void const *_pRawData, umint _nDataBytes);
 
 	struct CResolveAddressParameters
@@ -383,7 +401,7 @@ namespace NMib::NSys::NNetwork
 	bool fg_HasNativeUnixSockets(); // False where TCP and a port file emulate unix sockets
 
 	void *fg_AsyncResolveAddress_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
-	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress &_opAddress, NMib::NStr::CStr &_Error);
+	bool fg_AsyncResolveAddress_GetResult(void *_pResolver, CAddress &o_pAddress, NMib::NStr::CStr &_Error);
 	void fg_AsyncResolveAddress_Close(void *_pResolver);
 	void fg_AsyncResolveAddress_CloseAsync(void *_pResolver, NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
@@ -492,18 +510,18 @@ namespace NMib::NNetwork
 				mp_Address = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_Address);
 		}
 
-		template <typename t_CAddress>
-		CNetAddress(t_CAddress const &_Address)
-			: mp_Address(NMib::NSys::NNetwork::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress)))
+		template <typename tf_CAddress>
+		CNetAddress(tf_CAddress const &_Address)
+			: mp_Address(NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress)))
 		{
 		}
 
-		template <typename t_CAddress>
-		CNetAddress &operator = (t_CAddress const &_Address)
+		template <typename tf_CAddress>
+		CNetAddress &operator = (tf_CAddress const &_Address)
 		{
 			f_Clear();
 
-			mp_Address = NMib::NSys::NNetwork::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
+			mp_Address = NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
 
 			return *this;
 		}
@@ -573,10 +591,10 @@ namespace NMib::NNetwork
 
 		uint32 f_GetScopeID() const;
 
-		template <typename t_CAddress>
-		bool f_Get(t_CAddress &_oAddress) const
+		template <typename tf_CAddress>
+		bool f_Get(tf_CAddress &o_Address) const
 		{
-			return NMib::NSys::NNetwork::fg_GetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_oAddress, sizeof(t_CAddress));
+			return NMib::NSys::NNetwork::fg_GetAddressRaw(mp_Address, tf_CAddress::fs_GetType(), &o_Address, sizeof(tf_CAddress));
 		}
 
 		bool f_Set(CNetAddress const &_Address)
@@ -588,15 +606,15 @@ namespace NMib::NNetwork
 			return mp_Address != nullptr;
 		}
 
-		template <typename t_CAddress>
-		bool f_Set(t_CAddress const &_Address)
+		template <typename tf_CAddress>
+		bool f_Set(tf_CAddress const &_Address)
 		{
 			f_Clear();
 
 			if (mp_Address)
-				mp_Address = NMib::NSys::NNetwork::fg_SetAddressRaw(mp_Address, t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
+				mp_Address = NMib::NSys::NNetwork::fg_SetAddressRaw(mp_Address, tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
 			else
-				mp_Address = NMib::NSys::NNetwork::fg_CreateAddress(t_CAddress::fs_GetType(), &_Address, sizeof(t_CAddress));
+				mp_Address = NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
 
 			return mp_Address != nullptr;
 		}
@@ -691,8 +709,8 @@ namespace NMib::NNetwork
 
 	struct CAsyncResolver
 	{
-		CAsyncResolver(CAsyncResolver const &) = delete;
-		CAsyncResolver &operator = (CAsyncResolver const &) = delete;
+		CAsyncResolver(CAsyncResolver const &_Other) = delete;
+		CAsyncResolver &operator = (CAsyncResolver const &_Other) = delete;
 
 		CAsyncResolver(CAsyncResolver &&_Other);
 

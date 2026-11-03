@@ -55,24 +55,24 @@ static fp32 const gc_Timeout = 60.0f;
 
 struct CSysNet_Tests : public NMib::NTest::CTest
 {
-	template <typename t_CNetAddress, typename t_CNotNetAddress>
-	void f_TestAddress(t_CNetAddress const &_Localhost, t_CNotNetAddress const &_Other)
+	template <typename tf_CNetAddress, typename tf_CNotNetAddress>
+	void f_TestAddress(tf_CNetAddress const &_Localhost, tf_CNotNetAddress const &_Other)
 	{
 		CNetAddress Localhost(_Localhost);
 		DMibExpectFalse(Localhost.f_IsEmpty());
-		DMibExpect(Localhost.f_GetType(), ==, t_CNetAddress::mc_Type);
+		DMibExpect(Localhost.f_GetType(), ==, tf_CNetAddress::mc_Type);
 
-		t_CNetAddress Return;
+		tf_CNetAddress Return;
 		DMibExpectTrue(Localhost.f_Get(Return));
 		DMibExpect(fg_MemCmp((uint8 const *)&Return, (uint8 const *)&_Localhost, sizeof(Return)), ==, 0);
 
-		t_CNotNetAddress NotReturn;
+		tf_CNotNetAddress NotReturn;
 		DMibExpectTrue(Localhost.f_Get(NotReturn));
 
 		CNetAddress Other(_Other);
 		DMibExpectFalse(Other.f_IsEmpty());
 
-		t_CNetAddress Return2;
+		tf_CNetAddress Return2;
 		DMibExpectTrue(Other.f_Get(Return2));
 		DMibExpect(fg_MemCmp((uint8 const *)&Return2, (uint8 const *)&_Other, sizeof(Return2)), ==, 0);
 
@@ -80,19 +80,19 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		DMibExpect(Localhost, <, Other);
 	}
 
-	template <typename t_CNetAddress>
-	void f_TestResolve(CStr const &_Address, t_CNetAddress const &_Result)
+	template <typename tf_CNetAddress>
+	void f_TestResolve(CStr const &_Address, tf_CNetAddress const &_Result)
 	{
-		CNetAddress Resolved = CSocket::fs_ResolveAddress("localhost", t_CNetAddress::mc_Type);
+		CNetAddress Resolved = CSocket::fs_ResolveAddress("localhost", tf_CNetAddress::mc_Type);
 		DMibExpectFalse(Resolved.f_IsEmpty());
 
-		t_CNetAddress Return;
+		tf_CNetAddress Return;
 		DMibExpectTrue(Resolved.f_Get(Return));
 		DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 	}
 
-	template <typename t_CNetAddress>
-	void f_TestAsyncResolve(CStr const &_Address, t_CNetAddress const &_Result)
+	template <typename tf_CNetAddress>
+	void f_TestAsyncResolve(CStr const &_Address, tf_CNetAddress const &_Result)
 	{
 		NStorage::TCSharedPointer<CEventAutoReset> pResolveEvent = fg_Construct();
 
@@ -100,7 +100,7 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		Resolver.f_Open
 			(
 				_Address
-				, t_CNetAddress::mc_Type
+				, tf_CNetAddress::mc_Type
 				, [pResolveEvent]
 				{
 					pResolveEvent->f_Signal();
@@ -119,23 +119,23 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 
 		if (!Resolved.f_IsEmpty())
 		{
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Resolved.f_Get(Return));
 			DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 		}
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestConnectRefused(uint16 _Port)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress("localhost", t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress("localhost", tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 
 		if (Address.f_IsEmpty())
 			return;
 
 		{
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 			Return.m_Port = _Port;
 			Address.f_Set(Return);
@@ -159,14 +159,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		DMibExpectFalse(Socket.f_IsValid());
 	}
 
-	template <typename t_CNetAddress, ENetAddressType _Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestConnect(CStr const &_Address, uint16 _Port)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, _Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;
@@ -224,14 +224,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		}
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestConnectListen(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;
@@ -255,7 +255,7 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 					DMibTestPath("Server");
 					try
 					{
-						t_CNetAddress AnyAddr;
+						tf_CNetAddress AnyAddr;
 						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
@@ -358,14 +358,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		ServerThread->f_Stop();
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestConnectReportTo(CStr const &_Address, uint16 _Port)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;
@@ -435,14 +435,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		}
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestConnectListenReportTo(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;
@@ -466,7 +466,7 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 					DMibTestPath("Server");
 					try
 					{
-						t_CNetAddress AnyAddr; // = _Localhost;
+						tf_CNetAddress AnyAddr; // = _Localhost;
 						AnyAddr.f_SetLocalhost();
 						AnyAddr.m_Port = _ListenPort;
 
@@ -582,14 +582,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		ServerThread->f_Stop();
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestInherit(CStr const &_Address, uint16 _Port, bool _bInheritable)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;
@@ -666,14 +666,14 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 		}
 	}
 
-	template <typename t_CNetAddress, ENetAddressType t_Type>
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
 	void f_TestAsyncConnectReportTo(CStr const &_Address, uint16 _Port)
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, t_Type);
+		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
 		DMibExpectFalse(Address.f_IsEmpty());
 		{
 			DMibTestPath("SetPort");
-			t_CNetAddress Return;
+			tf_CNetAddress Return;
 			DMibExpectTrue(Address.f_Get(Return));
 
 			Return.m_Port = _Port;

@@ -30,8 +30,8 @@ namespace NMib::NNetwork
 		void *f_Detach();
 
 	private:
-		CInheritedSocketHandle(CInheritedSocketHandle const &) = delete;
-		CInheritedSocketHandle &operator = (CInheritedSocketHandle const &) = delete;
+		CInheritedSocketHandle(CInheritedSocketHandle const &_Other) = delete;
+		CInheritedSocketHandle &operator = (CInheritedSocketHandle const &_Other) = delete;
 
 		void *mp_pSocketHandle = nullptr;
 		bool mp_bOwned = false;

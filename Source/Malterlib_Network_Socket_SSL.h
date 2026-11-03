@@ -126,8 +126,8 @@ namespace NMib::NNetwork
 		;
 
 	private:
-		CSocket_SSL(CSocket_SSL const &) = delete;
-		CSocket_SSL &operator = (CSocket_SSL const &) = delete;
+		CSocket_SSL(CSocket_SSL const &_Other) = delete;
+		CSocket_SSL &operator = (CSocket_SSL const &_Other) = delete;
 
 		enum EState
 		{

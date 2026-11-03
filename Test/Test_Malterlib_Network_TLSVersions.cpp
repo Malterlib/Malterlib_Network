@@ -42,7 +42,7 @@ namespace
 				Peer.f_Accept
 					(
 						&Listener
-						, [Changed](ENetTCPState)
+						, [Changed](ENetTCPState _StateAdded)
 						{
 							Changed->f_Signal();
 						}
@@ -365,13 +365,13 @@ namespace
 			TCPromise<CSocketConnectionInfo_SSL> ServerInfo;
 			TCPromise<TCActorInterface<CAsyncSocketActor>> ServerAccepted;
 			CAsyncSocketServerCallbacks Callbacks;
-			Callbacks.m_fNewConnection = g_ActorFunctor / [ServerInfo, ServerAccepted](CAsyncSocketNewServerConnection Connection) -> TCFuture<void>
+			Callbacks.m_fNewConnection = g_ActorFunctor / [ServerInfo, ServerAccepted](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 				{
-					auto *pInfo = static_cast<CSocketConnectionInfo_SSL *>(Connection.m_Info.m_pSocketInfo.f_Get());
+					auto *pInfo = static_cast<CSocketConnectionInfo_SSL *>(_Connection.m_Info.m_pSocketInfo.f_Get());
 					DMibRequire(pInfo);
 
 					ServerInfo.f_SetResult(CSocketConnectionInfo_SSL(*pInfo));
-					ServerAccepted.f_SetResult(co_await Connection.f_Accept({}));
+					ServerAccepted.f_SetResult(co_await _Connection.f_Accept({}));
 
 					co_return {};
 				}

@@ -84,11 +84,11 @@ namespace
 			co_return co_await m_SecondStarted.f_Future();
 		}
 
-		NFunction::TCFunctionMovable<void (ENetTCPState)> f_Callback()
+		NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> f_Callback()
 		{
 			auto Weak = fg_ThisActor(this).f_Weak();
 
-			return [Weak](ENetTCPState)
+			return [Weak](ENetTCPState _StateAdded)
 				{
 					if (auto Actor = Weak.f_Lock())
 						Actor.f_Bind<&CNameServer::f_Poll>().f_DiscardResult();
@@ -322,7 +322,7 @@ namespace
 						Blocker.f_ListenDatagram
 							(
 								CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0)
-								, [](ENetTCPState)
+								, [](ENetTCPState _StateAdded)
 								{
 								}
 								, ENetFlag_None
@@ -334,7 +334,7 @@ namespace
 						Blocker.f_Listen
 							(
 								CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0)
-								, [](ENetTCPState)
+								, [](ENetTCPState _StateAdded)
 								{
 								}
 								, ENetFlag_None
