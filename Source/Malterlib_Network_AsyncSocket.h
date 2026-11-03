@@ -89,7 +89,7 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<void> f_SetTimeout(fp64 _Seconds);
 		NConcurrency::TCFuture<void> f_SetSendWindow(umint _nBytes);
-		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname);
+		NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>> f_UpgradeSocket(NNetwork::FVirtualSocketFactory _fSocketFactory, NStr::CStr _Hostname);
 
 		NConcurrency::TCFuture<void> f_SendData(NContainer::CSharedByteVector _Message, uint32 _Priority);
 		NConcurrency::TCFuture<CCloseInfo> f_Close(EAsyncSocketStatus _Status, NStr::CStr _Reason);
@@ -227,7 +227,7 @@ namespace NMib::NNetwork
 				, NStr::CStr _BindAddress // The src address to bind to. Leave empty to not bind
 				, NMib::NNetwork::ENetAddressType _PreferAddress // The preferred type of address to connect to
 				, uint16 _Port // The port to connect to
-				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NNetwork::FVirtualSocketFactory _fSocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 		; // You will receive an exception if connection fails
@@ -235,7 +235,7 @@ namespace NMib::NNetwork
 			(
 				NNetwork::CNetAddress _ConnectToAddress // The server to connect to
 				, NNetwork::CNetAddress _BindAddress // The src address to bind to. Leave empty to not bind
-				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NNetwork::FVirtualSocketFactory _fSocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 				, NStr::CStr _Hostname // Tthe hostname to use for SSL connections
 			)
 			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
@@ -287,7 +287,7 @@ namespace NMib::NNetwork
 				, uint16 _nListen // The number of ports to listen to. In consecutive order from the _StartListen port
 				, NMib::NNetwork::ENetFlag _ListenFlags
 				, CAsyncSocketServerCallbacks _Callbacks
-				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NNetwork::FVirtualSocketFactory _fSocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 			-> NConcurrency::TCFuture<CListenResult>
 		;
@@ -297,7 +297,7 @@ namespace NMib::NNetwork
 				NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo // The addresses to listen to
 				, NMib::NNetwork::ENetFlag _ListenFlags
 				, CAsyncSocketServerCallbacks _Callbacks
-				, NNetwork::FVirtualSocketFactory _SocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
+				, NNetwork::FVirtualSocketFactory _fSocketFactory // The factory to use for creating the sockets. If empty/nullptr it will default to CSocket_TCP::fs_GetFactory()
 			)
 			-> NConcurrency::TCFuture<CListenResult>
 		;

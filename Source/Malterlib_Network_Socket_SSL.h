@@ -26,8 +26,8 @@ namespace NMib::NNetwork
 		CSocket_SSL
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
-				, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
-				, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
+				, CSSLConnection::FAuthenticationResultCallback const &_fAuthenticationResultCallback
+				, CSSLConnection::FUserTrustDecisionCallback const &_fUserTrustDecisionCallback
 				, NStr::CStr const &_Hostname
 			)
 		;
@@ -119,8 +119,8 @@ namespace NMib::NNetwork
 		static auto fs_GetFactory
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
-				, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback = fg_Default()
-				, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback = fg_Default()
+				, CSSLConnection::FAuthenticationResultCallback const &_fAuthenticationResultCallback = fg_Default()
+				, CSSLConnection::FUserTrustDecisionCallback const &_fUserTrustDecisionCallback = fg_Default()
 			)
 			-> FVirtualSocketFactory
 		;
@@ -179,17 +179,17 @@ namespace NMib::NNetwork
 
 		static constexpr umint mcp_nMaxRecordBytes = 16 * 1024; // Maximum plaintext per TLS record.
 		NContainer::TCVector<CSendOperation> mp_SendOperations; // Indexed pool with per-generation and newest-first free lists; grows to observed window demand.
-		NContainer::TCVector<int32> mp_iBufferOperationHead;
+		NContainer::TCVector<int32> mp_BufferOperationHead;
 		umint mp_nSendWindowBytes = 0;
 		NContainer::CByteVector mp_SendStaging;
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
-		NThread::CMutual mp_fOnStateChangeLock;
+		NThread::CMutual mp_OnStateChangeLock;
 		CSocket mp_Socket;
 		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
 
 		NStorage::TCSharedPointer<CSSLContext> mp_pSSLContext;
-		CSSLConnection::FAuthenticationResultCallback mp_AuthenticationResultCallback;
-		CSSLConnection::FUserTrustDecisionCallback mp_UserTrustDecisionCallback;
+		CSSLConnection::FAuthenticationResultCallback mp_fAuthenticationResultCallback;
+		CSSLConnection::FUserTrustDecisionCallback mp_fUserTrustDecisionCallback;
 
 		CSSLConnection mp_SSLConnection;
 

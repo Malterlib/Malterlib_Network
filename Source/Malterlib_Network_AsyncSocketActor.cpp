@@ -526,13 +526,13 @@ namespace NMib::NNetwork
 		co_return {};
 	}
 
-	auto CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _SocketFactory, NStr::CStr _Hostname)
+	auto CAsyncSocketActor::f_UpgradeSocket(NNetwork::FVirtualSocketFactory _fSocketFactory, NStr::CStr _Hostname)
 		-> NConcurrency::TCFuture<NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo>>
 	{
 		if (f_IsDestroyed())
 			co_return DMibErrorInstance("Destroying socket");
 
-		if (!_SocketFactory)
+		if (!_fSocketFactory)
 			co_return DMibErrorInstance("Socket upgrade requires a socket factory");
 
 		auto &Internal = *mp_pInternal;
@@ -565,7 +565,7 @@ namespace NMib::NNetwork
 		if (Internal.m_UpgradeSocketPromise)
 			co_return DMibErrorInstance("Socket upgrade already in progress");
 
-		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _SocketFactory(_Hostname);
+		NStorage::TCUniquePointer<NNetwork::ICSocket> pNewSocket = _fSocketFactory(_Hostname);
 		Internal.m_bUpgradeRequired = false;
 
 		auto DeferredTCPState = fg_Exchange(Internal.m_DeferredTCPState, NNetwork::ENetTCPState_None);
@@ -1834,8 +1834,8 @@ namespace NMib::NNetwork
 		Internal.m_bDeferringCallbacks = false;
 		if (Internal.m_Callbacks.m_fOnReceiveData)
 		{
-			for (auto &pMessage : Internal.m_DeferredOnReciveData)
-				Internal.m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(pMessage));
+			for (auto &Message : Internal.m_DeferredOnReciveData)
+				Internal.m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(Message));
 			Internal.m_DeferredOnReciveData.f_Clear();
 		}
 		if (Internal.m_Callbacks.m_fOnClose && Internal.m_bOnCloseCalled)

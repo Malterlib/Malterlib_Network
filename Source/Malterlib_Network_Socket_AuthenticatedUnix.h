@@ -178,7 +178,7 @@ namespace NMib::NNetwork
 
 		uint32 mp_ConnectionGeneration = 0; // Owner increments under callback lock on reuse; poller callbacks reject stale generations under that lock.
 		NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> mp_fOnStateChange;
-		NThread::CMutual mp_fOnStateChangeLock;
+		NThread::CMutual mp_OnStateChangeLock;
 		CSocket mp_Socket;
 		umint mp_nTransferSizeHint = 0;
 		NStorage::TCSharedPointer<CAuthenticatedUnixContext> mp_pContext;

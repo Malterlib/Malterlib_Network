@@ -86,13 +86,13 @@ namespace NMib::NNetwork
 			Waiter.f_SetException(DMibErrorInstance("Resolver shutting down"));
 		Internal.m_InitWaiters.f_Clear();
 
-		Internal.m_Channel.f_Clear();
+		Internal.m_pChannel.f_Clear();
 
 		DMibFastCheck(Internal.m_Sockets.f_IsEmpty());
 
-		Internal.m_Drain->f_Release();
+		Internal.m_pDrain->f_Release();
 		co_await fg_Move(mp_Sequencer).f_Destroy().f_Wrap() > LogError.f_Warning("Failed to destroy resolver sequencer");
-		co_await Internal.m_Drain->m_Done.f_Future().f_Wrap() > LogError.f_Warning("Failed to deregister resolver sockets");
+		co_await Internal.m_pDrain->m_Done.f_Future().f_Wrap() > LogError.f_Warning("Failed to deregister resolver sockets");
 
 		co_return {};
 	}

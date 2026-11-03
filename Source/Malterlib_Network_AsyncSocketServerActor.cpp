@@ -57,13 +57,13 @@ namespace NMib::NNetwork
 			NContainer::TCVector<NNetwork::CNetAddress> _AddressesToListenTo
 			, NMib::NNetwork::ENetFlag _ListenFlags
 			, CAsyncSocketServerCallbacks _Callbacks
-			, NNetwork::FVirtualSocketFactory _SocketFactory
+			, NNetwork::FVirtualSocketFactory _fSocketFactory
 		)
 		-> NConcurrency::TCFuture<CListenResult>
 	{
-		NNetwork::FVirtualSocketFactory SocketFactory = fg_Move(_SocketFactory);
-		if (!SocketFactory)
-			SocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
+		NNetwork::FVirtualSocketFactory fSocketFactory = fg_Move(_fSocketFactory);
+		if (!fSocketFactory)
+			fSocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
 
 		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
 
@@ -134,7 +134,7 @@ namespace NMib::NNetwork
 
 				NConcurrency::TCWeakActor<CListenActor> WeakListenActor = ListenActor;
 
-				NStorage::TCUniquePointer<NNetwork::ICSocket> pListenSocket = SocketFactory("");
+				NStorage::TCUniquePointer<NNetwork::ICSocket> pListenSocket = fSocketFactory("");
 				NException::CDisableExceptionTraceScope DisableExceptionTrace;
 				NConcurrency::CIoLoopCreateScope IoLoopScope(Binding);
 				pListenSocket->f_Listen
@@ -169,7 +169,7 @@ namespace NMib::NNetwork
 			, uint16 _nListen
 			, NMib::NNetwork::ENetFlag _ListenFlags
 			, CAsyncSocketServerCallbacks _Callbacks
-			, NNetwork::FVirtualSocketFactory _SocketFactory
+			, NNetwork::FVirtualSocketFactory _fSocketFactory
 		)
 		-> NConcurrency::TCFuture<CListenResult>
 	{
@@ -183,7 +183,7 @@ namespace NMib::NNetwork
 			AddressesToListenTo.f_Insert(fg_Move(Address));
 		}
 
-		co_return co_await f_StartListenAddress(fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_SocketFactory));
+		co_return co_await f_StartListenAddress(fg_Move(AddressesToListenTo), _ListenFlags, fg_Move(_Callbacks), fg_Move(_fSocketFactory));
 	}
 
 	NConcurrency::TCFuture<void> CAsyncSocketServerActor::fp_Destroy()

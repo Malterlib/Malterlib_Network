@@ -72,8 +72,8 @@ namespace NMib::NNetwork
 		uint64 m_TimerGeneration = 0;
 		CResolveActor *m_pThis = nullptr;
 		NSys::ICIoLoop *m_pLoop = nullptr;
-		NStorage::TCUniquePointer<CChannel> m_Channel;
-		NStorage::TCSharedPointer<CDrain> m_Drain = fg_Construct();
+		NStorage::TCUniquePointer<CChannel> m_pChannel;
+		NStorage::TCSharedPointer<CDrain> m_pDrain = fg_Construct();
 		NContainer::TCMap<ares_socket_t, NStorage::TCUniquePointer<CSocket>> m_Sockets;
 		NContainer::TCVector<NConcurrency::TCPromise<void>> m_InitWaiters;
 		NStr::CStr m_NameServer;

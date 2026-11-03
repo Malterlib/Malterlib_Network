@@ -22,8 +22,8 @@ namespace NMib::NNetwork
 		using CStreamReader = NStream::TCBinaryStreamMemoryPtr<>;
 		using CStreamAppender = NStream::TCBinaryStreamMemoryRef<>;
 
-		constexpr ch8 gc_pHandshakeMagic[8] = {'M', 'i', 'b', 'P', 'A', 'u', 't', '1'};
-		constexpr ch8 gc_pTranscriptLabel[] = "MalterlibPlainAuthV1";
+		constexpr ch8 gc_HandshakeMagic[8] = {'M', 'i', 'b', 'P', 'A', 'u', 't', '1'};
+		constexpr ch8 gc_TranscriptLabel[] = "MalterlibPlainAuthV1";
 		constexpr umint gc_NonceSize = 32;
 		constexpr umint gc_MaxHandshakeFrameSize = 256 * 1024;
 		constexpr umint gc_MaxCertificateChainLength = 8; // Bounds pre-authentication allocations from untrusted hellos
@@ -198,7 +198,7 @@ namespace NMib::NNetwork
 		return [this, _Generation](ENetTCPState _StateAdded)
 			{
 				// Check callback and generation under the same lock used to install a new attempt, excluding cleared or stale callbacks.
-				DMibLock(mp_fOnStateChangeLock);
+				DMibLock(mp_OnStateChangeLock);
 				if (mp_ConnectionGeneration != _Generation)
 					return;
 
@@ -229,7 +229,7 @@ namespace NMib::NNetwork
 		mp_Socket.f_Close();
 		uint32 Generation;
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			Generation = ++mp_ConnectionGeneration;
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 			mp_bHandshakePumpOnWrite = true;
@@ -255,7 +255,7 @@ namespace NMib::NNetwork
 		mp_Socket.f_Close();
 		uint32 Generation;
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			Generation = ++mp_ConnectionGeneration;
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 			mp_bHandshakePumpOnWrite = true;
@@ -268,7 +268,7 @@ namespace NMib::NNetwork
 				, [this, Generation](ENetTCPState _StateAdded)
 				{
 					// Check callback and generation under lock; a stale connected event could start the new handshake on an unconnected socket.
-					DMibLock(mp_fOnStateChangeLock);
+					DMibLock(mp_OnStateChangeLock);
 					if (mp_ConnectionGeneration != Generation)
 						return;
 
@@ -309,7 +309,7 @@ namespace NMib::NNetwork
 		mp_Socket.f_Close();
 		uint32 Generation;
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			Generation = ++mp_ConnectionGeneration;
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 			mp_bHandshakePumpOnWrite = false;
@@ -356,7 +356,7 @@ namespace NMib::NNetwork
 
 		uint32 Generation;
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			Generation = ++mp_ConnectionGeneration;
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 			mp_bHandshakePumpOnWrite = true;
@@ -389,7 +389,7 @@ namespace NMib::NNetwork
 	void CSocket_AuthenticatedUnix::f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 		}
 	}
@@ -509,7 +509,7 @@ namespace NMib::NNetwork
 
 		uint32 Generation;
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			Generation = ++mp_ConnectionGeneration;
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 			mp_bHandshakePumpOnWrite = true;
@@ -670,7 +670,7 @@ namespace NMib::NNetwork
 		fg_GenerateRandomData(Nonce, gc_NonceSize);
 
 		CStream Hello;
-		Hello.f_FeedBytes(gc_pHandshakeMagic, sizeof(gc_pHandshakeMagic));
+		Hello.f_FeedBytes(gc_HandshakeMagic, sizeof(gc_HandshakeMagic));
 		Hello << uint8(mp_pContext->f_IsClientContext() ? gc_RoleClient : gc_RoleServer);
 		Hello << Handshake.m_LocalIdentity.m_ProcessID;
 		Hello << Handshake.m_LocalIdentity.m_PidFSDevice;
@@ -788,7 +788,7 @@ namespace NMib::NNetwork
 		auto ServerDigest = CHash_SHA512::fs_DigestFromData(ServerHello);
 
 		NContainer::CSecureByteVector Message;
-		Message.f_InsertLast((uint8 const *)gc_pTranscriptLabel, sizeof(gc_pTranscriptLabel) - 1);
+		Message.f_InsertLast((uint8 const *)gc_TranscriptLabel, sizeof(gc_TranscriptLabel) - 1);
 		Message.f_InsertLast(_bServerRole ? gc_RoleServer : gc_RoleClient);
 		Message.f_InsertLast(ClientDigest.f_GetData(), CHashDigest_SHA512::mc_Size);
 		Message.f_InsertLast(ServerDigest.f_GetData(), CHashDigest_SHA512::mc_Size);
@@ -812,13 +812,13 @@ namespace NMib::NNetwork
 			}
 		;
 
-		umint HeaderSize = sizeof(gc_pHandshakeMagic) + sizeof(uint8) + 3 * sizeof(uint64) + gc_NonceSize + sizeof(uint16);
+		umint HeaderSize = sizeof(gc_HandshakeMagic) + sizeof(uint8) + 3 * sizeof(uint64) + gc_NonceSize + sizeof(uint16);
 		if (_Payload.f_GetLen() < HeaderSize)
 			return fp_FailHandshake("Invalid handshake hello");
 
-		uint8 Magic[sizeof(gc_pHandshakeMagic)];
+		uint8 Magic[sizeof(gc_HandshakeMagic)];
 		Reader.f_ConsumeBytes(Magic, sizeof(Magic));
-		if (NMemory::fg_MemCmp(Magic, (uint8 const *)gc_pHandshakeMagic, sizeof(Magic)) != 0)
+		if (NMemory::fg_MemCmp(Magic, (uint8 const *)gc_HandshakeMagic, sizeof(Magic)) != 0)
 			return fp_FailHandshake("Invalid handshake magic");
 
 		uint8 PeerRole = 0;
@@ -1001,7 +1001,7 @@ namespace NMib::NNetwork
 			mp_ExtraState.f_FetchOr(ENetTCPState_Closed);
 
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			mp_bHandshakePumpOnWrite = false;
 			if (bReport && mp_fOnStateChange)
 				mp_fOnStateChange(ENetTCPState_Closed);
@@ -1015,7 +1015,7 @@ namespace NMib::NNetwork
 		mp_ExtraState.f_FetchOr(ENetTCPState_Read | ENetTCPState_Write);
 
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			mp_bHandshakePumpOnWrite = false;
 			if (mp_fOnStateChange)
 				mp_fOnStateChange(ENetTCPState_Read | ENetTCPState_Write);

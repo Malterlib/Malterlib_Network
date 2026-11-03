@@ -52,29 +52,29 @@ namespace NMib::NNetwork
 	{
 		*g_CaresLibrary;
 
-		TCUniquePointer<CChannel> Channel = fg_Construct();
+		TCUniquePointer<CChannel> pChannel = fg_Construct();
 		ares_options Options{};
 		Options.sock_state_cb = &fs_SocketState;
-		Options.sock_state_cb_data = Channel.f_Get();
-		int Status = ares_init_options(&Channel->m_pChannel, &Options, ARES_OPT_SOCK_STATE_CB);
+		Options.sock_state_cb_data = pChannel.f_Get();
+		int Status = ares_init_options(&pChannel->m_pChannel, &Options, ARES_OPT_SOCK_STATE_CB);
 		if (Status != ARES_SUCCESS)
 			DMibErrorNet(ares_strerror(Status));
 
 		if (!_NameServer.f_IsEmpty())
 		{
-			Status = ares_set_servers_ports_csv(Channel->m_pChannel, _NameServer.f_GetStr());
+			Status = ares_set_servers_ports_csv(pChannel->m_pChannel, _NameServer.f_GetStr());
 			if (Status != ARES_SUCCESS)
 				DMibErrorNet(ares_strerror(Status));
 		}
 
 		hostent *pHost = nullptr;
-		Status = ares_gethostbyname_file(Channel->m_pChannel, "localhost", AF_INET, &pHost);
+		Status = ares_gethostbyname_file(pChannel->m_pChannel, "localhost", AF_INET, &pHost);
 		if (pHost)
 			ares_free_hostent(pHost);
 		if (Status == ARES_ENOMEM)
 			DMibErrorNet(ares_strerror(Status));
 
-		return Channel;
+		return pChannel;
 	}
 
 	void CResolveActor::CInternal::fs_SocketState(void *_pData, ares_socket_t _Socket, int _Readable, int _Writable) noexcept
@@ -107,16 +107,16 @@ namespace NMib::NNetwork
 
 		if (!pFound)
 		{
-			TCUniquePointer<CSocket> NewSocket = fg_Construct();
-			auto &Socket = m_Sockets[_Socket];
-			Socket = fg_Move(NewSocket);
-			Socket->m_Handle = _Socket;
-			Socket->m_Generation = ++m_NextSocketGeneration;
-			Socket->m_Actor = fg_ThisActor(m_pThis).f_Weak();
-			Socket->m_pRegistration = m_pLoop->f_Register
+			TCUniquePointer<CSocket> pNewSocket = fg_Construct();
+			auto &pSocket = m_Sockets[_Socket];
+			pSocket = fg_Move(pNewSocket);
+			pSocket->m_Handle = _Socket;
+			pSocket->m_Generation = ++m_NextSocketGeneration;
+			pSocket->m_Actor = fg_ThisActor(m_pThis).f_Weak();
+			pSocket->m_pRegistration = m_pLoop->f_Register
 				(
 					NSys::CIoLoopHandle(_Socket)
-					, Socket.f_Get()
+					, pSocket.f_Get()
 					, NSys::EIoLoopEvent::mc_Read | NSys::EIoLoopEvent::mc_Write
 					, [](void *_pToken, NSys::EIoLoopEvent _Events, int _Error)
 					{
@@ -129,10 +129,10 @@ namespace NMib::NNetwork
 				)
 			;
 
-			if (!Socket->m_pRegistration)
+			if (!pSocket->m_pRegistration)
 				DMibErrorNet("Could not register DNS socket");
 
-			pFound = &Socket;
+			pFound = &pSocket;
 		}
 
 		(*pFound)->m_Interest = _Interest;
@@ -151,24 +151,24 @@ namespace NMib::NNetwork
 			return;
 		}
 
-		auto Socket = fg_Move(*pFound);
+		auto pSocket = fg_Move(*pFound);
 		Owner.m_Sockets.f_Remove(_Socket);
-		if (!Socket->m_pRegistration)
+		if (!pSocket->m_pRegistration)
 		{
 			NSys::NNetwork::fg_CloseSocketHandle(reinterpret_cast<void *>(umint(_Socket)));
 
 			return;
 		}
 
-		auto *pRegistration = Socket->m_pRegistration;
-		Owner.m_Drain->m_Pending.f_FetchAdd(1);
+		auto *pRegistration = pSocket->m_pRegistration;
+		Owner.m_pDrain->m_Pending.f_FetchAdd(1);
 		Owner.m_pLoop->f_DeregisterAsync
 			(
 				pRegistration
-				, [Socket = fg_Move(Socket), Drain = Owner.m_Drain]
+				, [pSocket = fg_Move(pSocket), pDrain = Owner.m_pDrain]
 				{
-					NSys::NNetwork::fg_CloseSocketHandle(reinterpret_cast<void *>(umint(Socket->m_Handle)));
-					Drain->f_Release();
+					NSys::NNetwork::fg_CloseSocketHandle(reinterpret_cast<void *>(umint(pSocket->m_Handle)));
+					pDrain->f_Release();
 				}
 			)
 		;
@@ -176,7 +176,7 @@ namespace NMib::NNetwork
 
 	void CResolveActor::CInternal::fs_Reply(void *_pData, int _Status, int _Timeouts, ares_addrinfo *_pResult) noexcept
 	{
-		TCUniquePointer<CQuery> Query = fg_Explicit(static_cast<CQuery *>(_pData));
+		TCUniquePointer<CQuery> pQuery = fg_Explicit(static_cast<CQuery *>(_pData));
 		auto Cleanup = g_OnScopeExit / [_pResult]
 			{
 				if (_pResult)
@@ -196,27 +196,27 @@ namespace NMib::NNetwork
 			if (Addresses.f_IsEmpty())
 				DMibErrorNet("Name resolution returned no IP addresses");
 
-			Query->m_Result.f_SetResult(fg_Move(Addresses));
+			pQuery->m_Result.f_SetResult(fg_Move(Addresses));
 		}
 		catch (...)
 		{
-			Query->m_Result.f_SetException(NException::fg_CurrentException());
+			pQuery->m_Result.f_SetException(NException::fg_CurrentException());
 		}
 	}
 
 	void CResolveActor::CInternal::f_Process(ares_fd_events_t const *_pEvents, umint _Count)
 	{
-		int Status = ares_process_fds(m_Channel->m_pChannel, _pEvents, _Count, ARES_PROCESS_FLAG_NONE);
+		int Status = ares_process_fds(m_pChannel->m_pChannel, _pEvents, _Count, ARES_PROCESS_FLAG_NONE);
 		if (Status != ARES_SUCCESS)
 			m_pFailure = DMibErrorInstance(ares_strerror(Status));
 
 		if (m_pFailure)
-			ares_cancel(m_Channel->m_pChannel);
+			ares_cancel(m_pChannel->m_pChannel);
 
-		for (auto const &Socket : m_Sockets)
+		for (auto const &pSocket : m_Sockets)
 		{
-			if (Socket->m_pRegistration)
-				m_pLoop->f_RequestReadiness(Socket->m_pRegistration, Socket->m_Interest);
+			if (pSocket->m_pRegistration)
+				m_pLoop->f_RequestReadiness(pSocket->m_pRegistration, pSocket->m_Interest);
 		}
 
 		f_UpdateTimer();
@@ -225,7 +225,7 @@ namespace NMib::NNetwork
 	void CResolveActor::CInternal::f_UpdateTimer()
 	{
 		timeval Timeout;
-		auto *pTimeout = ares_timeout(m_Channel->m_pChannel, nullptr, &Timeout);
+		auto *pTimeout = ares_timeout(m_pChannel->m_pChannel, nullptr, &Timeout);
 		fp64 Seconds = pTimeout ? fp64(pTimeout->tv_sec) + fp64(pTimeout->tv_usec) / 1000000.0 : -1.0;
 		m_pThis->fp_SetTimer(++m_TimerGeneration, Seconds).f_DiscardResult();
 	}
@@ -259,9 +259,9 @@ namespace NMib::NNetwork
 
 			if (Result)
 			{
-				Internal.m_Channel = fg_Move(*Result);
-				Internal.m_Channel->m_pOwner = &Internal;
-				ares_set_socket_close_callback(Internal.m_Channel->m_pChannel, &CInternal::fs_CloseSocket, Internal.m_Channel.f_Get());
+				Internal.m_pChannel = fg_Move(*Result);
+				Internal.m_pChannel->m_pOwner = &Internal;
+				ares_set_socket_close_callback(Internal.m_pChannel->m_pChannel, &CInternal::fs_CloseSocket, Internal.m_pChannel.f_Get());
 				Internal.m_State = CInternal::EState::mc_Ready;
 			}
 			else
@@ -312,9 +312,9 @@ namespace NMib::NNetwork
 		ares_addrinfo_hints Hints{};
 		Hints.ai_family = _PreferType == ENetAddressType_TCPv4 ? AF_INET : _PreferType == ENetAddressType_TCPv6 ? AF_INET6 : AF_UNSPEC;
 		Hints.ai_socktype = SOCK_STREAM;
-		ares_getaddrinfo(Internal.m_Channel->m_pChannel, _Host.f_GetStr(), nullptr, &Hints, &CInternal::fs_Reply, pQuery);
+		ares_getaddrinfo(Internal.m_pChannel->m_pChannel, _Host.f_GetStr(), nullptr, &Hints, &CInternal::fs_Reply, pQuery);
 		if (Internal.m_pFailure)
-			ares_cancel(Internal.m_Channel->m_pChannel);
+			ares_cancel(Internal.m_pChannel->m_pChannel);
 		Internal.f_UpdateTimer();
 
 		auto Result = co_await fg_Move(Future).f_Wrap();

@@ -188,7 +188,7 @@ namespace
 			CActorRunLoopTestHelper &_RunLoopHelper
 			, TCSharedPointerSupportWeak<CBenchState> const &_pState
 			, CNetAddress const &_ListenAddress
-			, FVirtualSocketFactory const &_ServerFactory
+			, FVirtualSocketFactory const &_fServerFactory
 			, TCActor<tf_CHandler> const &_HandlerActor
 		)
 		-> uint16
@@ -275,7 +275,7 @@ namespace
 				, fg_CreateVector(_ListenAddress)
 				, ENetFlag_None
 				, fg_Move(ListenCallbacks)
-				, fg_TempCopy(_ServerFactory)
+				, fg_TempCopy(_fServerFactory)
 			)
 			.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
 		;
@@ -290,7 +290,7 @@ namespace
 			CActorRunLoopTestHelper &_RunLoopHelper
 			, TCSharedPointerSupportWeak<CBenchState> const &_pState
 			, CStr const &_ConnectAddress
-			, FVirtualSocketFactory const &_ClientFactory
+			, FVirtualSocketFactory const &_fClientFactory
 			, TCActor<tf_CHandler> const &_HandlerActor
 		)
 	{
@@ -302,7 +302,7 @@ namespace
 		if (ResolvedAddress.f_GetType() == ENetAddressType_Unix || fg_IsLoopbackAddress(ResolvedAddress))
 			_pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, gc_BenchLocalFragmentationSize).f_DiscardResult();
 
-		auto NewClientConnection = _pState->m_ClientActor(&CAsyncSocketClientActor::f_Connect, _ConnectAddress, "", ENetAddressType_None, 0, fg_TempCopy(_ClientFactory))
+		auto NewClientConnection = _pState->m_ClientActor(&CAsyncSocketClientActor::f_Connect, _ConnectAddress, "", ENetAddressType_None, 0, fg_TempCopy(_fClientFactory))
 			.f_CallSync(_RunLoopHelper.m_pRunLoop, g_Timeout)
 		;
 
@@ -329,18 +329,18 @@ namespace
 			CActorRunLoopTestHelper &_RunLoopHelper
 			, TCSharedPointerSupportWeak<CBenchState> const &_pState
 			, CStr const &_Address
-			, FVirtualSocketFactory const &_ServerFactory
-			, FVirtualSocketFactory const &_ClientFactory
+			, FVirtualSocketFactory const &_fServerFactory
+			, FVirtualSocketFactory const &_fClientFactory
 			, TCActor<tf_CHandler> const &_HandlerActor
 		)
 	{
-		uint16 ListenPort = fg_SetupServer(_RunLoopHelper, _pState, CSocket::fs_ResolveAddress(_Address), _ServerFactory, _HandlerActor);
+		uint16 ListenPort = fg_SetupServer(_RunLoopHelper, _pState, CSocket::fs_ResolveAddress(_Address), _fServerFactory, _HandlerActor);
 
 		CStr ConnectAddress = _Address;
 		if (_Address.f_EndsWith(":0") && ListenPort != 0)
 			ConnectAddress = "{}{}"_f << _Address.f_Left(_Address.f_GetLen() - 1) << ListenPort;
 
-		fg_SetupClient(_RunLoopHelper, _pState, ConnectAddress, _ClientFactory, _HandlerActor);
+		fg_SetupClient(_RunLoopHelper, _pState, ConnectAddress, _fClientFactory, _HandlerActor);
 	}
 
 	// Coroutine-driven timing measures actor scheduling; priority controls whether the socket hop crosses pools.
@@ -425,14 +425,14 @@ namespace
 			, CTestPerformance &_PerfTest
 			, CStr const &_Name
 			, CStr const &_Address
-			, FVirtualSocketFactory const &_ServerFactory
-			, FVirtualSocketFactory const &_ClientFactory
+			, FVirtualSocketFactory const &_fServerFactory
+			, FVirtualSocketFactory const &_fClientFactory
 			, umint _nPingRoundTrips
 			, umint _nRepetitions
 		)
 	{
 		TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(_RunLoopHelper.m_pRunLoop, true, uint64(0));
-		fg_SetupConnection(_RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<tf_CHandler>());
+		fg_SetupConnection(_RunLoopHelper, pState, _Address, _fServerFactory, _fClientFactory, fg_ConstructActor<tf_CHandler>());
 
 		TCActor<tf_CDriver> Driver = fg_ConstructActor<tf_CDriver>();
 
@@ -498,7 +498,7 @@ namespace
 					(
 						"Ping"
 						, PerfTest
-						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_ServerFactory, FVirtualSocketFactory const &_ClientFactory)
+						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
 						{
 							DMibTestPath(_Tag);
 
@@ -508,8 +508,8 @@ namespace
 									, PerfTest
 									, "Ping_{}"_f << _Tag
 									, _Address
-									, _ServerFactory
-									, _ClientFactory
+									, _fServerFactory
+									, _fClientFactory
 									, mcp_nPingRoundTrips
 									, mcp_nRepetitions
 								)
@@ -521,8 +521,8 @@ namespace
 									, PerfTest
 									, "PingHigh_{}"_f << _Tag
 									, _Address
-									, _ServerFactory
-									, _ClientFactory
+									, _fServerFactory
+									, _fClientFactory
 									, mcp_nPingRoundTrips
 									, mcp_nRepetitions
 								)
@@ -545,12 +545,12 @@ namespace
 					(
 						"Thr"
 						, PerfTest
-						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_ServerFactory, FVirtualSocketFactory const &_ClientFactory)
+						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
 						{
 							DMibTestPath(_Tag);
 
 							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
-							fg_SetupConnection(RunLoopHelper, pState, _Address, _ServerFactory, _ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
+							fg_SetupConnection(RunLoopHelper, pState, _Address, _fServerFactory, _fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mcp_nRepetitions, g_Timeout);
 						}
@@ -574,7 +574,7 @@ namespace
 
 					CActorRunLoopTestHelper RunLoopHelper;
 
-					FVirtualSocketFactory ServerFactory;
+					FVirtualSocketFactory fServerFactory;
 					if (Scheme == "tls")
 					{
 						CSSLSettings ServerSettings;
@@ -584,12 +584,12 @@ namespace
 						Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
 						CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
 						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-						ServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+						fServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
 					}
 
 					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
 
-					fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), ServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
+					fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), fServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
 
 					CStr TicketString = "{}://{}:{}"_f << Scheme << Host << Port;
 					NFile::CFile::fs_WriteStringToFile(TicketFile, TicketString, false);
@@ -631,7 +631,7 @@ namespace
 
 					CTestPerformance PerfTest(0.015);
 
-					FVirtualSocketFactory ClientFactory;
+					FVirtualSocketFactory fClientFactory;
 					if (Scheme == "tls")
 					{
 						// The per-run self-signed certificate is accepted explicitly by this benchmark client.
@@ -639,11 +639,11 @@ namespace
 						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
 						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreTrustFailures;
 						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-						ClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+						fClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
 					}
 
 					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
-					fg_SetupClient(RunLoopHelper, pState, Address, ClientFactory, fg_ConstructActor<CBenchHandlerActor>());
+					fg_SetupClient(RunLoopHelper, pState, Address, fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
 
 					DMibTestPath("Remote");
 					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mcp_nRepetitions, CallTimeout);

@@ -73,10 +73,10 @@ namespace NMib::NNetwork
 	inline bool CAsyncResolver::f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error)
 	{
 		fp_CheckValid();
-		NMib::NSys::NNetwork::CAddress Address;
-		if (NMib::NSys::NNetwork::fg_AsyncResolveAddress_GetResult(mp_pResolver, Address, _Error))
+		NMib::NSys::NNetwork::CAddress pAddress;
+		if (NMib::NSys::NNetwork::fg_AsyncResolveAddress_GetResult(mp_pResolver, pAddress, _Error))
 		{
-			_Address = NMib::NNetwork::CNetAddress(Address);
+			_Address = NMib::NNetwork::CNetAddress(pAddress);
 			return true;
 		}
 		else
@@ -85,7 +85,7 @@ namespace NMib::NNetwork
 
 	inline uint32 CNetAddress::f_GetScopeID() const
 	{
-		return mp_Address ? NMib::NSys::NNetwork::fg_GetAddressScopeID(mp_Address) : 0;
+		return mp_pAddress ? NMib::NSys::NNetwork::fg_GetAddressScopeID(mp_pAddress) : 0;
 	}
 
 	// The first result is the address selected by fs_ResolveAddress.
@@ -103,14 +103,14 @@ namespace NMib::NNetwork
 	{
 		auto Cleanup = g_OnScopeExit / [&_Addresses]
 			{
-				for (auto Address : _Addresses)
-					NMib::NSys::NNetwork::fg_FreeAddress(Address);
+				for (auto pAddress : _Addresses)
+					NMib::NSys::NNetwork::fg_FreeAddress(pAddress);
 			}
 		;
 
 		NContainer::TCVector<CNetAddress> Result;
-		for (auto &Address : _Addresses)
-			Result.f_Insert(CNetAddress(fg_Exchange(Address, nullptr)));
+		for (auto &pAddress : _Addresses)
+			Result.f_Insert(CNetAddress(fg_Exchange(pAddress, nullptr)));
 
 		return Result;
 	}

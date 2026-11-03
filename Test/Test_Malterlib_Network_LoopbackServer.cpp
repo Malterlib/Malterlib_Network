@@ -265,14 +265,14 @@ namespace
 		{
 			m_pThread->f_Stop();
 
-			for (auto &Socket : m_ConnectedSockets)
-				(*Socket)->f_Close();
+			for (auto &pSocket : m_ConnectedSockets)
+				(*pSocket)->f_Close();
 
 			m_ConnectedSockets.f_Clear();
 			m_DispatchQueue.f_Clear();
 
-			for (auto &Socket : m_ConnectedSockets)
-				(*Socket)->f_Close();
+			for (auto &pSocket : m_ConnectedSockets)
+				(*pSocket)->f_Close();
 
 			m_ConnectedSockets.f_Clear();
 			m_ListenSocketV4.f_Close();

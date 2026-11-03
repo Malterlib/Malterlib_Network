@@ -157,15 +157,15 @@ namespace NMib::NNetwork
 
 			auto *pData = ASN1_STRING_get0_data(pSequence);
 			auto *pEnd = pData + ASN1_STRING_length(pSequence);
-			bssl::UniquePtr<RSA_PSS_PARAMS> Params(d2i_RSA_PSS_PARAMS(nullptr, &pData, pEnd - pData));
-			if (!Params || pData != pEnd)
+			bssl::UniquePtr<RSA_PSS_PARAMS> pParams(d2i_RSA_PSS_PARAMS(nullptr, &pData, pEnd - pData));
+			if (!pParams || pData != pEnd)
 				return 0;
 
 			uint16 MaskStrength = 80;
-			if (Params->maskGenAlgorithm)
+			if (pParams->maskGenAlgorithm)
 			{
 				ASN1_OBJECT const *pMaskObject = nullptr;
-				X509_ALGOR_get0(&pMaskObject, &Type, &pValue, Params->maskGenAlgorithm);
+				X509_ALGOR_get0(&pMaskObject, &Type, &pValue, pParams->maskGenAlgorithm);
 				if (OBJ_obj2nid(pMaskObject) != NID_mgf1 || Type != V_ASN1_SEQUENCE || !pValue)
 					return 0;
 
@@ -175,14 +175,14 @@ namespace NMib::NNetwork
 
 				pData = ASN1_STRING_get0_data(pSequence);
 				pEnd = pData + ASN1_STRING_length(pSequence);
-				bssl::UniquePtr<X509_ALGOR> MaskHash(d2i_X509_ALGOR(nullptr, &pData, pEnd - pData));
-				if (!MaskHash || pData != pEnd)
+				bssl::UniquePtr<X509_ALGOR> pMaskHash(d2i_X509_ALGOR(nullptr, &pData, pEnd - pData));
+				if (!pMaskHash || pData != pEnd)
 					return 0;
 
-				MaskStrength = fg_AlgorithmDigestStrength(MaskHash.get());
+				MaskStrength = fg_AlgorithmDigestStrength(pMaskHash.get());
 			}
 
-			return fg_Min(fg_AlgorithmDigestStrength(Params->hashAlgorithm), MaskStrength);
+			return fg_Min(fg_AlgorithmDigestStrength(pParams->hashAlgorithm), MaskStrength);
 		}
 
 		bool fg_IsSelfIssuedCertificate(X509 *_pCertificate)
@@ -197,9 +197,9 @@ namespace NMib::NNetwork
 
 			X509 *pIssuer = nullptr;
 			auto Result = X509_STORE_CTX_get1_issuer(&pIssuer, _pStoreContext, _pCertificate);
-			bssl::UniquePtr<X509> Issuer(pIssuer);
+			bssl::UniquePtr<X509> pOwnedIssuer(pIssuer);
 
-			return Result == 1 && X509_cmp(Issuer.get(), _pCertificate) == 0;
+			return Result == 1 && X509_cmp(pOwnedIssuer.get(), _pCertificate) == 0;
 		}
 
 		// Trust anchors authenticate through their configured keys, not their self-signatures.
@@ -757,9 +757,9 @@ namespace NMib::NNetwork
 					if (CertificateFiles.f_IsEmpty())
 						DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
 
-					for (auto Iter = CertificateFiles.f_GetIterator(); Iter; ++Iter)
+					for (auto iCertificateFile = CertificateFiles.f_GetIterator(); iCertificateFile; ++iCertificateFile)
 					{
-						NContainer::CByteVector CertificateData = NFile::CFile::fs_ReadFile(*Iter);
+						NContainer::CByteVector CertificateData = NFile::CFile::fs_ReadFile(*iCertificateFile);
 						if (CertificateData.f_IsEmpty())
 							continue;
 
@@ -774,7 +774,7 @@ namespace NMib::NNetwork
 
 						ERR_clear_error();
 						if (!X509_STORE_add_cert(pStore, pCertificate))
-							DMibErrorCryptography(fg_GetExceptionStr(fg_Format("Failed to add certificate '{}' to store", *Iter)));
+							DMibErrorCryptography(fg_GetExceptionStr(fg_Format("Failed to add certificate '{}' to store", *iCertificateFile)));
 					}
 
 					if (!bUsingCertificateAuthority)
@@ -864,9 +864,9 @@ namespace NMib::NNetwork
 				NContainer::TCVector<NStr::CStr> CRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
 
 				bool bAdded = false;
-				for (auto Iter = CRLFiles.f_GetIterator(); Iter; ++Iter)
+				for (auto iCRLFile = CRLFiles.f_GetIterator(); iCRLFile; ++iCRLFile)
 				{
-					NContainer::CByteVector CRLData = NFile::CFile::fs_ReadFile(*Iter);
+					NContainer::CByteVector CRLData = NFile::CFile::fs_ReadFile(*iCRLFile);
 					if (CRLData.f_IsEmpty())
 						continue;
 
@@ -1145,8 +1145,8 @@ namespace NMib::NNetwork
 			(
 				CSSLConnection *_pSSL
 				, NStorage::TCSharedPointer<CSSLContext> const &_pContext
-				, FAuthenticationResultCallback &&_AuthenticationResultCallback
-				, FUserTrustDecisionCallback &&_UserTrustCallback
+				, FAuthenticationResultCallback &&_fAuthenticationResultCallback
+				, FUserTrustDecisionCallback &&_fUserTrustCallback
 				, NStr::CStr const &_Hostname
 			)
 			: mp_pSSL(_pSSL)
@@ -1155,8 +1155,8 @@ namespace NMib::NNetwork
 			, mp_Hostname(_Hostname)
 			, mp_State(EState_None)
 			, mp_bConnected(false)
-			, mp_AuthenticationResultCallback(fg_Move(_AuthenticationResultCallback))
-			, mp_UserTrustCallback(fg_Move(_UserTrustCallback))
+			, mp_fAuthenticationResultCallback(fg_Move(_fAuthenticationResultCallback))
+			, mp_fUserTrustCallback(fg_Move(_fUserTrustCallback))
 			, mp_bHandshakeInProgress(false)
 			, mp_bUsingTrustDecision(false)
 		{
@@ -1863,8 +1863,8 @@ namespace NMib::NNetwork
 		NStr::CStr mp_Hostname;
 		NStr::CStr mp_LastError;
 		EState mp_State;
-		FAuthenticationResultCallback mp_AuthenticationResultCallback;
-		FUserTrustDecisionCallback mp_UserTrustCallback;
+		FAuthenticationResultCallback mp_fAuthenticationResultCallback;
+		FUserTrustDecisionCallback mp_fUserTrustCallback;
 
 		CSSLConnectionResult mp_ExpectedResultCallback;
 		NStorage::TCUniquePointer<CSSLContext::CSession> mp_pSession;
@@ -1930,8 +1930,8 @@ namespace NMib::NNetwork
 				fp_ProcessConnection(Ret, !_bAccept, ResultForCallback);
 			}
 
-			if (mp_AuthenticationResultCallback)
-				mp_AuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
+			if (mp_fAuthenticationResultCallback)
+				mp_fAuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
 			mp_bHandshakeInProgress = ResultForCallback == EAuthenticationResult_SocketNotReady;
 
 #if 0
@@ -2016,8 +2016,8 @@ namespace NMib::NNetwork
 					if (bCallTrustCallback)
 					{
 						f_SetState(EState_RequiresUserDecisionOnTrust);
-						if (mp_UserTrustCallback)
-							mp_UserTrustCallback(mp_pSSL->f_GetConnectionResult());
+						if (mp_fUserTrustCallback)
+							mp_fUserTrustCallback(mp_pSSL->f_GetConnectionResult());
 					}
 				}
 			}
@@ -2109,8 +2109,8 @@ namespace NMib::NNetwork
 	CSSLConnection::CSSLConnection
 		(
 			NStorage::TCSharedPointer<CSSLContext> const &_pContext
-			, FAuthenticationResultCallback &&_AuthenticationResultCallback
-			, FUserTrustDecisionCallback &&_UserTrustDecisionCallback
+			, FAuthenticationResultCallback &&_fAuthenticationResultCallback
+			, FUserTrustDecisionCallback &&_fUserTrustDecisionCallback
 			, NStr::CStr const &_Hostname
 		)
 		: mp_pInternal(nullptr)
@@ -2119,7 +2119,7 @@ namespace NMib::NNetwork
 			(
 				[&]() -> decltype(auto)
 				{
-					mp_pInternal = fg_Construct(this, _pContext, fg_Move(_AuthenticationResultCallback), fg_Move(_UserTrustDecisionCallback), _Hostname);
+					mp_pInternal = fg_Construct(this, _pContext, fg_Move(_fAuthenticationResultCallback), fg_Move(_fUserTrustDecisionCallback), _Hostname);
 				}
 			)
 		;
@@ -2745,19 +2745,19 @@ namespace NMib::NNetwork
 
 	bool CSSLConnectionResult::f_ContainsInvalidContextErrors() const
 	{
-		for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
+		for (auto iMiscError = mp_MiscErrors.f_GetIterator(); iMiscError; ++iMiscError)
 		{
 			if
 			(
-				Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation
-				|| Iter.f_GetKey() == EMiscError_InvalidPublicCertificate
-				|| Iter.f_GetKey() == EMiscError_InvalidPrivateKey
-				|| Iter.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch
-				|| Iter.f_GetKey() == EMiscError_InvalidCRLData
-				|| Iter.f_GetKey() == EMiscError_InvalidCRLPath
-				|| Iter.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
-				|| Iter.f_GetKey() == EMiscError_InternalError
-				|| Iter.f_GetKey() == EMiscError_MismatchingSpecificCertificate
+				iMiscError.f_GetKey() == EMiscError_InvalidCertificateAuthorityLocation
+				|| iMiscError.f_GetKey() == EMiscError_InvalidPublicCertificate
+				|| iMiscError.f_GetKey() == EMiscError_InvalidPrivateKey
+				|| iMiscError.f_GetKey() == EMiscError_CertificatePrivateKeyMisMatch
+				|| iMiscError.f_GetKey() == EMiscError_InvalidCRLData
+				|| iMiscError.f_GetKey() == EMiscError_InvalidCRLPath
+				|| iMiscError.f_GetKey() == EMiscError_InvalidCertificateAuthorityData
+				|| iMiscError.f_GetKey() == EMiscError_InternalError
+				|| iMiscError.f_GetKey() == EMiscError_MismatchingSpecificCertificate
 			)
 			{
 				return true;
@@ -2786,9 +2786,9 @@ namespace NMib::NNetwork
 			}
 		;
 
-		for (auto Iter = _LocalStore.f_GetIterator(); Iter; ++Iter)
+		for (auto iCertificate = _LocalStore.f_GetIterator(); iCertificate; ++iCertificate)
 		{
-			if (fVerifyAgainstLocalTrust(*Iter))
+			if (fVerifyAgainstLocalTrust(*iCertificate))
 				return true;
 		}
 
@@ -2840,16 +2840,16 @@ namespace NMib::NNetwork
 		;
 
 		// Add errors generated for each level of certificate chain.
-		for (auto Iter = mp_Certificates.f_GetIterator(); Iter; ++Iter)
+		for (auto iCertificate = mp_Certificates.f_GetIterator(); iCertificate; ++iCertificate)
 		{
-			CResultCertificate const &Certificate = (*Iter);
-			for (auto EIter = Certificate.m_Errors.f_GetIterator(); EIter; ++EIter)
-				fAppendError(fp_StringForError(EIter.f_GetKey()));
+			CResultCertificate const &Certificate = (*iCertificate);
+			for (auto iError = Certificate.m_Errors.f_GetIterator(); iError; ++iError)
+				fAppendError(fp_StringForError(iError.f_GetKey()));
 		}
 
 		// Add misc errors.
-		for (auto Iter = mp_MiscErrors.f_GetIterator(); Iter; ++Iter)
-			fAppendError(fp_StringForError(Iter.f_GetKey()));
+		for (auto iMiscError = mp_MiscErrors.f_GetIterator(); iMiscError; ++iMiscError)
+			fAppendError(fp_StringForError(iMiscError.f_GetKey()));
 
 		// Add system errors.
 		if (!mp_SSLErrors.f_IsEmpty())

@@ -9,14 +9,14 @@ namespace NMib::NNetwork
 	CSocket_SSL::CSocket_SSL
 		(
 			NStorage::TCSharedPointer<CSSLContext> const &_pContext
-			, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
-			, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
+			, CSSLConnection::FAuthenticationResultCallback const &_fAuthenticationResultCallback
+			, CSSLConnection::FUserTrustDecisionCallback const &_fUserTrustDecisionCallback
 			, NStr::CStr const &_Hostname
 		)
 		: mp_pSSLContext(_pContext)
-		, mp_AuthenticationResultCallback(_AuthenticationResultCallback)
-		, mp_UserTrustDecisionCallback(_UserTrustDecisionCallback)
-		, mp_SSLConnection(_pContext, fg_TempCopy(_AuthenticationResultCallback), fg_TempCopy(_UserTrustDecisionCallback), _Hostname)
+		, mp_fAuthenticationResultCallback(_fAuthenticationResultCallback)
+		, mp_fUserTrustDecisionCallback(_fUserTrustDecisionCallback)
+		, mp_SSLConnection(_pContext, fg_TempCopy(_fAuthenticationResultCallback), fg_TempCopy(_fUserTrustDecisionCallback), _Hostname)
 	{
 	}
 
@@ -83,7 +83,7 @@ namespace NMib::NNetwork
 	{
 		return [this](ENetTCPState _StateAdded)
 			{
-				DMibLock(mp_fOnStateChangeLock);
+				DMibLock(mp_OnStateChangeLock);
 				mp_fOnStateChange(_StateAdded);
 			}
 		;
@@ -123,7 +123,7 @@ namespace NMib::NNetwork
 				, [this](ENetTCPState _StateAdded)
 				{
 					{
-						DMibLock(mp_fOnStateChangeLock);
+						DMibLock(mp_OnStateChangeLock);
 						mp_fOnStateChange(_StateAdded);
 					}
 					if (_StateAdded == ENetTCPState_Connected)
@@ -161,7 +161,7 @@ namespace NMib::NNetwork
 
 	NStorage::TCUniquePointer<ICSocket> CSocket_SSL::f_Accept(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
-		NStorage::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_AuthenticationResultCallback, mp_UserTrustDecisionCallback, "");
+		NStorage::TCUniquePointer<CSocket_SSL> pSocket = fg_Construct(mp_pSSLContext, mp_fAuthenticationResultCallback, mp_fUserTrustDecisionCallback, "");
 		pSocket->mp_fOnStateChange = fg_Move(_fOnStateChange);
 		pSocket->mp_Socket.f_Accept(&mp_Socket, pSocket->fp_SharedOnStateChange());
 		if (!pSocket->mp_Socket.f_IsValid())
@@ -204,7 +204,7 @@ namespace NMib::NNetwork
 	void CSocket_SSL::f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			mp_fOnStateChange = fg_Move(_fOnStateChange);
 		}
 	}
@@ -444,15 +444,15 @@ namespace NMib::NNetwork
 		CSendOperation &Operation = mp_SendOperations[_iOperation];
 		DMibFastCheck(!Operation.m_bLinked);
 
-		umint nHeads = mp_iBufferOperationHead.f_GetLen();
+		umint nHeads = mp_BufferOperationHead.f_GetLen();
 		if (Operation.m_iBuffer >= nHeads)
 		{
-			mp_iBufferOperationHead.f_SetLen(Operation.m_iBuffer + 1);
+			mp_BufferOperationHead.f_SetLen(Operation.m_iBuffer + 1);
 			for (umint iHead = nHeads; iHead <= Operation.m_iBuffer; ++iHead)
-				mp_iBufferOperationHead[iHead] = -1;
+				mp_BufferOperationHead[iHead] = -1;
 		}
 
-		int32 *pLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+		int32 *pLink = &mp_BufferOperationHead[Operation.m_iBuffer];
 		while (*pLink >= 0)
 			pLink = &mp_SendOperations[umint(*pLink)].m_iNextForBuffer;
 
@@ -467,7 +467,7 @@ namespace NMib::NNetwork
 
 		if (Operation.m_bLinked)
 		{
-			int32 *pLink = &mp_iBufferOperationHead[Operation.m_iBuffer];
+			int32 *pLink = &mp_BufferOperationHead[Operation.m_iBuffer];
 			while (*pLink >= 0 && umint(*pLink) != _iOperation)
 				pLink = &mp_SendOperations[umint(*pLink)].m_iNextForBuffer;
 
@@ -757,7 +757,7 @@ namespace NMib::NNetwork
 	// Report staged transfers through their stored callbacks; return carrier plaintext through the currently resolving operation.
 	void CSocket_SSL::fp_ResolveOpsForBuffer(umint _iBuffer, NMib::NSys::CIoCompletion const &_Result, umint &o_nCarrierPlaintext)
 	{
-		int32 iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		int32 iOperation = _iBuffer < mp_BufferOperationHead.f_GetLen() ? mp_BufferOperationHead[_iBuffer] : -1;
 		while (iOperation >= 0)
 		{
 			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
@@ -788,7 +788,7 @@ namespace NMib::NNetwork
 	// Free each transfer only after both completion and release have been reported.
 	void CSocket_SSL::fp_ReleaseOpsForBuffer(umint _iBuffer, umint _iTransfer)
 	{
-		int32 iOperation = _iBuffer < mp_iBufferOperationHead.f_GetLen() ? mp_iBufferOperationHead[_iBuffer] : -1;
+		int32 iOperation = _iBuffer < mp_BufferOperationHead.f_GetLen() ? mp_BufferOperationHead[_iBuffer] : -1;
 		while (iOperation >= 0)
 		{
 			CSendOperation &Operation = mp_SendOperations[umint(iOperation)];
@@ -1170,14 +1170,14 @@ namespace NMib::NNetwork
 	auto CSocket_SSL::fs_GetFactory
 		(
 			NStorage::TCSharedPointer<CSSLContext> const &_pContext
-			, CSSLConnection::FAuthenticationResultCallback const &_AuthenticationResultCallback
-			, CSSLConnection::FUserTrustDecisionCallback const &_UserTrustDecisionCallback
+			, CSSLConnection::FAuthenticationResultCallback const &_fAuthenticationResultCallback
+			, CSSLConnection::FUserTrustDecisionCallback const &_fUserTrustDecisionCallback
 		)
 		-> FVirtualSocketFactory
 	{
 		return [=](NStr::CStr const &_Hostname) -> NStorage::TCUniquePointer<ICSocket>
 			{
-				return fg_Construct<CSocket_SSL>(_pContext, _AuthenticationResultCallback, _UserTrustDecisionCallback, _Hostname);
+				return fg_Construct<CSocket_SSL>(_pContext, _fAuthenticationResultCallback, _fUserTrustDecisionCallback, _Hostname);
 			}
 		;
 	}
@@ -1246,7 +1246,7 @@ namespace NMib::NNetwork
 	{
 		mp_ExtraState.f_FetchOr(_ToAdd);
 		{
-			DMibLock(mp_fOnStateChangeLock);
+			DMibLock(mp_OnStateChangeLock);
 			if (mp_fOnStateChange)
 				mp_fOnStateChange(_ToAdd);
 		}

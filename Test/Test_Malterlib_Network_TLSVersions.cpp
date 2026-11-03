@@ -32,7 +32,7 @@ namespace
 			CSocket Socket;
 			Socket.f_Connect(Address);
 
-			TCSharedPointer<NThread::CEventAutoReset> Changed = fg_Construct();
+			TCSharedPointer<NThread::CEventAutoReset> pChanged = fg_Construct();
 			CSocket Peer;
 
 			// Accepting only succeeds once the connection has arrived, and the listener reports no state,
@@ -42,9 +42,9 @@ namespace
 				Peer.f_Accept
 					(
 						&Listener
-						, [Changed](ENetTCPState _StateAdded)
+						, [pChanged](ENetTCPState _StateAdded)
 						{
-							Changed->f_Signal();
+							pChanged->f_Signal();
 						}
 					)
 				;
@@ -58,8 +58,8 @@ namespace
 				NSys::fg_Thread_Sleep(0.005f);
 			}
 
-			TCSharedPointer<CSSLContext> Context = fg_Construct(CSSLContext::EType_Client, _Settings);
-			CSSLConnection Connection(Context, {}, {}, "localhost");
+			TCSharedPointer<CSSLContext> pContext = fg_Construct(CSSLContext::EType_Client, _Settings);
+			CSSLConnection Connection(pContext, {}, {}, "localhost");
 			Connection.f_GiveSocket(&Socket);
 			Connection.f_Connect();
 
@@ -80,7 +80,7 @@ namespace
 				if (bEndOfStream || nReceived == Hello.f_GetLen() || Timeout.f_GetTime() >= 10.0 * NTest::gc_TimeoutMultiplier)
 					DMibError("Could not receive configured ClientHello");
 
-				Changed->f_WaitTimeout(0.1);
+				pChanged->f_WaitTimeout(0.1);
 			}
 
 			Hello.f_SetLen(nReceived);
@@ -219,41 +219,41 @@ namespace
 					{
 						using namespace NCryptography::NBoringSSL;
 
-						bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_server_method()));
+						bssl::UniquePtr<SSL_CTX> pContext(SSL_CTX_new(TLS_server_method()));
 						uint16_t Group = _Group;
 						uint16_t Signature = SSL_SIGN_ECDSA_SECP521R1_SHA512;
 						if
 						(
-							!Context
-							|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-							|| !SSL_CTX_set1_group_ids(Context.get(), &Group, 1)
-							|| !SSL_CTX_set_signing_algorithm_prefs(Context.get(), &Signature, 1)
+							!pContext
+							|| !SSL_CTX_set_min_proto_version(pContext.get(), TLS1_3_VERSION)
+							|| !SSL_CTX_set1_group_ids(pContext.get(), &Group, 1)
+							|| !SSL_CTX_set_signing_algorithm_prefs(pContext.get(), &Signature, 1)
 						)
 						{
 							DMibErrorCryptography(fg_GetExceptionStr("Could not prepare single-group server fixture"));
 						}
 
-						bssl::UniquePtr<X509> Certificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
-						bssl::UniquePtr<EVP_PKEY> Key(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
-						if (!SSL_CTX_use_certificate(Context.get(), Certificate.get()) || !SSL_CTX_use_PrivateKey(Context.get(), Key.get()))
+						bssl::UniquePtr<X509> pCertificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
+						bssl::UniquePtr<EVP_PKEY> pKey(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
+						if (!SSL_CTX_use_certificate(pContext.get(), pCertificate.get()) || !SSL_CTX_use_PrivateKey(pContext.get(), pKey.get()))
 							DMibErrorCryptography(fg_GetExceptionStr("Could not install single-group server credentials"));
 
-						bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
-						bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
-						bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
-						if (!Connection || !Read || !Write || BIO_write(Read.get(), _Hello.f_GetArray(), int(_Hello.f_GetLen())) != int(_Hello.f_GetLen()))
+						bssl::UniquePtr<SSL> pConnection(SSL_new(pContext.get()));
+						bssl::UniquePtr<BIO> pRead(BIO_new(BIO_s_mem()));
+						bssl::UniquePtr<BIO> pWrite(BIO_new(BIO_s_mem()));
+						if (!pConnection || !pRead || !pWrite || BIO_write(pRead.get(), _Hello.f_GetArray(), int(_Hello.f_GetLen())) != int(_Hello.f_GetLen()))
 							DMibErrorCryptography(fg_GetExceptionStr("Could not feed single-group handshake fixture"));
 
-						SSL_set_bio(Connection.get(), Read.release(), Write.release());
-						SSL_set_accept_state(Connection.get());
+						SSL_set_bio(pConnection.get(), pRead.release(), pWrite.release());
+						SSL_set_accept_state(pConnection.get());
 
 						ERR_clear_error();
-						auto Result = SSL_accept(Connection.get());
-						auto Error = SSL_get_error(Connection.get(), Result);
+						auto Result = SSL_accept(pConnection.get());
+						auto Error = SSL_get_error(pConnection.get(), Result);
 
 						DMibExpect(Error, ==, SSL_ERROR_WANT_READ)(fg_GetErrors());
-						DMibExpectFalse(bool(SSL_used_hello_retry_request(Connection.get())));
-						DMibExpect(SSL_get_group_id(Connection.get()), ==, Group);
+						DMibExpectFalse(bool(SSL_used_hello_retry_request(pConnection.get())));
+						DMibExpect(SSL_get_group_id(pConnection.get()), ==, Group);
 
 						ERR_clear_error();
 					}
@@ -293,29 +293,29 @@ namespace
 					{
 						using namespace NCryptography::NBoringSSL;
 
-						bssl::UniquePtr<BIGNUM> Modulus(BN_new());
-						bssl::UniquePtr<BIGNUM> Exponent(BN_new());
-						if (!Modulus || !Exponent || !BN_set_bit(Modulus.get(), _Bits - 1) || !BN_set_bit(Modulus.get(), 0) || !BN_set_word(Exponent.get(), RSA_F4))
+						bssl::UniquePtr<BIGNUM> pModulus(BN_new());
+						bssl::UniquePtr<BIGNUM> pExponent(BN_new());
+						if (!pModulus || !pExponent || !BN_set_bit(pModulus.get(), _Bits - 1) || !BN_set_bit(pModulus.get(), 0) || !BN_set_word(pExponent.get(), RSA_F4))
 							DMibErrorCryptography(fg_GetExceptionStr("Could not prepare RSA modulus fixture"));
 
 						// Only the public modulus length is exercised; no RSA private key or handshake is needed.
-						bssl::UniquePtr<RSA> RSAKey(RSA_new_public_key(Modulus.get(), Exponent.get()));
-						bssl::UniquePtr<EVP_PKEY> Key(EVP_PKEY_new());
-						bssl::UniquePtr<X509> Certificate(fg_LoadCertificate(_Signer.m_PublicCertificateData));
-						bssl::UniquePtr<EVP_PKEY> Signer(fg_LoadPrivateKey(_Signer.m_PrivateKeyData));
+						bssl::UniquePtr<RSA> pRSAKey(RSA_new_public_key(pModulus.get(), pExponent.get()));
+						bssl::UniquePtr<EVP_PKEY> pKey(EVP_PKEY_new());
+						bssl::UniquePtr<X509> pCertificate(fg_LoadCertificate(_Signer.m_PublicCertificateData));
+						bssl::UniquePtr<EVP_PKEY> pSigner(fg_LoadPrivateKey(_Signer.m_PrivateKeyData));
 						if
 						(
-							!RSAKey
-							|| !Key
-							|| !EVP_PKEY_set1_RSA(Key.get(), RSAKey.get())
-							|| !X509_set_pubkey(Certificate.get(), Key.get())
-							|| !X509_sign(Certificate.get(), Signer.get(), EVP_sha512())
+							!pRSAKey
+							|| !pKey
+							|| !EVP_PKEY_set1_RSA(pKey.get(), pRSAKey.get())
+							|| !X509_set_pubkey(pCertificate.get(), pKey.get())
+							|| !X509_sign(pCertificate.get(), pSigner.get(), EVP_sha512())
 						)
 						{
 							DMibErrorCryptography(fg_GetExceptionStr("Could not prepare RSA certificate fixture"));
 						}
 
-						return fg_ConvertX509ToBinary(Certificate.get());
+						return fg_ConvertX509ToBinary(pCertificate.get());
 					}
 				)
 			;
@@ -431,7 +431,7 @@ namespace
 			co_return ClientDigest;
 		}
 
-		static TCFuture<void> fs_ExpectConnectionFailure(CSSLSettings _ClientSettings, FVirtualSocketFactory _ServerFactory)
+		static TCFuture<void> fs_ExpectConnectionFailure(CSSLSettings _ClientSettings, FVirtualSocketFactory _fServerFactory)
 		{
 			TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, _ClientSettings);
 
@@ -450,7 +450,7 @@ namespace
 					, NContainer::fg_CreateVector<CNetAddress>(Address)
 					, ENetFlag_None
 					, CAsyncSocketServerCallbacks{}
-					, fg_Move(_ServerFactory)
+					, fg_Move(_fServerFactory)
 				)
 			;
 
@@ -499,10 +499,10 @@ namespace
 
 				struct CCase
 				{
-					ch8 const *m_Name;
+					ch8 const *m_pName;
 					CSSLSettings::EProtocol m_Client;
 					CSSLSettings::EProtocol m_Server;
-					ch8 const *m_Expected;
+					ch8 const *m_pExpected;
 					bool m_bStrict = false;
 				};
 
@@ -522,7 +522,7 @@ namespace
 
 				for (auto const &Case : Cases)
 				{
-					DMibTestPath(Case.m_Name);
+					DMibTestPath(Case.m_pName);
 
 					auto Server = Case.m_bStrict ? StrongServer : CompatibleServer;
 					Server.m_Protocol = Case.m_Server;
@@ -533,9 +533,9 @@ namespace
 					Client.m_CACertificateData = Server.m_PublicCertificateData;
 					Client.m_MinimumCryptoStrength = Server.m_MinimumCryptoStrength;
 
-					bool bExpectedRetry = !Case.m_bStrict && CStr(Case.m_Expected) == "TLSv1.3";
-					auto Digest = co_await fs_CheckConnection(fg_Move(Client), fg_Move(Server), Case.m_Expected, Case.m_bStrict ? 256 : 128, bExpectedRetry);
-					auto &Previous = PreviousDigests[CStr(Case.m_Expected)];
+					bool bExpectedRetry = !Case.m_bStrict && CStr(Case.m_pExpected) == "TLSv1.3";
+					auto Digest = co_await fs_CheckConnection(fg_Move(Client), fg_Move(Server), Case.m_pExpected, Case.m_bStrict ? 256 : 128, bExpectedRetry);
+					auto &Previous = PreviousDigests[CStr(Case.m_pExpected)];
 					if (!Previous.f_IsEmpty())
 						DMibExpect(Digest, !=, Previous);
 
@@ -557,7 +557,7 @@ namespace
 
 					struct CPreferenceCase
 					{
-						ch8 const *m_Name;
+						ch8 const *m_pName;
 						CSSLSettings m_Settings;
 						EStrength m_Minimum;
 						uint16 m_First;
@@ -679,7 +679,7 @@ namespace
 
 					for (auto const &Case : PreferenceCases)
 					{
-						DMibTestPath(Case.m_Name);
+						DMibTestPath(Case.m_pName);
 
 						for (auto Protocol : {CSSLSettings::EProtocol_TLS_1_2, CSSLSettings::EProtocol_TLS_1_3})
 						{
@@ -741,7 +741,7 @@ namespace
 
 					struct COfferCase
 					{
-						ch8 const *m_Name;
+						ch8 const *m_pName;
 						uint32 m_Minimum;
 						bool m_bConfigurePolicy;
 					};
@@ -759,7 +759,7 @@ namespace
 
 					for (auto const &Offer : Offers)
 					{
-						DMibTestPath(Offer.m_Name);
+						DMibTestPath(Offer.m_pName);
 
 						auto Hello = fs_ClientHello(Offer.m_Minimum, Offer.m_bConfigurePolicy);
 						auto Offset = fs_CipherOffset(Hello);
@@ -986,37 +986,37 @@ namespace
 		{
 			using namespace NCryptography::NBoringSSL;
 
-			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_client_method()));
+			bssl::UniquePtr<SSL_CTX> pContext(SSL_CTX_new(TLS_client_method()));
 			if
 			(
-				!Context
-				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
-				|| (_bConfigurePolicy && !SSL_CTX_set_tls13_cipher_policy(Context.get(), _MinimumBits, 1))
+				!pContext
+				|| !SSL_CTX_set_min_proto_version(pContext.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_max_proto_version(pContext.get(), TLS1_3_VERSION)
+				|| (_bConfigurePolicy && !SSL_CTX_set_tls13_cipher_policy(pContext.get(), _MinimumBits, 1))
 			)
 			{
 				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS client fixture"));
 			}
 
-			bssl::SSL_CTX_set_aes_hw_override_for_testing(Context.get(), true);
+			bssl::SSL_CTX_set_aes_hw_override_for_testing(pContext.get(), true);
 
-			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
-			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
-			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
-			if (!Connection || !Read || !Write)
+			bssl::UniquePtr<SSL> pConnection(SSL_new(pContext.get()));
+			bssl::UniquePtr<BIO> pRead(BIO_new(BIO_s_mem()));
+			bssl::UniquePtr<BIO> pWrite(BIO_new(BIO_s_mem()));
+			if (!pConnection || !pRead || !pWrite)
 				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
 
-			auto *pWrite = Write.get();
-			SSL_set_bio(Connection.get(), Read.release(), Write.release());
-			SSL_set_connect_state(Connection.get());
+			auto *pWriteBIO = pWrite.get();
+			SSL_set_bio(pConnection.get(), pRead.release(), pWrite.release());
+			SSL_set_connect_state(pConnection.get());
 
 			ERR_clear_error();
-			auto Result = SSL_connect(Connection.get());
-			if (Result >= 0 || SSL_get_error(Connection.get(), Result) != SSL_ERROR_WANT_READ)
+			auto Result = SSL_connect(pConnection.get());
+			if (Result >= 0 || SSL_get_error(pConnection.get(), Result) != SSL_ERROR_WANT_READ)
 				DMibErrorCryptography(fg_GetExceptionStr("Could not generate ClientHello fixture"));
 
 			char *pData = nullptr;
-			auto Length = BIO_get_mem_data(pWrite, &pData);
+			auto Length = BIO_get_mem_data(pWriteBIO, &pData);
 			if (Length < 5 || uint8(pData[0]) != 22)
 				DMibError("Expected a TLS handshake record");
 
@@ -1035,39 +1035,39 @@ namespace
 		{
 			using namespace NCryptography::NBoringSSL;
 
-			bssl::UniquePtr<SSL_CTX> Context(SSL_CTX_new(TLS_server_method()));
+			bssl::UniquePtr<SSL_CTX> pContext(SSL_CTX_new(TLS_server_method()));
 			if
 			(
-				!Context
-				|| !SSL_CTX_set_min_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_max_proto_version(Context.get(), TLS1_3_VERSION)
-				|| !SSL_CTX_set_tls13_cipher_policy(Context.get(), _bStrict ? 256 : 0, 1)
+				!pContext
+				|| !SSL_CTX_set_min_proto_version(pContext.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_max_proto_version(pContext.get(), TLS1_3_VERSION)
+				|| !SSL_CTX_set_tls13_cipher_policy(pContext.get(), _bStrict ? 256 : 0, 1)
 			)
 			{
 				DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS server fixture"));
 			}
 
-			bssl::UniquePtr<X509> Certificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
-			bssl::UniquePtr<EVP_PKEY> Key(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
-			if (!SSL_CTX_use_certificate(Context.get(), Certificate.get()) || !SSL_CTX_use_PrivateKey(Context.get(), Key.get()))
+			bssl::UniquePtr<X509> pCertificate(fg_LoadCertificate(_Credentials.m_PublicCertificateData));
+			bssl::UniquePtr<EVP_PKEY> pKey(fg_LoadPrivateKey(_Credentials.m_PrivateKeyData));
+			if (!SSL_CTX_use_certificate(pContext.get(), pCertificate.get()) || !SSL_CTX_use_PrivateKey(pContext.get(), pKey.get()))
 				DMibErrorCryptography(fg_GetExceptionStr("Could not install TLS fixture credentials"));
 
-			bssl::UniquePtr<SSL> Connection(SSL_new(Context.get()));
-			bssl::UniquePtr<BIO> Read(BIO_new(BIO_s_mem()));
-			bssl::UniquePtr<BIO> Write(BIO_new(BIO_s_mem()));
-			if (!Connection || !Read || !Write)
+			bssl::UniquePtr<SSL> pConnection(SSL_new(pContext.get()));
+			bssl::UniquePtr<BIO> pRead(BIO_new(BIO_s_mem()));
+			bssl::UniquePtr<BIO> pWrite(BIO_new(BIO_s_mem()));
+			if (!pConnection || !pRead || !pWrite)
 				DMibErrorCryptography(fg_GetExceptionStr("Could not allocate TLS fixture"));
 
 			auto Hello = fs_AES128OnlyHello();
-			if (BIO_write(Read.get(), Hello.f_GetArray(), int(Hello.f_GetLen())) != int(Hello.f_GetLen()))
+			if (BIO_write(pRead.get(), Hello.f_GetArray(), int(Hello.f_GetLen())) != int(Hello.f_GetLen()))
 				DMibErrorCryptography(fg_GetExceptionStr("Could not feed ClientHello fixture"));
 
-			SSL_set_bio(Connection.get(), Read.release(), Write.release());
-			SSL_set_accept_state(Connection.get());
+			SSL_set_bio(pConnection.get(), pRead.release(), pWrite.release());
+			SSL_set_accept_state(pConnection.get());
 
 			ERR_clear_error();
-			auto Result = SSL_accept(Connection.get());
-			auto Error = SSL_get_error(Connection.get(), Result);
+			auto Result = SSL_accept(pConnection.get());
+			auto Error = SSL_get_error(pConnection.get(), Result);
 			auto Reason = ERR_GET_REASON(ERR_peek_last_error());
 			auto Details = fg_GetErrors();
 
@@ -1080,7 +1080,7 @@ namespace
 			{
 				DMibExpect(Error, ==, SSL_ERROR_WANT_READ)(Details);
 
-				auto *pCipher = SSL_get_pending_cipher(Connection.get());
+				auto *pCipher = SSL_get_pending_cipher(pConnection.get());
 				DMibAssertTrue(pCipher != nullptr);
 				DMibExpect(SSL_CIPHER_get_bits(pCipher, nullptr), ==, 128);
 			}

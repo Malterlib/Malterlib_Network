@@ -380,7 +380,7 @@ private:
 			}
 		}
 
-		void f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_ServerFactory)
+		void f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_fServerFactory)
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
 			CAsyncSocketServerCallbacks ListenCallbacks;
@@ -507,7 +507,7 @@ private:
 				}
 			;
 
-			m_ServerActor(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector(_ListenAddress), ENetFlag_None, fg_Move(ListenCallbacks), fg_TempCopy(_ServerFactory))
+			m_ServerActor(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector(_ListenAddress), ENetFlag_None, fg_Move(ListenCallbacks), fg_TempCopy(_fServerFactory))
 				> [pStateWeak](TCAsyncResult<CAsyncSocketServerActor::CListenResult> &&_Result)
 				{
 					auto pState = pStateWeak.f_Lock();
@@ -528,10 +528,10 @@ private:
 			DMibAssertTrue(m_ListenCallbackReference);
 		}
 
-		void f_Connect(CStr const &_Address, FVirtualSocketFactory const &_ClientFactory)
+		void f_Connect(CStr const &_Address, FVirtualSocketFactory const &_fClientFactory)
 		{
 			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
-			m_ClientActor(&CAsyncSocketClientActor::f_Connect, _Address, "", ENetAddressType_None, 10502, fg_TempCopy(_ClientFactory)) > [pStateWeak]
+			m_ClientActor(&CAsyncSocketClientActor::f_Connect, _Address, "", ENetAddressType_None, 10502, fg_TempCopy(_fClientFactory)) > [pStateWeak]
 				(TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
 				{
 					auto pState = pStateWeak.f_Lock();
@@ -797,7 +797,7 @@ private:
 			}
 		;
 
-		FAsyncSocketUpgradeCheckFactory CheckUpgradeFactory = [pStateWeak]() -> FAsyncSocketUpgradeCheck
+		FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [pStateWeak]() -> FAsyncSocketUpgradeCheck
 			{
 				return [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 					{
@@ -816,7 +816,7 @@ private:
 				;
 			}
 		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, CheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		CAsyncSocketServerCallbacks ServerCallbacks;
 		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
@@ -974,12 +974,12 @@ private:
 			}
 		;
 
-		FAsyncSocketUpgradeCheckFactory CheckUpgradeFactory = [fCheckUpgradePrefix]() -> FAsyncSocketUpgradeCheck
+		FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [fCheckUpgradePrefix]() -> FAsyncSocketUpgradeCheck
 			{
 				return fCheckUpgradePrefix;
 			}
 		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, CheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		CAsyncSocketServerCallbacks ServerCallbacks;
 		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
@@ -1252,8 +1252,8 @@ private:
 			CActorRunLoopTestHelper RunLoopHelper;
 
 			auto Factories = _fGetFactories();
-			auto ServerFactory = fg_Get<0>(Factories);
-			auto ClientFactory = fg_Get<1>(Factories);
+			auto fServerFactory = fg_Get<0>(Factories);
+			auto fClientFactory = fg_Get<1>(Factories);
 
 			CNetAddress ListenAddress;
 			if (_Address == "localhost")
@@ -1274,10 +1274,10 @@ private:
 				;
 
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-				pState->f_StartListen(ListenAddress, ServerFactory);
+				pState->f_StartListen(ListenAddress, fServerFactory);
 
 				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-				pState->f_Connect(_Address, ClientFactory);
+				pState->f_Connect(_Address, fClientFactory);
 
 				auto fTextBuffer = [&](CStr const &_Text)
 					{
@@ -1347,11 +1347,11 @@ private:
 
 				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
 				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->f_StartListen(ListenAddress, ServerFactory);
+				pState->f_StartListen(ListenAddress, fServerFactory);
 
 				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
 				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->f_Connect(_Address, ClientFactory);
+				pState->f_Connect(_Address, fClientFactory);
 
 				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
 					return;
@@ -1719,11 +1719,11 @@ private:
 		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
 		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
 
-		FVirtualSocketFactory ServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
-		FVirtualSocketFactory ClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+		FVirtualSocketFactory fServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+		FVirtualSocketFactory fClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
 		if (_bHandshakeWithData)
 		{
-			ServerSSLFactory = [fFactory = fg_Move(ServerSSLFactory)](CStr const &_Hostname) -> TCUniquePointer<ICSocket>
+			fServerSSLFactory = [fFactory = fg_Move(fServerSSLFactory)](CStr const &_Hostname) -> TCUniquePointer<ICSocket>
 				{
 					return fg_Construct<CHandshakeWithDataSocket>(fFactory(_Hostname));
 				}
@@ -1790,7 +1790,7 @@ private:
 			}
 		;
 
-		FAsyncSocketUpgradeCheckFactory ServerCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
+		FAsyncSocketUpgradeCheckFactory fServerCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
 			{
 				return [fUpgradeCheckMessage, UpgradeMessage = CStr("STARTTLS")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 					{
@@ -1799,13 +1799,13 @@ private:
 				;
 			}
 		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, ServerCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fServerCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		// The default socket timeout (60s) is shorter than g_Timeout under sanitizers, so a heavily loaded CI machine can silently close the connection while the test is still waiting
 		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 			{
 				CAsyncSocketCallbacks SocketCallbacks;
 				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
@@ -1819,7 +1819,7 @@ private:
 						co_return {};
 					}
 				;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ServerSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
@@ -1854,7 +1854,7 @@ private:
 						if (bStartTLS)
 						{
 							(
-								NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, ServerSSLFactory, fTextBuffer]() -> TCFuture<void>
+								NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fServerSSLFactory, fTextBuffer]() -> TCFuture<void>
 								{
 									TCActor<CAsyncSocketActor> ServerSocket;
 									NTime::CStopwatch Timeout;
@@ -1875,7 +1875,7 @@ private:
 
 									co_await NConcurrency::fg_Timeout(0.001);
 									co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("S"), 0);
-									co_await ServerSocket(&CAsyncSocketActor::f_UpgradeSocket, ServerSSLFactory, CStr());
+									co_await ServerSocket(&CAsyncSocketActor::f_UpgradeSocket, fServerSSLFactory, CStr());
 
 									DMibLock(pState->m_Lock);
 									pState->m_bServerUpgraded = true;
@@ -1958,7 +1958,7 @@ private:
 
 		ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
-		FAsyncSocketUpgradeCheckFactory ClientCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
+		FAsyncSocketUpgradeCheckFactory fClientCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
 			{
 				return [fUpgradeCheckMessage, UpgradeMessage = CStr("S")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 					{
@@ -1967,7 +1967,7 @@ private:
 				;
 			}
 		;
-		ClientActor(&CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory, ClientCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		ClientActor(&CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory, fClientCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
 		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
 			(
@@ -1993,7 +1993,7 @@ private:
 				co_return {};
 			}
 		;
-		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, ClientSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fClientSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
 			{
 				auto pState = pStateWeak.f_Lock();
 				if (!pState)
@@ -2028,10 +2028,10 @@ private:
 				if (bUpgrade)
 				{
 					(
-						NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, ClientSSLFactory, fTextBuffer]() -> TCFuture<void>
+						NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fClientSSLFactory, fTextBuffer]() -> TCFuture<void>
 						{
 							co_await NConcurrency::fg_Timeout(0.001);
-							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, ClientSSLFactory, CStr("localhost"));
+							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost"));
 							{
 								DMibLock(pState->m_Lock);
 								pState->m_bClientUpgraded = true;
@@ -2052,7 +2052,7 @@ private:
 		CStr UpgradeWithoutCheckError;
 		try
 		{
-			pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, ClientSSLFactory, CStr("localhost")).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost")).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 		}
 		catch (NException::CExceptionBase const &_Exception)
 		{

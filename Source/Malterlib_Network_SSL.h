@@ -258,8 +258,8 @@ namespace NMib::NNetwork
 		CSSLConnection
 			(
 				NStorage::TCSharedPointer<CSSLContext> const &_pContext
-				, FAuthenticationResultCallback &&_AuthenticationResultCallback
-				, FUserTrustDecisionCallback &&_UserTrustDecisionCallback
+				, FAuthenticationResultCallback &&_fAuthenticationResultCallback
+				, FUserTrustDecisionCallback &&_fUserTrustDecisionCallback
 				, NStr::CStr const &_Hostname
 			)
 		;

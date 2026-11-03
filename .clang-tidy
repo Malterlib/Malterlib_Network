@@ -5,7 +5,6 @@
 Checks: >-
   -*,
   malterlib-*,
-  -malterlib-header-declarations-only,
-  -malterlib-conceptual-prefix
+  -malterlib-header-declarations-only
 CheckOptions:
   malterlib.OptionsFile: ../Core/ClangTidyOptions.yaml
