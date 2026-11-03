@@ -18,9 +18,9 @@ namespace NMib::NNetwork
 	{
 		// Handshake messages use little-endian fields and a 32-bit length prefix. Signatures cover both hellos;
 		// anonymous clients send no signature. Mutual acceptance follows verification; kernel identity binding excludes a relay.
-		using CStream = NStream::CBinaryStreamMemory<>;
-		using CStreamReader = NStream::CBinaryStreamMemoryPtr<>;
-		using CStreamAppender = NStream::CBinaryStreamMemoryRef<>;
+		using CStream = NStream::TCBinaryStreamMemory<>;
+		using CStreamReader = NStream::TCBinaryStreamMemoryPtr<>;
+		using CStreamAppender = NStream::TCBinaryStreamMemoryRef<>;
 
 		constexpr ch8 gc_pHandshakeMagic[8] = {'M', 'i', 'b', 'P', 'A', 'u', 't', '1'};
 		constexpr ch8 gc_pTranscriptLabel[] = "MalterlibPlainAuthV1";

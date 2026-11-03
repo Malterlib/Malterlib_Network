@@ -193,11 +193,11 @@ namespace NMib::NNetwork
 
 		enum EFormat
 		{
-			EHtml
-			, ECommaSeperated
+			EFormat_Html
+			, EFormat_CommaSeperated
 		};
 
-		NStr::CStr f_GetErrorMessage(EFormat _Format = ECommaSeperated) const;
+		NStr::CStr f_GetErrorMessage(EFormat _Format = EFormat_CommaSeperated) const;
 
 	protected:
 		static bool fsp_IsTrustError(int _Error);

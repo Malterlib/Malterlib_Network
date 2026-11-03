@@ -376,9 +376,9 @@ namespace
 			Options.m_CommonName = _Name;
 			Options.m_Hostnames = NContainer::fg_CreateVector<CStr>("localhost");
 			if (_bStrong)
-				Options.m_KeySetting = CPublicKeySettings_EC_secp521r1{};
+				Options.m_KeySetting = CPublicKeySettings_EC_Secp521r1{};
 			else
-				Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
+				Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
 
 			if (_bCA)
 				Options.f_MakeCA();
@@ -436,9 +436,9 @@ namespace
 			Options.m_CommonName = _Name;
 			Options.m_Hostnames = NContainer::fg_CreateVector<CStr>("localhost");
 			if (_bStrong)
-				Options.m_KeySetting = CPublicKeySettings_EC_secp521r1{};
+				Options.m_KeySetting = CPublicKeySettings_EC_Secp521r1{};
 			else
-				Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
+				Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
 
 			if (_bCA)
 				Options.f_MakeCA();
@@ -601,7 +601,7 @@ namespace
 			{
 				auto CompatibleServer = fs_Settings("Compatible server", false);
 				auto StrongServer = fs_Settings("Strong server", true);
-				using CStrength = NCryptography::ECryptoStrength;
+				using EStrength = NCryptography::ECryptoStrength;
 
 				struct CCase
 				{
@@ -632,7 +632,7 @@ namespace
 
 					auto Server = Case.m_bStrict ? StrongServer : CompatibleServer;
 					Server.m_Protocol = Case.m_Server;
-					Server.m_MinimumCryptoStrength = Case.m_bStrict ? CStrength::mc_EquivalentSymmetric256bit : CStrength::mc_Compatible;
+					Server.m_MinimumCryptoStrength = Case.m_bStrict ? EStrength::mc_EquivalentSymmetric256bit : EStrength::mc_Compatible;
 
 					CSSLSettings Client;
 					Client.m_Protocol = Case.m_Client;
@@ -655,7 +655,7 @@ namespace
 					CSSLSettings Medium;
 					CCertificateOptions Options;
 					Options.m_CommonName = "P384 signature preference";
-					Options.m_KeySetting = CPublicKeySettings_EC_secp384r1{};
+					Options.m_KeySetting = CPublicKeySettings_EC_Secp384r1{};
 					CCertificateSignOptions SignOptions;
 					SignOptions.m_Digest = EDigestType_SHA512;
 
@@ -665,7 +665,7 @@ namespace
 					{
 						ch8 const *m_Name;
 						CSSLSettings m_Settings;
-						CStrength m_Minimum;
+						EStrength m_Minimum;
 						uint16 m_First;
 						NContainer::TCVector<uint16> m_Groups;
 						uint16 m_InitialShare;
@@ -676,7 +676,7 @@ namespace
 							{
 								"P256"
 								, CompatibleServer
-								, CStrength::mc_Compatible
+								, EStrength::mc_Compatible
 								, SSL_SIGN_ECDSA_SECP256R1_SHA256
 								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
 								, SSL_GROUP_SECP384R1
@@ -685,7 +685,7 @@ namespace
 							{
 								"P384"
 								, Medium
-								, CStrength::mc_Compatible
+								, EStrength::mc_Compatible
 								, SSL_SIGN_ECDSA_SECP384R1_SHA384
 								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
 								, SSL_GROUP_SECP384R1
@@ -694,7 +694,7 @@ namespace
 							{
 								"P521"
 								, StrongServer
-								, CStrength::mc_Compatible
+								, EStrength::mc_Compatible
 								, SSL_SIGN_ECDSA_SECP521R1_SHA512
 								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
 								, SSL_GROUP_SECP384R1
@@ -703,7 +703,7 @@ namespace
 							{
 								"P256Minimum128"
 								, CompatibleServer
-								, CStrength::mc_EquivalentSymmetric128bit
+								, EStrength::mc_EquivalentSymmetric128bit
 								, SSL_SIGN_ECDSA_SECP256R1_SHA256
 								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
 								, SSL_GROUP_X25519
@@ -712,7 +712,7 @@ namespace
 							{
 								"P384Minimum128"
 								, Medium
-								, CStrength::mc_EquivalentSymmetric128bit
+								, EStrength::mc_EquivalentSymmetric128bit
 								, SSL_SIGN_ECDSA_SECP384R1_SHA384
 								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
 								, SSL_GROUP_X25519
@@ -721,7 +721,7 @@ namespace
 							{
 								"P521Minimum192"
 								, StrongServer
-								, CStrength::mc_EquivalentSymmetric192bit
+								, EStrength::mc_EquivalentSymmetric192bit
 								, SSL_SIGN_ECDSA_SECP521R1_SHA512
 								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1}
 								, SSL_GROUP_SECP384R1
@@ -730,7 +730,7 @@ namespace
 							{
 								"P384Minimum192"
 								, Medium
-								, CStrength::mc_EquivalentSymmetric192bit
+								, EStrength::mc_EquivalentSymmetric192bit
 								, SSL_SIGN_ECDSA_SECP384R1_SHA384
 								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
 								, SSL_GROUP_SECP384R1
@@ -739,7 +739,7 @@ namespace
 							{
 								"P521Minimum256"
 								, StrongServer
-								, CStrength::mc_EquivalentSymmetric256bit
+								, EStrength::mc_EquivalentSymmetric256bit
 								, SSL_SIGN_ECDSA_SECP521R1_SHA512
 								, {SSL_GROUP_SECP521R1}
 								, SSL_GROUP_SECP521R1
@@ -748,7 +748,7 @@ namespace
 							{
 								"NoLocalKey"
 								, {}
-								, CStrength::mc_Compatible
+								, EStrength::mc_Compatible
 								, SSL_SIGN_ECDSA_SECP521R1_SHA512
 								, {SSL_GROUP_SECP521R1, SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP256R1}
 								, SSL_GROUP_SECP384R1
@@ -757,7 +757,7 @@ namespace
 							{
 								"NoLocalKeyMinimum128"
 								, {}
-								, CStrength::mc_EquivalentSymmetric128bit
+								, EStrength::mc_EquivalentSymmetric128bit
 								, SSL_SIGN_ECDSA_SECP256R1_SHA256
 								, {SSL_GROUP_X25519, SSL_GROUP_SECP256R1, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
 								, SSL_GROUP_X25519
@@ -766,7 +766,7 @@ namespace
 							{
 								"NoLocalKeyMinimum192"
 								, {}
-								, CStrength::mc_EquivalentSymmetric192bit
+								, EStrength::mc_EquivalentSymmetric192bit
 								, SSL_SIGN_ECDSA_SECP384R1_SHA384
 								, {SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1}
 								, SSL_GROUP_SECP384R1
@@ -775,7 +775,7 @@ namespace
 							{
 								"NoLocalKeyMinimum256"
 								, {}
-								, CStrength::mc_EquivalentSymmetric256bit
+								, EStrength::mc_EquivalentSymmetric256bit
 								, SSL_SIGN_ECDSA_SECP521R1_SHA512
 								, {SSL_GROUP_SECP521R1}
 								, SSL_GROUP_SECP521R1
@@ -899,12 +899,12 @@ namespace
 				{
 					using namespace NCryptography::NBoringSSL;
 
-					CStrength Minimums[] =
+					EStrength Minimums[] =
 						{
-							CStrength::mc_Compatible
-							, CStrength::mc_EquivalentSymmetric128bit
-							, CStrength::mc_EquivalentSymmetric192bit
-							, CStrength::mc_EquivalentSymmetric256bit
+							EStrength::mc_Compatible
+							, EStrength::mc_EquivalentSymmetric128bit
+							, EStrength::mc_EquivalentSymmetric192bit
+							, EStrength::mc_EquivalentSymmetric256bit
 						}
 					;
 					uint16_t Groups[] = {SSL_GROUP_SECP384R1, SSL_GROUP_X25519, SSL_GROUP_SECP384R1, SSL_GROUP_SECP521R1};
@@ -957,16 +957,16 @@ namespace
 					struct CRSAKeyCase
 					{
 						int m_Bits;
-						CStrength m_Minimum;
+						EStrength m_Minimum;
 						bool m_bAccepted;
 					};
 
 					CRSAKeyCase Keys[] =
 						{
-							{6789, CStrength::mc_EquivalentSymmetric128bit, false}
-							, {6790, CStrength::mc_EquivalentSymmetric128bit, true}
-							, {8192, CStrength::mc_EquivalentSymmetric192bit, false}
-							, {16384, CStrength::mc_EquivalentSymmetric256bit, false}
+							{6789, EStrength::mc_EquivalentSymmetric128bit, false}
+							, {6790, EStrength::mc_EquivalentSymmetric128bit, true}
+							, {8192, EStrength::mc_EquivalentSymmetric192bit, false}
+							, {16384, EStrength::mc_EquivalentSymmetric256bit, false}
 						}
 					;
 
@@ -988,7 +988,7 @@ namespace
 				DMibTestCategory("WeakLocalKey")
 				{
 					auto Server = CompatibleServer;
-					Server.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+					Server.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 
 					DMibExpectExceptionType(CSSLContext(CSSLContext::EType_Server, Server), CExceptionCryptography);
 				};
@@ -1012,7 +1012,7 @@ namespace
 
 						auto Server = Credentials;
 						Server.m_Protocol = Protocol;
-						Server.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+						Server.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 
 						CSSLSettings Client;
 						Client.m_Protocol = Protocol;
@@ -1023,7 +1023,7 @@ namespace
 					}
 
 					CSSLSettings UntrustedClient;
-					UntrustedClient.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+					UntrustedClient.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 					UntrustedClient.m_VerificationFlags = CSSLSettings::EVerificationFlag_IgnoreTrustFailures | CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
 
 					co_await fs_ExpectHandshakeFailure(fg_Move(UntrustedClient), fs_Settings("Untrusted self-signed leaf", true, false, EDigestType_SHA256));
@@ -1034,7 +1034,7 @@ namespace
 				DMibTestCategory("PeerClosesDuringHandshake") -> TCFuture<void>
 				{
 					CSSLSettings Client;
-					Client.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+					Client.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 
 					// A plain TCP listener without an accept callback closes before a TLS handshake can complete.
 					co_await fs_ExpectConnectionFailure(fg_Move(Client), {});
@@ -1053,7 +1053,7 @@ namespace
 						auto Server = fs_SignedSettings(Root, "Peer strength leaf", !bWeakKey, false, bWeakKey ? EDigestType_SHA512 : EDigestType_SHA256);
 
 						CSSLSettings Client;
-						Client.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+						Client.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 						Client.m_CACertificateData = Root.m_PublicCertificateData;
 						Client.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreTrustFailures | CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
 
@@ -1075,7 +1075,7 @@ namespace
 
 						CSSLSettings Client;
 						Client.m_CACertificateData = Root.m_PublicCertificateData;
-						Client.m_MinimumCryptoStrength = CStrength::mc_EquivalentSymmetric256bit;
+						Client.m_MinimumCryptoStrength = EStrength::mc_EquivalentSymmetric256bit;
 
 						co_await fs_ExpectHandshakeFailure(fg_Move(Client), fg_Move(Server));
 					}

@@ -29,7 +29,7 @@ namespace
 		CCertificateOptions Options;
 		Options.m_CommonName = "Malterlib AuthenticatedUnix Test";
 		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-		Options.m_KeySetting = CPublicKeySettings_EC_secp256r1{};
+		Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
 
 		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, o_Certificate, o_PrivateKey);
 	}

@@ -2822,14 +2822,14 @@ namespace NMib::NNetwork
 
 		auto fl_AppendError = [&](NStr::CStr const &_Error)
 			{
-				if (_Format == ECommaSeperated)
+				if (_Format == EFormat_CommaSeperated)
 				{
 					if (!ErrorMessage.f_IsEmpty())
 						ErrorMessage += NStr::CStr::CFormat(", {}") << _Error;
 					else
 						ErrorMessage = _Error;
 				}
-				else if (_Format == EHtml)
+				else if (_Format == EFormat_Html)
 				{
 					if (!ErrorMessage.f_IsEmpty())
 						ErrorMessage += NStr::CStr::CFormat("<li>{}</li>") << _Error;
@@ -2855,7 +2855,7 @@ namespace NMib::NNetwork
 		if (!mp_SSLErrors.f_IsEmpty())
 			fl_AppendError(mp_SSLErrors);
 
-		if (_Format == EHtml)
+		if (_Format == EFormat_Html)
 			ErrorMessage += "</ul>";
 
 		return ErrorMessage;

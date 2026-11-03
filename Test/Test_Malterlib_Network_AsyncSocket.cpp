@@ -32,7 +32,7 @@ using namespace NMib::NCryptography;
 
 namespace
 {
-	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_secp256r1{};
+	CPublicKeySetting gc_TestTestKeySetting = CPublicKeySettings_EC_Secp256r1{};
 
 	// Hold the actor's handshake transition until a readiness read also returns application data.
 	struct CHandshakeWithDataSocket : ICSocket
