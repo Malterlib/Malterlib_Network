@@ -55,46 +55,13 @@ namespace NMib::NNetwork
 			, EProtocol_TLS_1_3
 		};
 
-		bool operator == (CSSLSettings const &_Other) const noexcept
-		{
-			return m_PublicCertificateData == _Other.m_PublicCertificateData
-				&& m_PrivateKeyData == _Other.m_PrivateKeyData
-				&& m_CRLData == _Other.m_CRLData
-				&& m_CACertificateData == _Other.m_CACertificateData
-				&& m_CAStoreLocation == _Other.m_CAStoreLocation
-				&& m_PathToCRLs == _Other.m_PathToCRLs
-				&& m_VerificationFlags == _Other.m_VerificationFlags
-				&& m_VerificationDepth == _Other.m_VerificationDepth
-				&& m_LocalCertificateStore == _Other.m_LocalCertificateStore
-				&& m_Protocol == _Other.m_Protocol
-				&& m_MinimumCryptoStrength == _Other.m_MinimumCryptoStrength
-			;
-		}
+		bool operator == (CSSLSettings const &_Other) const noexcept;
 
-		bool f_IsPeerCertificateVerified() const
-		{
-			return !m_CACertificateData.f_IsEmpty() || !m_CAStoreLocation.f_IsEmpty();
-		}
-
-		bool f_UserCanManageCertificates() const
-		{
-			return (m_VerificationFlags & EVerificationFlag_RememberTrustedCertificates) && (m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted);
-		}
-
-		bool f_UserCanIgnoreTrustFailures() const
-		{
-			return m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted;
-		}
-
-		bool f_UserCanIgnoreVerificationFailures() const
-		{
-			return m_VerificationFlags & EVerificationFlag_UserCanIgnoreVerificationFailures;
-		}
-
-		bool f_CanConnectToInsecureSSL() const
-		{
-			return m_VerificationFlags & EVerificationFlag_AllowInsecureSSL;
-		}
+		bool f_IsPeerCertificateVerified() const;
+		bool f_UserCanManageCertificates() const;
+		bool f_UserCanIgnoreTrustFailures() const;
+		bool f_UserCanIgnoreVerificationFailures() const;
+		bool f_CanConnectToInsecureSSL() const;
 
 		NContainer::CByteVector m_PublicCertificateData;
 		NContainer::CSecureByteVector m_PrivateKeyData;
@@ -134,46 +101,20 @@ namespace NMib::NNetwork
 			NContainer::CByteVector m_Data;
 			NContainer::TCMap<int, int> m_Errors;
 
-			bool operator == (CResultCertificate const &_Other) const noexcept
-			{
-				return m_Data == _Other.m_Data && m_Errors == _Other.m_Errors;
-			}
+			bool operator == (CResultCertificate const &_Other) const noexcept;
 		};
 
-		bool operator == (CSSLConnectionResult const &_Other) const noexcept
-		{
-			return
-				(
-					mp_Certificates == _Other.mp_Certificates
-					&& mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured
-					&& mp_bVerificationErrorsOccured == _Other.mp_bVerificationErrorsOccured
-					&& mp_MiscErrors == _Other.mp_MiscErrors
-					&& mp_SSLErrors == _Other.mp_SSLErrors
-				)
-			;
-		}
+		bool operator == (CSSLConnectionResult const &_Other) const noexcept;
 
 		NContainer::CByteVector f_GetPeerCertificate() const;
 		NContainer::TCVector<NContainer::CByteVector> f_GetCertificateChain() const;
 
-		CSSLConnectionResult()
-			: mp_bTrustErrorsOccured(false)
-			, mp_bVerificationErrorsOccured(false)
-			, mp_bConnectionRefused(false)
-		{
-		}
-
-		~CSSLConnectionResult()
-		{
-		}
+		CSSLConnectionResult();
+		~CSSLConnectionResult();
 
 		void f_LogError(umint _Depth, int _Error);
 		void f_LogMiscError(EMiscError _Error);
-		bool f_HasLoggedCertificateChain() const
-		{
-			return !mp_Certificates.f_IsEmpty();
-		}
-
+		bool f_HasLoggedCertificateChain() const;
 		void f_LogCertificate(umint _Depth, NContainer::CByteVector const &_Certificate);
 
 		NStr::CStr f_GetPeerCertificateName() const;
@@ -325,15 +266,8 @@ namespace NMib::NNetwork
 		CSocketOperationResult f_Receive(void *_pData, umint _nLen);
 
 		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
-		CSSLConnectionResult &f_GetConnectionResult()
-		{
-			return mp_Result;
-		}
-
-		CSSLConnectionResult const &f_GetConnectionResult() const
-		{
-			return mp_Result;
-		}
+		CSSLConnectionResult &f_GetConnectionResult();
+		CSSLConnectionResult const &f_GetConnectionResult() const;
 
 		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest() const;
 		NStr::CStr f_GetProtocolVersion() const;

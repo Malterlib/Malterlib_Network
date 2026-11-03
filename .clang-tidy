@@ -1,10 +1,9 @@
 # Copyright © Unbroken AB
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# The malterlib-* logic checks. The naming and declaration style checks are off until the sources follow them.
+# Every malterlib-* check: the logic checks and the naming and declaration style checks.
 Checks: >-
   -*,
-  malterlib-*,
-  -malterlib-header-declarations-only
+  malterlib-*
 CheckOptions:
   malterlib.OptionsFile: ../Core/ClangTidyOptions.yaml

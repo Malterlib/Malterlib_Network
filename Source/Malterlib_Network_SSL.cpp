@@ -2592,6 +2592,16 @@ namespace NMib::NNetwork
 		;
 	}
 
+	CSSLConnectionResult &CSSLConnection::f_GetConnectionResult()
+	{
+		return mp_Result;
+	}
+
+	CSSLConnectionResult const &CSSLConnection::f_GetConnectionResult() const
+	{
+		return mp_Result;
+	}
+
 	bool CSSLConnection::f_Connect()
 	{
 		return fg_RunProtectRegisters
@@ -2684,7 +2694,77 @@ namespace NMib::NNetwork
 		;
 	}
 
+	bool CSSLSettings::operator == (CSSLSettings const &_Other) const noexcept
+	{
+		return m_PublicCertificateData == _Other.m_PublicCertificateData
+			&& m_PrivateKeyData == _Other.m_PrivateKeyData
+			&& m_CRLData == _Other.m_CRLData
+			&& m_CACertificateData == _Other.m_CACertificateData
+			&& m_CAStoreLocation == _Other.m_CAStoreLocation
+			&& m_PathToCRLs == _Other.m_PathToCRLs
+			&& m_VerificationFlags == _Other.m_VerificationFlags
+			&& m_VerificationDepth == _Other.m_VerificationDepth
+			&& m_LocalCertificateStore == _Other.m_LocalCertificateStore
+			&& m_Protocol == _Other.m_Protocol
+			&& m_MinimumCryptoStrength == _Other.m_MinimumCryptoStrength
+		;
+	}
+
+	bool CSSLSettings::f_IsPeerCertificateVerified() const
+	{
+		return !m_CACertificateData.f_IsEmpty() || !m_CAStoreLocation.f_IsEmpty();
+	}
+
+	bool CSSLSettings::f_UserCanManageCertificates() const
+	{
+		return (m_VerificationFlags & EVerificationFlag_RememberTrustedCertificates) && (m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted);
+	}
+
+	bool CSSLSettings::f_UserCanIgnoreTrustFailures() const
+	{
+		return m_VerificationFlags & EVerificationFlag_UserCanAcceptUntrusted;
+	}
+
+	bool CSSLSettings::f_UserCanIgnoreVerificationFailures() const
+	{
+		return m_VerificationFlags & EVerificationFlag_UserCanIgnoreVerificationFailures;
+	}
+
+	bool CSSLSettings::f_CanConnectToInsecureSSL() const
+	{
+		return m_VerificationFlags & EVerificationFlag_AllowInsecureSSL;
+	}
+
 	// CSSLConnectionResult
+
+	bool CSSLConnectionResult::CResultCertificate::operator == (CResultCertificate const &_Other) const noexcept
+	{
+		return m_Data == _Other.m_Data && m_Errors == _Other.m_Errors;
+	}
+
+	bool CSSLConnectionResult::operator == (CSSLConnectionResult const &_Other) const noexcept
+	{
+		return
+			(
+				mp_Certificates == _Other.mp_Certificates
+				&& mp_bTrustErrorsOccured == _Other.mp_bTrustErrorsOccured
+				&& mp_bVerificationErrorsOccured == _Other.mp_bVerificationErrorsOccured
+				&& mp_MiscErrors == _Other.mp_MiscErrors
+				&& mp_SSLErrors == _Other.mp_SSLErrors
+			)
+		;
+	}
+
+	CSSLConnectionResult::CSSLConnectionResult()
+		: mp_bTrustErrorsOccured(false)
+		, mp_bVerificationErrorsOccured(false)
+		, mp_bConnectionRefused(false)
+	{
+	}
+
+	CSSLConnectionResult::~CSSLConnectionResult()
+	{
+	}
 
 	void CSSLConnectionResult::f_LogError(umint _Depth, int _Error)
 	{
@@ -2715,6 +2795,11 @@ namespace NMib::NNetwork
 
 		if (_Error == EMiscError_HostnameMisMatch)
 			mp_bVerificationErrorsOccured = true;
+	}
+
+	bool CSSLConnectionResult::f_HasLoggedCertificateChain() const
+	{
+		return !mp_Certificates.f_IsEmpty();
 	}
 
 	void CSSLConnectionResult::f_LogCertificate(umint _Depth, NContainer::CByteVector const &_Certificate)

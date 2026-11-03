@@ -193,6 +193,14 @@ namespace NMib::NNetwork
 		return false;
 	}
 
+	ICSocketConnectionInfo::~ICSocketConnectionInfo()
+	{
+	}
+
+	ICSocket::~ICSocket()
+	{
+	}
+
 	// Sizes transport-owned buffering from a typical payload transfer; pass-through transports ignore it.
 	void ICSocket::f_SetTransferSizeHint(umint _nBytes)
 	{

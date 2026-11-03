@@ -95,44 +95,16 @@ namespace NMib::NNetwork
 		uint8 m_IP[4] = {};
 
 		CNetAddressIPv4() = default;
-
-		CNetAddressIPv4(uint8 _Octet0, uint8 _Octet1, uint8 _Octet2, uint8 _Octet3)
-		{
-			m_IP[0] = _Octet0;
-			m_IP[1] = _Octet1;
-			m_IP[2] = _Octet2;
-			m_IP[3] = _Octet3;
-		}
-
-		CNetAddressIPv4(CNetAddressIPv4 const &_Src)
-		{
-			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
-		}
-
-		CNetAddressIPv4 &operator = (CNetAddressIPv4 const &_Src)
-		{
-			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
-
-			return *this;
-		}
+		CNetAddressIPv4(uint8 _Octet0, uint8 _Octet1, uint8 _Octet2, uint8 _Octet3);
+		CNetAddressIPv4(CNetAddressIPv4 const &_Src);
+		CNetAddressIPv4 &operator = (CNetAddressIPv4 const &_Src);
 
 		template <typename tf_CStream>
-		void f_Stream(tf_CStream &_Stream)
-		{
-			for (auto &Ip : m_IP)
-				_Stream % Ip;
-		}
-
+		void f_Stream(tf_CStream &_Stream);
 		template <typename tf_CStr>
-		void f_Format(tf_CStr &o_String) const
-		{
-			o_String += typename tf_CStr::CFormat("{}.{}.{}.{}") << m_IP[0] << m_IP[1] << m_IP[2] << m_IP[3];
-		}
+		void f_Format(tf_CStr &o_String) const;
 
-		void f_SetLocalhost()
-		{
-			*this = {127, 0, 0, 1};
-		}
+		void f_SetLocalhost();
 	};
 
 	struct CNetAddressIPv6
@@ -160,48 +132,15 @@ namespace NMib::NNetwork
 				, uint8 _Octet14
 				, uint8 _Octet15
 			)
-		{
-			m_IP[0] = _Octet0;
-			m_IP[1] = _Octet1;
-			m_IP[2] = _Octet2;
-			m_IP[3] = _Octet3;
-			m_IP[4] = _Octet4;
-			m_IP[5] = _Octet5;
-			m_IP[6] = _Octet6;
-			m_IP[7] = _Octet7;
-			m_IP[8] = _Octet8;
-			m_IP[9] = _Octet9;
-			m_IP[10] = _Octet10;
-			m_IP[11] = _Octet11;
-			m_IP[12] = _Octet12;
-			m_IP[13] = _Octet13;
-			m_IP[14] = _Octet14;
-			m_IP[15] = _Octet15;
-		}
+		;
 
-		CNetAddressIPv6(CNetAddressIPv6 const &_Src)
-		{
-			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
-		}
-
-		CNetAddressIPv6 &operator = (CNetAddressIPv6 const &_Src)
-		{
-			NMemory::fg_MemCopy(m_IP, _Src.m_IP, sizeof(m_IP));
-
-			return *this;
-		}
+		CNetAddressIPv6(CNetAddressIPv6 const &_Src);
+		CNetAddressIPv6 &operator = (CNetAddressIPv6 const &_Src);
 
 		template <typename tf_CStream>
-		void f_Stream(tf_CStream &_Stream)
-		{
-			for (auto &Ip : m_IP)
-				_Stream % Ip;
-		}
+		void f_Stream(tf_CStream &_Stream);
 
-		void f_SetLocalhost()
-		{
-			*this = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-		}
+		void f_SetLocalhost();
 	};
 
 	enum ENetAddressType : uint32
@@ -226,45 +165,14 @@ namespace NMib::NNetwork
 
 		static constexpr ENetAddressType mc_Type = t_Type;
 
-		TCNetAddressTCP()
-			: m_Port(0)
-		{
-		}
+		TCNetAddressTCP();
+		TCNetAddressTCP(TCNetAddressTCP const &_Src);
+		TCNetAddressTCP(t_CIPAddress const &_Src, uint16 _Port);
+		TCNetAddressTCP &operator = (TCNetAddressTCP const &_Src);
+		TCNetAddressTCP &operator = (t_CIPAddress const &_Src);
 
-		TCNetAddressTCP(TCNetAddressTCP const &_Src)
-		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
-		}
-
-		TCNetAddressTCP(t_CIPAddress const &_Src, uint16 _Port)
-			: t_CIPAddress(_Src)
-			, m_Port(_Port)
-		{
-		}
-
-		TCNetAddressTCP &operator = (TCNetAddressTCP const &_Src)
-		{
-			NMemory::fg_MemCopy(this, &_Src, sizeof(*this));
-
-			return *this;
-		}
-
-		TCNetAddressTCP &operator = (t_CIPAddress const &_Src)
-		{
-			(*this) = _Src;
-
-			return *this;
-		}
-
-		t_CIPAddress const &f_GetIP() const
-		{
-			return *this;
-		}
-
-		static ENetAddressType fs_GetType()
-		{
-			return t_Type;
-		}
+		t_CIPAddress const &f_GetIP() const;
+		static ENetAddressType fs_GetType();
 	};
 
 	using CNetAddressTCPv4 = TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4>;
@@ -303,61 +211,29 @@ namespace NMib::NStream
 	template <typename t_CStream>
 	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv4>
 	{
-		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data)
-		{
-			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
-			_Stream << _Data.m_Port;
-		}
-
-		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 &_Data)
-		{
-			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
-			_Stream >> _Data.m_Port;
-		}
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 const &_Data);
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv4 &_Data);
 	};
 
 	template <typename t_CStream>
 	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv4>
 	{
-		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data)
-		{
-			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
-		}
-
-		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv4 &_Data)
-		{
-			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
-		}
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv4 const &_Data);
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv4 &_Data);
 	};
 
 	template <typename t_CStream>
 	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressTCPv6>
 	{
-		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data)
-		{
-			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
-			_Stream << _Data.m_Port;
-		}
-
-		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 &_Data)
-		{
-			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
-			_Stream >> _Data.m_Port;
-		}
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 const &_Data);
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressTCPv6 &_Data);
 	};
 
 	template <typename t_CStream>
 	struct TCBinaryStreamTypeReference<t_CStream, NNetwork::CNetAddressIPv6>
 	{
-		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data)
-		{
-			_Stream.f_FeedBytes(_Data.m_IP, sizeof(_Data.m_IP));
-		}
-
-		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv6 &_Data)
-		{
-			_Stream.f_ConsumeBytes(_Data.m_IP, sizeof(_Data.m_IP));
-		}
+		static constexpr void fs_Feed(t_CStream &_Stream, NNetwork::CNetAddressIPv6 const &_Data);
+		static constexpr void fs_Consume(t_CStream &_Stream, NNetwork::CNetAddressIPv6 &_Data);
 	};
 }
 
@@ -487,245 +363,59 @@ namespace NMib::NNetwork
 		NMib::NSys::NNetwork::CAddress mp_pAddress;
 
 	public:
-		CNetAddress()
-			: mp_pAddress(nullptr)
-		{
-		}
-
-		explicit CNetAddress(NMib::NSys::NNetwork::CAddress _pAddress)
-			: mp_pAddress(_pAddress)
-		{
-		}
-
-		CNetAddress(CNetAddress &&_ToMove)
-			: mp_pAddress(_ToMove.mp_pAddress)
-		{
-			_ToMove.mp_pAddress = nullptr;
-		}
-
-		CNetAddress(CNetAddress const &_ToCopy)
-			: mp_pAddress(nullptr)
-		{
-			if (_ToCopy.mp_pAddress)
-				mp_pAddress = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_pAddress);
-		}
+		CNetAddress();
+		explicit CNetAddress(NMib::NSys::NNetwork::CAddress _pAddress);
+		CNetAddress(CNetAddress &&_ToMove);
+		CNetAddress(CNetAddress const &_ToCopy);
+		template <typename tf_CAddress>
+		CNetAddress(tf_CAddress const &_Address);
 
 		template <typename tf_CAddress>
-		CNetAddress(tf_CAddress const &_Address)
-			: mp_pAddress(NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress)))
-		{
-		}
+		CNetAddress &operator = (tf_CAddress const &_Address);
+		CNetAddress &operator = (CNetAddress &&_ToMove);
+		CNetAddress &operator = (CNetAddress const &_ToCopy);
+		~CNetAddress();
 
-		template <typename tf_CAddress>
-		CNetAddress &operator = (tf_CAddress const &_Address)
-		{
-			f_Clear();
+		void f_Clear();
+		void *f_Detach();
+		void *f_AccessRaw() const;
 
-			mp_pAddress = NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
-
-			return *this;
-		}
-
-		CNetAddress &operator = (CNetAddress &&_ToMove)
-		{
-			f_Clear();
-
-			mp_pAddress = _ToMove.mp_pAddress;
-			_ToMove.mp_pAddress = nullptr;
-
-			return *this;
-		}
-
-		CNetAddress &operator = (CNetAddress const &_ToCopy)
-		{
-			f_Clear();
-
-			if (_ToCopy.mp_pAddress)
-				mp_pAddress = NMib::NSys::NNetwork::fg_DuplicateAddress(_ToCopy.mp_pAddress);
-
-			return *this;
-		}
-
-		~CNetAddress()
-		{
-			f_Clear();
-		}
-
-		void f_Clear()
-		{
-			if (mp_pAddress)
-			{
-				NMib::NSys::NNetwork::fg_FreeAddress(mp_pAddress);
-				mp_pAddress = nullptr;
-			}
-		}
-
-		void *f_Detach()
-		{
-			void *pRet = mp_pAddress;
-			mp_pAddress = nullptr;
-			return pRet;
-		}
-
-		void *f_AccessRaw() const
-		{
-			return mp_pAddress;
-		}
-
-		bool f_IsEmpty() const
-		{
-			return mp_pAddress == nullptr;
-		}
-
-		NStr::CStr f_GetString(ENetAddressStringFlag _Flags) const
-		{
-			if (mp_pAddress == nullptr)
-				return "";
-			return NMib::NSys::NNetwork::fg_GetAddressString(mp_pAddress, _Flags);
-		}
-
-		ENetAddressType f_GetType() const
-		{
-			return mp_pAddress ? NMib::NSys::NNetwork::fg_GetAddressType(mp_pAddress) : ENetAddressType_None;
-		}
-
+		bool f_IsEmpty() const;
+		NStr::CStr f_GetString(ENetAddressStringFlag _Flags) const;
+		ENetAddressType f_GetType() const;
 		uint32 f_GetScopeID() const;
 
 		template <typename tf_CAddress>
-		bool f_Get(tf_CAddress &o_Address) const
-		{
-			return NMib::NSys::NNetwork::fg_GetAddressRaw(mp_pAddress, tf_CAddress::fs_GetType(), &o_Address, sizeof(tf_CAddress));
-		}
-
-		bool f_Set(CNetAddress const &_Address)
-		{
-			f_Clear();
-			if (_Address.mp_pAddress)
-				mp_pAddress = NMib::NSys::NNetwork::fg_DuplicateAddress(_Address.mp_pAddress);
-
-			return mp_pAddress != nullptr;
-		}
-
+		bool f_Get(tf_CAddress &o_Address) const;
+		bool f_Set(CNetAddress const &_Address);
 		template <typename tf_CAddress>
-		bool f_Set(tf_CAddress const &_Address)
-		{
-			f_Clear();
+		bool f_Set(tf_CAddress const &_Address);
 
-			if (mp_pAddress)
-				mp_pAddress = NMib::NSys::NNetwork::fg_SetAddressRaw(mp_pAddress, tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
-			else
-				mp_pAddress = NMib::NSys::NNetwork::fg_CreateAddress(tf_CAddress::fs_GetType(), &_Address, sizeof(tf_CAddress));
+		bool f_SetPort(uint16 _Port);
+		uint16 f_GetPort() const;
 
-			return mp_pAddress != nullptr;
-		}
+		operator NMib::NSys::NNetwork::CAddress () const;
 
-		bool f_SetPort(uint16 _Port)
-		{
-			if (!mp_pAddress)
-				return false;
-
-			switch (NMib::NSys::NNetwork::fg_GetAddressType(mp_pAddress))
-			{
-			case ENetAddressType_TCPv4:
-				{
-					CNetAddressTCPv4 TCPv4;
-					if (!f_Get(TCPv4))
-						return false;
-
-					TCPv4.m_Port = _Port;
-
-					return f_Set(TCPv4);
-				}
-
-			case ENetAddressType_TCPv6:
-				{
-					CNetAddressTCPv6 TCPv6;
-					if (!f_Get(TCPv6))
-						return false;
-
-					TCPv6.m_Port = _Port;
-
-					return f_Set(TCPv6);
-				}
-			default: return false;
-			}
-		}
-
-		uint16 f_GetPort() const
-		{
-			if (!mp_pAddress)
-				return 0;
-
-			switch (NMib::NSys::NNetwork::fg_GetAddressType(mp_pAddress))
-			{
-			case ENetAddressType_TCPv4:
-				{
-					CNetAddressTCPv4 TCPv4;
-					if (!f_Get(TCPv4))
-						return 0;
-
-					return TCPv4.m_Port;
-				}
-
-			case ENetAddressType_TCPv6:
-				{
-					CNetAddressTCPv6 TCPv6;
-					if (!f_Get(TCPv6))
-						return 0;
-
-					return TCPv6.m_Port;
-				}
-			default: return 0;
-			}
-		}
-
-		operator NMib::NSys::NNetwork::CAddress () const
-		{
-			return mp_pAddress;
-		}
-
-		bool operator == (CNetAddress const &_Other) const
-		{
-			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_pAddress, _Other.mp_pAddress) == 0;
-		}
-
-		COrdering_Weak operator <=> (CNetAddress const &_Other) const
-		{
-			return NMib::NSys::NNetwork::fg_CompareAddresses(mp_pAddress, _Other.mp_pAddress) <=> 0;
-		}
+		bool operator == (CNetAddress const &_Other) const;
+		COrdering_Weak operator <=> (CNetAddress const &_Other) const;
 
 		template <typename tf_CStr>
-		void f_Format(tf_CStr &o_Str) const
-		{
-			auto Type = f_GetType();
-
-			ENetAddressStringFlag Flags = ENetAddressStringFlag_IncludePort;
-			if (Type == ENetAddressType_Unix)
-				Flags |= ENetAddressStringFlag_IncludeType;
-
-			o_Str += f_GetString(Flags);
-		}
+		void f_Format(tf_CStr &o_Str) const;
 	};
 
 	struct CAsyncResolver
 	{
 		CAsyncResolver(CAsyncResolver const &_Other) = delete;
 		CAsyncResolver &operator = (CAsyncResolver const &_Other) = delete;
-
 		CAsyncResolver(CAsyncResolver &&_Other);
-
 		CAsyncResolver &operator = (CAsyncResolver &&_Other);
-
 		CAsyncResolver();
-
 		~CAsyncResolver();
 
 		void f_Close();
-
 		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
 		void f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NFunction::TCFunctionMutable<void ()> &&_fOnFinish);
-
 		void f_Open(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
 		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error);
@@ -746,64 +436,17 @@ namespace NMib::NNetwork
 
 	struct CSocket
 	{
-		CSocket()
-		{
-			mp_pSocket = nullptr;
-		}
+		CSocket();
+		~CSocket();
+		CSocket(CSocket &&_Other);
+		CSocket &operator = (CSocket &&_Other);
 
-		// Destruction cannot block on another pool thread's loop; use asynchronous close.
-		~CSocket()
-		{
-			f_CloseAsync({});
-		}
+		bool f_IsValid() const;
 
-		// Move settings even if the platform socket has not been created yet.
-		CSocket(CSocket &&_Other)
-			: mp_pSocket(fg_Exchange(_Other.mp_pSocket, nullptr))
-			, mp_nSendWindowBytes(_Other.mp_nSendWindowBytes)
-			, mp_bSendWindowConfigured(_Other.mp_bSendWindowConfigured)
-			, mp_bInheritable(_Other.mp_bInheritable)
-		{
-		}
+		void f_Close();
+		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
 
-		CSocket &operator = (CSocket &&_Other)
-		{
-			mp_pSocket = fg_Exchange(_Other.mp_pSocket, nullptr);
-			mp_nSendWindowBytes = _Other.mp_nSendWindowBytes;
-			mp_bSendWindowConfigured = _Other.mp_bSendWindowConfigured;
-			mp_bInheritable = _Other.mp_bInheritable;
-			return *this;
-		}
-
-		bool f_IsValid() const
-		{
-			return mp_pSocket != nullptr;
-		}
-
-		// Synchronous close, complete on return; refuses for a socket on a created loop, where
-		// only the asynchronous form is legal
-		void f_Close()
-		{
-			if (mp_pSocket)
-				NMib::NSys::NNetwork::fg_Close(mp_pSocket);
-			mp_pSocket = nullptr;
-		}
-
-		// Consumes the platform socket; registered sockets finish on the loop thread, unregistered sockets inline.
-		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed)
-		{
-			void *pSocket = mp_pSocket;
-			mp_pSocket = nullptr;
-			if (pSocket)
-				NMib::NSys::NNetwork::fg_CloseAsync(pSocket, fg_Move(_fOnClosed));
-			else if (_fOnClosed)
-				_fOnClosed();
-		}
-
-		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0)
-		{
-			f_Connect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress(), _Timeout);
-		}
+		void f_Connect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr, fp64 _Timeout = 15.0);
 
 		void f_Connect
 			(
@@ -814,15 +457,7 @@ namespace NMib::NNetwork
 			)
 		;
 
-		void f_AsyncConnect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr)
-		{
-			f_Close();
-
-			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fsp_GetChangeReportTo(_pReportTo), CNetAddress());
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void f_AsyncConnect(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo = nullptr);
 
 		void f_AsyncConnect
 			(
@@ -830,34 +465,10 @@ namespace NMib::NNetwork
 				, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
 				, NMib::NNetwork::CNetAddress const &_BindAddress = NMib::NNetwork::CNetAddress()
 			)
-		{
-			f_Close();
+		;
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
-
-		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo, ENetFlag _Flags)
-		{
-			f_Close();
-
-			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fsp_GetChangeReportTo(_pReportTo), _Flags);
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
-
-		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
-		{
-			f_Close();
-
-			mp_pSocket = NMib::NSys::NNetwork::fg_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NThread::CSemaphoreAggregate *_pReportTo, ENetFlag _Flags);
+		void f_Listen(NMib::NNetwork::CNetAddress const &_Address, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags);
 
 		void f_ListenDatagram
 			(
@@ -865,254 +476,62 @@ namespace NMib::NNetwork
 				, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange
 				, ENetFlag _Flags
 			)
-		{
-			f_Close();
+		;
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreAggregate *_pReportTo);
+		void f_Accept(CSocket *_pAcceptFrom, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
-		void f_Accept(CSocket *_pAcceptFrom, NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			f_Close();
+		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreAggregate *_pReportTo);
+		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			if (mp_pSocket)
-				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
-		void f_Accept(CSocket *_pAcceptFrom, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
-		{
-			f_Close();
+		void *f_GiveUpForInherit();
+		void f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle);
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_Accept(_pAcceptFrom->mp_pSocket, fg_Move(_fOnStateChange));
-			fp_ApplyInheritable();
-			fp_ApplySendWindow();
-			if (mp_pSocket)
-				NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void *f_GetOSSocket();
 
-		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			f_Close();
+		void f_SetReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo);
+		void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fsp_GetChangeReportTo(_pReportTo));
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		void f_Shutdown();
+		void f_SetAbortOnClose();
 
-		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
-		{
-			f_Close();
+		ENetTCPState f_GetState();
+		NStr::CStr f_GetCloseReason();
 
-			mp_pSocket = NMib::NSys::NNetwork::fg_InheritHandle2(_pSocketHandle, fg_Move(_fOnStateChange));
-			NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
-		}
+		umint f_Receive(void *_pData, umint _DataLen, bool &o_bEndOfStream);
+		umint f_Send(void const *_pData, umint _DataLen);
+		umint f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans);
 
-		// Retains registration and kernel connection state; only the state callback changes owner.
-		void f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
-		{
-			f_Close();
+		void f_RequestReadiness(bool _bRead, bool _bWrite);
 
-			mp_pSocket = _Socket.mp_pSocket;
-			_Socket.mp_pSocket = nullptr;
-			if (mp_pSocket)
-				NMib::NSys::NNetwork::fg_ReownSocket(mp_pSocket, fg_Move(_fOnStateChange));
-		}
+		bool f_SupportsCompletionIo() const;
+		bool f_SendReleaseIsPrompt() const;
+		NMib::NSys::ICIoLoop *f_GetOwningIoLoop() const;
 
-		void *f_GiveUpForInherit()
-		{
-			return NMib::NSys::NNetwork::fg_GiveUpForInherit(mp_pSocket);
-		}
+		bool f_SupportsReceiveStream() const;
+		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink);
+		void f_ResumeReceiveStream();
 
-		// Empties the wrapper immediately; delivers the handle after removal acknowledgement makes reuse safe.
-		void f_GiveUpForInheritAsync(NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle)
-		{
-			fp_CheckSocket();
+		bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited);
+		bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes);
 
-			void *pSocket = mp_pSocket;
-			mp_pSocket = nullptr;
-			NMib::NSys::NNetwork::fg_GiveUpForInheritAsync(pSocket, fg_Move(_fOnHandle));
-		}
+		void f_SetInheritable();
+		void f_SetSendWindow(umint _nBytes, bool _bConfigured);
 
-		void *f_GetOSSocket()
-		{
-			return NMib::NSys::NNetwork::fg_GetOSSocket(mp_pSocket);
-		}
+		umint f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NMib::NSys::FIoBufferReleased &&_fOnBufferReleased);
 
-		void f_SetReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			NMib::NSys::NNetwork::fg_SetOnStateChange(mp_pSocket, fsp_GetChangeReportTo(_pReportTo));
-		}
+		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen);
+		umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen);
 
-		void f_SetOnStateChange(NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
-		{
-			NMib::NSys::NNetwork::fg_SetOnStateChange(mp_pSocket, fg_Move(_fOnStateChange));
-		}
-
-		void f_Shutdown()
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_Shutdown(mp_pSocket);
-		}
-
-		void f_SetAbortOnClose()
-		{
-			if (mp_pSocket)
-				NMib::NSys::NNetwork::fg_SetAbortOnClose(mp_pSocket);
-		}
-
-		ENetTCPState f_GetState()
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_GetState(mp_pSocket);
-		}
-
-		NStr::CStr f_GetCloseReason()
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_GetCloseReason(mp_pSocket);
-		}
-
-		umint f_Receive(void *_pData, umint _DataLen, bool &o_bEndOfStream)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_Receive(mp_pSocket, _pData, _DataLen, o_bEndOfStream);
-		}
-
-		umint f_Send(void const *_pData, umint _DataLen)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_Send(mp_pSocket, _pData, _DataLen);
-		}
-
-		umint f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_SendVectored(mp_pSocket, _pSpans, _nSpans);
-		}
-
-		void f_RequestReadiness(bool _bRead, bool _bWrite)
-		{
-			fp_CheckSocket();
-
-			NMib::NSys::NNetwork::fg_RequestReadiness(mp_pSocket, _bRead, _bWrite);
-		}
-
-		bool f_SupportsCompletionIo() const
-		{
-			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsCompletionIo(mp_pSocket);
-		}
-
-		bool f_SendReleaseIsPrompt() const
-		{
-			return !mp_pSocket || NMib::NSys::NNetwork::fg_SendReleaseIsPrompt(mp_pSocket);
-		}
-
-		NMib::NSys::ICIoLoop *f_GetOwningIoLoop() const
-		{
-			return mp_pSocket ? NMib::NSys::NNetwork::fg_GetOwningIoLoop(mp_pSocket) : nullptr;
-		}
-
-		bool f_SupportsReceiveStream() const
-		{
-			return mp_pSocket && NMib::NSys::NNetwork::fg_SupportsReceiveStream(mp_pSocket);
-		}
-
-		bool f_StartReceiveStream(umint _nBufferBytes, NStorage::TCSharedPointer<NSys::CIoStreamBackpressure> &&_pBackpressure, NSys::FIoStreamSink &&_fSink)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_StartReceiveStream(mp_pSocket, _nBufferBytes, fg_Move(_pBackpressure), fg_Move(_fSink));
-		}
-
-		void f_ResumeReceiveStream()
-		{
-			fp_CheckSocket();
-
-			NMib::NSys::NNetwork::fg_ResumeReceiveStream(mp_pSocket);
-		}
-
-		bool f_QueryPathDeliveryRate(umint &o_nBytes, bool &o_bAppLimited)
-		{
-			return mp_pSocket && NMib::NSys::NNetwork::fg_QueryPathDeliveryRate(mp_pSocket, o_nBytes, o_bAppLimited);
-		}
-
-		bool f_IsSendWindowFull(umint _nUnreleasedBytes, umint _nStartBytes)
-		{
-			return mp_pSocket && NMib::NSys::NNetwork::fg_IsSendWindowFull(mp_pSocket, _nUnreleasedBytes, _nStartBytes);
-		}
-
-		// Set before connect/listen/accept for a receiver unable to replace completion bindings.
-		void f_SetInheritable()
-		{
-			mp_bInheritable = true;
-			fp_ApplyInheritable();
-		}
-
-		// Before or after the socket exists: a socket in place takes the window now, and one made
-		// later takes it as it is created
-		void f_SetSendWindow(umint _nBytes, bool _bConfigured)
-		{
-			mp_nSendWindowBytes = _nBytes;
-			mp_bSendWindowConfigured = _bConfigured;
-			fp_ApplySendWindow();
-		}
-
-		umint f_SubmitSendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NMib::NSys::FIoBufferReleased &&_fOnBufferReleased)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_SubmitSendVectored(mp_pSocket, _pSpans, _nSpans, fg_Move(_fOnComplete), fg_Move(_fOnBufferReleased));
-		}
-
-		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_SendDatagram(mp_pSocket, _Address, _pData, _DataLen);
-		}
-
-		umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen)
-		{
-			fp_CheckSocket();
-
-			return NMib::NSys::NNetwork::fg_ReceiveDatagram(mp_pSocket, _Address, _pData, _DataLen);
-		}
-
-		NMib::NNetwork::CNetAddress f_GetPeerAddress() const
-		{
-			fp_CheckSocket();
-			return CNetAddress(NMib::NSys::NNetwork::fg_GetPeerAddress(mp_pSocket));
-		}
-
-		bool f_GetProcessIdentity(NMib::NSys::NNetwork::CProcessIdentity &o_LocalIdentity, NMib::NSys::NNetwork::CProcessIdentity &o_PeerIdentity) const
-		{
-			fp_CheckSocket();
-			return NMib::NSys::NNetwork::fg_GetProcessIdentity(mp_pSocket, o_LocalIdentity, o_PeerIdentity);
-		}
-
-		uint32 f_GetListenPort() const
-		{
-			fp_CheckSocket();
-			return NMib::NSys::NNetwork::fg_GetListenPort(mp_pSocket);
-		}
+		NMib::NNetwork::CNetAddress f_GetPeerAddress() const;
+		bool f_GetProcessIdentity(NMib::NSys::NNetwork::CProcessIdentity &o_LocalIdentity, NMib::NSys::NNetwork::CProcessIdentity &o_PeerIdentity) const;
+		uint32 f_GetListenPort() const;
 
 		static NContainer::TCVector<CNetAddress> fs_ResolveAddresses(NStr::CStr const &_Address, ENetAddressType _PreferType = ENetAddressType_None);
-
 		static NContainer::TCVector<CNetAddress> fs_ResolveHost(NStr::CStr const &_Host, ENetAddressType _PreferType = ENetAddressType_None);
-
-		static NMib::NNetwork::CNetAddress fs_ResolveAddress(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None)
-		{
-			return fg_Move(CNetAddress(NMib::NSys::NNetwork::fg_ResolveAddress(_Address, _PreferType)));
-		}
+		static NMib::NNetwork::CNetAddress fs_ResolveAddress(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
 	private:
 		void *mp_pSocket;
@@ -1121,32 +540,11 @@ namespace NMib::NNetwork
 		bool mp_bSendWindowConfigured = false;
 		bool mp_bInheritable = false;
 
-		void fp_ApplyInheritable()
-		{
-			if (mp_pSocket && mp_bInheritable)
-				NMib::NSys::NNetwork::fg_SetInheritable(mp_pSocket);
-		}
-
-		void fp_ApplySendWindow()
-		{
-			if (mp_pSocket && mp_nSendWindowBytes)
-				NMib::NSys::NNetwork::fg_SetSendWindow(mp_pSocket, mp_nSendWindowBytes, mp_bSendWindowConfigured);
-		}
-
+		void fp_ApplyInheritable();
+		void fp_ApplySendWindow();
 		void fp_CheckSocket() const;
 
-		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo)
-		{
-			if (_pReportTo)
-			{
-				return [_pReportTo](::NMib::NNetwork::ENetTCPState _StateAdded)
-					{
-						_pReportTo->f_Signal();
-					}
-				;
-			}
-			return NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)>();
-		}
+		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
 		CSocket(CSocket const &_Other);
 		CSocket &operator = (CSocket const &_Other);
@@ -1162,4 +560,5 @@ namespace NMib::NNetwork
 using namespace NMib::NNetwork;
 #endif
 
+#include "Malterlib_Network.hpp"
 #include "Malterlib_Network_Resolve.hpp"

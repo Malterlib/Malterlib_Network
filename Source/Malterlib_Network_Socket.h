@@ -11,9 +11,7 @@ namespace NMib::NNetwork
 {
 	struct ICSocketConnectionInfo
 	{
-		virtual ~ICSocketConnectionInfo()
-		{
-		}
+		virtual ~ICSocketConnectionInfo();
 	};
 
 	NStr::CStr fg_FormatSocketIoError(int32 _Error);
@@ -83,9 +81,7 @@ namespace NMib::NNetwork
 
 	struct ICSocket
 	{
-		virtual ~ICSocket()
-		{
-		}
+		virtual ~ICSocket();
 
 		virtual bool f_IsValid() const = 0;
 		virtual bool f_HandshakeDone() const = 0;

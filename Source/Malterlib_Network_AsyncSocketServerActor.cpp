@@ -23,6 +23,15 @@ namespace NMib::NNetwork
 	{
 	}
 
+	CAsyncSocketServerActor::CInternal::CInternal(CAsyncSocketServerActor *_pThis)
+		: m_pThis(_pThis)
+		, m_MaxMessageSize(24 * 1024 * 1024)
+		, m_FragmentationSize(32 * 1024)
+		, m_SendWindowBytes(0)
+		, m_Timeout(0.0)
+	{
+	}
+
 	void CAsyncSocketServerActor::f_SetDefaultMaxMessageSize(umint _MaxMessageSize)
 	{
 		mp_pInternal->m_MaxMessageSize = _MaxMessageSize;
