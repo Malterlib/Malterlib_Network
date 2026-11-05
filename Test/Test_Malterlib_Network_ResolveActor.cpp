@@ -14,146 +14,226 @@ namespace
 {
 	struct CResolveActor_Tests : NTest::CTest
 	{
-		void f_DoTests()
+		void f_DoTests();
+	};
+
+	void CResolveActor_Tests::f_DoTests()
+	{
+		DMibTestSuite("Addresses") -> TCFuture<void>
 		{
-			DMibTestSuite("Addresses") -> TCFuture<void>
+			auto Resolver = fg_ConstructActor<CResolveActor>();
+
+			for (auto PreferType : {ENetAddressType_TCPv4, ENetAddressType_TCPv6})
 			{
-				auto Resolver = fg_ConstructActor<CResolveActor>();
-
-				for (auto PreferType : {ENetAddressType_TCPv4, ENetAddressType_TCPv6})
-				{
-					DMibTestPath(PreferType == ENetAddressType_TCPv4 ? "IPv4" : "IPv6");
-					auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("localhost"), PreferType);
-					auto Addresses = co_await fg_Move(Lookup.m_Result);
-
-					DMibExpectFalse(Addresses.f_IsEmpty());
-					DMibExpect(Addresses[0].f_GetType(), ==, PreferType);
-				}
-
-				auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("localhost"), ENetAddressType_None);
+				DMibTestPath(PreferType == ENetAddressType_TCPv4 ? "IPv4" : "IPv6");
+				auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("localhost"), PreferType);
 				auto Addresses = co_await fg_Move(Lookup.m_Result);
-				bool bIPv4 = false;
-				bool bIPv6 = false;
-				for (auto const &Address : Addresses)
-				{
-					bIPv4 |= Address.f_GetType() == ENetAddressType_TCPv4;
-					bIPv6 |= Address.f_GetType() == ENetAddressType_TCPv6;
-				}
 
-				DMibExpectTrue(bIPv4);
-				DMibExpectTrue(bIPv6);
+				DMibExpectFalse(Addresses.f_IsEmpty());
+				DMibExpect(Addresses[0].f_GetType(), ==, PreferType);
+			}
 
-				auto BlockingActorCheckout = fg_BlockingActor();
-				auto Scoped = co_await
-					(
-						g_Dispatch(BlockingActorCheckout) / []
-						{
-							return CSocket::fs_ResolveHost("fe80::1%1", ENetAddressType_TCPv6);
-						}
-					)
-				;
-
-				DMibAssertFalse(Scoped.f_IsEmpty());
-				DMibExpect(Scoped[0].f_GetScopeID(), ==, 1u);
-				DMibExpect(Scoped[0].f_GetType(), ==, ENetAddressType_TCPv6);
-
-				auto ScopedLookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("fe80::1%1"), ENetAddressType_TCPv6);
-				auto ScopedResults = co_await fg_Move(ScopedLookup.m_Result);
-
-				DMibAssertFalse(ScopedResults.f_IsEmpty());
-				DMibExpect(ScopedResults[0].f_GetScopeID(), ==, 1u);
-
-				CNetAddress ScopedCopy = Scoped[0];
-				Scoped.f_Clear();
-
-				DMibExpect(ScopedCopy.f_GetScopeID(), ==, 1u);
-				DMibExpect(ScopedCopy.f_GetType(), ==, ENetAddressType_TCPv6);
-				DMibExpect(CNetAddress{}.f_GetScopeID(), ==, 0u);
-
-				CNetAddressTCPv6 IPv6;
-				DMibExpectTrue(ScopedCopy.f_Get(IPv6));
-				DMibExpect(IPv6.m_IP[0], ==, 0xfe);
-				DMibExpect(IPv6.m_IP[15], ==, 1);
-
-				auto AddressLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr("127.0.0.1:1234"), ENetAddressType_TCPv4);
-				auto AddressResults = co_await fg_Move(AddressLookup.m_Result);
-
-				DMibAssertFalse(AddressResults.f_IsEmpty());
-				auto &Address = AddressResults[0];
-
-				DMibExpect(Address.f_GetPort(), ==, 1234);
-				DMibExpect(Address.f_GetScopeID(), ==, 0u);
-
-				co_await fg_Move(Resolver).f_Destroy();
-
-				co_return {};
-			};
-
-			DMibTestSuite("EndpointCompatibility") -> TCFuture<void>
+			auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("localhost"), ENetAddressType_None);
+			auto Addresses = co_await fg_Move(Lookup.m_Result);
+			bool bIPv4 = false;
+			bool bIPv6 = false;
+			for (auto const &Address : Addresses)
 			{
-				auto Resolver = fg_ConstructActor<CResolveActor>();
-				auto BlockingActorCheckout = fg_BlockingActor();
+				bIPv4 |= Address.f_GetType() == ENetAddressType_TCPv4;
+				bIPv6 |= Address.f_GetType() == ENetAddressType_TCPv6;
+			}
 
-				for
+			DMibExpectTrue(bIPv4);
+			DMibExpectTrue(bIPv6);
+
+			auto BlockingActorCheckout = fg_BlockingActor();
+			auto Scoped = co_await
 				(
-					auto const *pAddress :
+					g_Dispatch(BlockingActorCheckout) / []
 					{
-						"127.0.0.1:1234"
-						, "IPv4:127.0.0.1:http"
-						, "IPv6:[::1]:1234"
-						, "IPv6:[fe80::1%1]:1234"
-						, "UNIX:resolver-vector.socket"
-						, "UNIX(0700):resolver-vector-mode.socket"
-						, "127.0.0.1:not-a-service"
-						, "UNIX("
+						return CSocket::fs_ResolveHost("fe80::1%1", ENetAddressType_TCPv6);
 					}
 				)
+			;
+
+			DMibAssertFalse(Scoped.f_IsEmpty());
+			DMibExpect(Scoped[0].f_GetScopeID(), ==, 1u);
+			DMibExpect(Scoped[0].f_GetType(), ==, ENetAddressType_TCPv6);
+
+			auto ScopedLookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("fe80::1%1"), ENetAddressType_TCPv6);
+			auto ScopedResults = co_await fg_Move(ScopedLookup.m_Result);
+
+			DMibAssertFalse(ScopedResults.f_IsEmpty());
+			DMibExpect(ScopedResults[0].f_GetScopeID(), ==, 1u);
+
+			CNetAddress ScopedCopy = Scoped[0];
+			Scoped.f_Clear();
+
+			DMibExpect(ScopedCopy.f_GetScopeID(), ==, 1u);
+			DMibExpect(ScopedCopy.f_GetType(), ==, ENetAddressType_TCPv6);
+			DMibExpect(CNetAddress{}.f_GetScopeID(), ==, 0u);
+
+			CNetAddressTCPv6 IPv6;
+			DMibExpectTrue(ScopedCopy.f_Get(IPv6));
+			DMibExpect(IPv6.m_IP[0], ==, 0xfe);
+			DMibExpect(IPv6.m_IP[15], ==, 1);
+
+			auto AddressLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr("127.0.0.1:1234"), ENetAddressType_TCPv4);
+			auto AddressResults = co_await fg_Move(AddressLookup.m_Result);
+
+			DMibAssertFalse(AddressResults.f_IsEmpty());
+			auto &Address = AddressResults[0];
+
+			DMibExpect(Address.f_GetPort(), ==, 1234);
+			DMibExpect(Address.f_GetScopeID(), ==, 0u);
+
+			co_await fg_Move(Resolver).f_Destroy();
+
+			co_return {};
+		};
+
+		DMibTestSuite("EndpointCompatibility") -> TCFuture<void>
+		{
+			auto Resolver = fg_ConstructActor<CResolveActor>();
+			auto BlockingActorCheckout = fg_BlockingActor();
+
+			for
+			(
+				auto const *pAddress :
 				{
-					DMibTestPath(pAddress);
-
-					auto Previous = co_await
-						(
-							g_Dispatch(BlockingActorCheckout) / [Text = NStr::CStr(pAddress)]
-							{
-								return CSocket::fs_ResolveAddress(Text, ENetAddressType_None);
-							}
-						)
-						.f_Wrap()
-					;
-
-					auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr(pAddress), ENetAddressType_None);
-					auto Result = co_await fg_Move(Lookup.m_Result).f_Wrap();
-
-					DMibExpect(bool(Result), ==, bool(Previous));
-					if (Result && Previous)
-					{
-						DMibAssertFalse(Result->f_IsEmpty());
-						DMibExpect((*Result)[0], ==, *Previous);
-						DMibExpect((*Result)[0].f_GetScopeID(), ==, Previous->f_GetScopeID());
-
-						bool bPortsMatch = true;
-						for (auto const &Address : *Result)
-							bPortsMatch &= Address.f_GetPort() == Previous->f_GetPort();
-
-						DMibExpectTrue(bPortsMatch);
-					}
-					else if (!Result && !Previous)
-						DMibExpect(Result.f_GetExceptionStr(), ==, Previous.f_GetExceptionStr());
+					"127.0.0.1:1234"
+					, "IPv4:127.0.0.1:http"
+					, "IPv6:[::1]:1234"
+					, "IPv6:[fe80::1%1]:1234"
+					, "UNIX:resolver-vector.socket"
+					, "UNIX(0700):resolver-vector-mode.socket"
+					, "127.0.0.1:not-a-service"
+					, "UNIX("
 				}
+			)
+			{
+				DMibTestPath(pAddress);
 
-				co_await fg_Move(Resolver).f_Destroy();
+				auto Previous = co_await
+					(
+						g_Dispatch(BlockingActorCheckout) / [Text = NStr::CStr(pAddress)]
+						{
+							return CSocket::fs_ResolveAddress(Text, ENetAddressType_None);
+						}
+					)
+					.f_Wrap()
+				;
 
-				co_return {};
+				auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr(pAddress), ENetAddressType_None);
+				auto Result = co_await fg_Move(Lookup.m_Result).f_Wrap();
+
+				DMibExpect(bool(Result), ==, bool(Previous));
+				if (Result && Previous)
+				{
+					DMibAssertFalse(Result->f_IsEmpty());
+					DMibExpect((*Result)[0], ==, *Previous);
+					DMibExpect((*Result)[0].f_GetScopeID(), ==, Previous->f_GetScopeID());
+
+					bool bPortsMatch = true;
+					for (auto const &Address : *Result)
+						bPortsMatch &= Address.f_GetPort() == Previous->f_GetPort();
+
+					DMibExpectTrue(bPortsMatch);
+				}
+				else if (!Result && !Previous)
+					DMibExpect(Result.f_GetExceptionStr(), ==, Previous.f_GetExceptionStr());
+			}
+
+			co_await fg_Move(Resolver).f_Destroy();
+
+			co_return {};
+		};
+
+		DMibTestSuite("BlockingLimit") -> TCFuture<void>
+		{
+			struct CState
+			{
+				NThread::CEvent m_Release;
+				TCPromise<void> m_Saturated;
+				NAtomic::TCAtomic<uint32> m_Started{0};
+				NAtomic::TCAtomic<uint32> m_CancelledStarted{0};
 			};
 
-			DMibTestSuite("BlockingLimit") -> TCFuture<void>
+			TCSharedPointer<CState> pState = fg_Construct();
+			pState->m_Release.f_ResetSignaled();
+			auto Cleanup = g_OnScopeExit / [pState]
+				{
+					pState->m_Release.f_SetSignaled();
+				}
+			;
+
+			CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
+				{
+					if (_Host == "cancelled.test")
+						pState->m_CancelledStarted.f_FetchAdd(1);
+					if (pState->m_Started.f_FetchAdd(1) == 1)
+						pState->m_Saturated.f_SetResult();
+
+					(void)pState->m_Release.f_WaitTimeout(5.0);
+
+					return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
+				}
+			;
+
+			auto Resolver = fg_ConstructActor<CResolveActor>(fResolve, 2);
+			auto First = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("first.test"), ENetAddressType_None);
+			auto Second = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("second.test"), ENetAddressType_None);
+			co_await pState->m_Saturated.f_Future().f_Timeout(5.0, "Resolver did not fill its slots");
+
+			auto Cancelled = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("cancelled.test"), ENetAddressType_None);
+			auto Queued = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("queued.test"), ENetAddressType_None);
+			auto AddressLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr("127.0.0.1:1234"), ENetAddressType_TCPv4);
+			co_await AddressLookup.m_Cancel->f_Destroy();
+			auto AddressResult = co_await fg_Move(AddressLookup.m_Result).f_Wrap();
+
+			DMibExpectFalse(bool(AddressResult));
+
+			auto EmptyLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr{}, ENetAddressType_None);
+			auto EmptyAddresses = co_await fg_Move(EmptyLookup.m_Result).f_Timeout(5.0, "Empty address waited for the sequencer");
+
+			DMibAssert(EmptyAddresses.f_GetLen(), ==, 1u);
+			DMibExpectTrue(EmptyAddresses[0].f_IsEmpty());
+			DMibExpectFalse(bool(EmptyLookup.m_Cancel));
+
+			co_await Cancelled.m_Cancel->f_Destroy();
+			co_await First.m_Cancel->f_Destroy();
+
+			auto CancelledResult = co_await fg_Move(Cancelled.m_Result).f_Wrap();
+			auto FirstResult = co_await fg_Move(First.m_Result).f_Wrap();
+			co_await fg_Timeout(0.05);
+
+			DMibExpectFalse(bool(CancelledResult));
+			DMibExpectFalse(bool(FirstResult));
+			DMibExpect(pState->m_Started.f_Load(), ==, 2u);
+
+			pState->m_Release.f_SetSignaled();
+			co_await fg_Move(Second.m_Result);
+			co_await fg_Move(Queued.m_Result);
+
+			DMibExpect(pState->m_Started.f_Load(), ==, 3u);
+			DMibExpect(pState->m_CancelledStarted.f_Load(), ==, 0u);
+
+			co_await fg_Move(Resolver).f_Destroy();
+
+			co_return {};
+		};
+
+		DMibTestSuite("CancelPending") -> TCFuture<void>
+		{
+			for (bool bDestroyActor : {false, true})
 			{
+				DMibTestPath(bDestroyActor ? "Destroy" : "Cancel");
+
 				struct CState
 				{
 					NThread::CEvent m_Release;
-					TCPromise<void> m_Saturated;
-					NAtomic::TCAtomic<uint32> m_Started{0};
-					NAtomic::TCAtomic<uint32> m_CancelledStarted{0};
+					TCPromise<void> m_Started;
+					TCPromise<void> m_Finished;
 				};
 
 				TCSharedPointer<CState> pState = fg_Construct();
@@ -166,133 +246,55 @@ namespace
 
 				CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
 					{
-						if (_Host == "cancelled.test")
-							pState->m_CancelledStarted.f_FetchAdd(1);
-						if (pState->m_Started.f_FetchAdd(1) == 1)
-							pState->m_Saturated.f_SetResult();
-
-						(void)pState->m_Release.f_WaitTimeout(5.0);
+						pState->m_Started.f_SetResult();
+						pState->m_Release.f_Wait();
+						pState->m_Finished.f_SetResult();
 
 						return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
 					}
 				;
 
-				auto Resolver = fg_ConstructActor<CResolveActor>(fResolve, 2);
-				auto First = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("first.test"), ENetAddressType_None);
-				auto Second = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("second.test"), ENetAddressType_None);
-				co_await pState->m_Saturated.f_Future().f_Timeout(5.0, "Resolver did not fill its slots");
+				auto Resolver = fg_ConstructActor<CResolveActor>(fResolve);
+				auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("pending.test"), ENetAddressType_None);
+				co_await pState->m_Started.f_Future();
 
-				auto Cancelled = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("cancelled.test"), ENetAddressType_None);
-				auto Queued = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("queued.test"), ENetAddressType_None);
-				auto AddressLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr("127.0.0.1:1234"), ENetAddressType_TCPv4);
-				co_await AddressLookup.m_Cancel->f_Destroy();
-				auto AddressResult = co_await fg_Move(AddressLookup.m_Result).f_Wrap();
-
-				DMibExpectFalse(bool(AddressResult));
-
-				auto EmptyLookup = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr{}, ENetAddressType_None);
-				auto EmptyAddresses = co_await fg_Move(EmptyLookup.m_Result).f_Timeout(5.0, "Empty address waited for the sequencer");
-
-				DMibAssert(EmptyAddresses.f_GetLen(), ==, 1u);
-				DMibExpectTrue(EmptyAddresses[0].f_IsEmpty());
-				DMibExpectFalse(bool(EmptyLookup.m_Cancel));
-
-				co_await Cancelled.m_Cancel->f_Destroy();
-				co_await First.m_Cancel->f_Destroy();
-
-				auto CancelledResult = co_await fg_Move(Cancelled.m_Result).f_Wrap();
-				auto FirstResult = co_await fg_Move(First.m_Result).f_Wrap();
-				co_await fg_Timeout(0.05);
-
-				DMibExpectFalse(bool(CancelledResult));
-				DMibExpectFalse(bool(FirstResult));
-				DMibExpect(pState->m_Started.f_Load(), ==, 2u);
-
-				pState->m_Release.f_SetSignaled();
-				co_await fg_Move(Second.m_Result);
-				co_await fg_Move(Queued.m_Result);
-
-				DMibExpect(pState->m_Started.f_Load(), ==, 3u);
-				DMibExpect(pState->m_CancelledStarted.f_Load(), ==, 0u);
-
-				co_await fg_Move(Resolver).f_Destroy();
-
-				co_return {};
-			};
-
-			DMibTestSuite("CancelPending") -> TCFuture<void>
-			{
-				for (bool bDestroyActor : {false, true})
-				{
-					DMibTestPath(bDestroyActor ? "Destroy" : "Cancel");
-
-					struct CState
-					{
-						NThread::CEvent m_Release;
-						TCPromise<void> m_Started;
-						TCPromise<void> m_Finished;
-					};
-
-					TCSharedPointer<CState> pState = fg_Construct();
-					pState->m_Release.f_ResetSignaled();
-					auto Cleanup = g_OnScopeExit / [pState]
+				// Release the backend if cancellation fails to deliver the result.
+				auto Watchdog = co_await fg_OneshotTimerAbortable
+					(
+						5.0
+						, [pState]() -> TCFuture<void>
 						{
 							pState->m_Release.f_SetSignaled();
+
+							co_return {};
 						}
-					;
+					)
+				;
 
-					CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
-						{
-							pState->m_Started.f_SetResult();
-							pState->m_Release.f_Wait();
-							pState->m_Finished.f_SetResult();
+				TCFuture<void> Destroy;
+				if (bDestroyActor)
+					Destroy = fg_Move(Resolver).f_Destroy();
+				else
+					co_await Lookup.m_Cancel->f_Destroy();
 
-							return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
-						}
-					;
+				auto Result = co_await fg_Move(Lookup.m_Result).f_Wrap();
 
-					auto Resolver = fg_ConstructActor<CResolveActor>(fResolve);
-					auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("pending.test"), ENetAddressType_None);
-					co_await pState->m_Started.f_Future();
+				DMibExpectFalse(bool(Result));
+				DMibExpectFalse(pState->m_Finished.f_IsSet());
 
-					// Release the backend if cancellation fails to deliver the result.
-					auto Watchdog = co_await fg_OneshotTimerAbortable
-						(
-							5.0
-							, [pState]() -> TCFuture<void>
-							{
-								pState->m_Release.f_SetSignaled();
+				pState->m_Release.f_SetSignaled();
+				co_await pState->m_Finished.f_Future();
+				if (Destroy.f_IsValid())
+					co_await fg_Move(Destroy);
+				co_await Watchdog->f_Destroy();
 
-								co_return {};
-							}
-						)
-					;
+				if (Resolver)
+					co_await fg_Move(Resolver).f_Destroy();
+			}
 
-					TCFuture<void> Destroy;
-					if (bDestroyActor)
-						Destroy = fg_Move(Resolver).f_Destroy();
-					else
-						co_await Lookup.m_Cancel->f_Destroy();
-
-					auto Result = co_await fg_Move(Lookup.m_Result).f_Wrap();
-
-					DMibExpectFalse(bool(Result));
-					DMibExpectFalse(pState->m_Finished.f_IsSet());
-
-					pState->m_Release.f_SetSignaled();
-					co_await pState->m_Finished.f_Future();
-					if (Destroy.f_IsValid())
-						co_await fg_Move(Destroy);
-					co_await Watchdog->f_Destroy();
-
-					if (Resolver)
-						co_await fg_Move(Resolver).f_Destroy();
-				}
-
-				co_return {};
-			};
-		}
-	};
+			co_return {};
+		};
+	}
 
 	DMibTestRegister(CResolveActor_Tests, Malterlib::Network);
 }

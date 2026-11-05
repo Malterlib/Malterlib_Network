@@ -18,13 +18,15 @@ namespace NMib::NNetwork
 	{
 		struct CSSLLowLevelDataIndex
 		{
-			CSSLLowLevelDataIndex()
-			{
-				m_ExDataIndex = SSL_get_ex_new_index(0, (void *)"CSSLConnection Index", nullptr, nullptr, nullptr);
-			}
+			CSSLLowLevelDataIndex();
 
 			int m_ExDataIndex = 0;
 		};
+
+		CSSLLowLevelDataIndex::CSSLLowLevelDataIndex()
+		{
+			m_ExDataIndex = SSL_get_ex_new_index(0, (void *)"CSSLConnection Index", nullptr, nullptr, nullptr);
+		}
 
 		constinit NStorage::TCAggregate<CSSLLowLevelDataIndex> g_SSLLowLevelDataIndex = {DAggregateInit};
 
@@ -296,24 +298,27 @@ namespace NMib::NNetwork
 		// BIOs retain this process-wide method through actors, which are destroyed before aggregate teardown frees it.
 		struct CSSLTransportBioMethod
 		{
-			CSSLTransportBioMethod()
-			{
-				m_pMethod = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "Malterlib socket transport");
-				if (!m_pMethod)
-					DMibErrorCryptography("Could not create the TLS transport method");
-
-				BIO_meth_set_read(m_pMethod, fg_SSLTransportBioRead);
-				BIO_meth_set_write(m_pMethod, fg_SSLTransportBioWrite);
-				BIO_meth_set_ctrl(m_pMethod, fg_SSLTransportBioCtrl);
-			}
-
-			~CSSLTransportBioMethod()
-			{
-				BIO_meth_free(m_pMethod);
-			}
+			CSSLTransportBioMethod();
+			~CSSLTransportBioMethod();
 
 			BIO_METHOD *m_pMethod = nullptr;
 		};
+
+		CSSLTransportBioMethod::CSSLTransportBioMethod()
+		{
+			m_pMethod = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "Malterlib socket transport");
+			if (!m_pMethod)
+				DMibErrorCryptography("Could not create the TLS transport method");
+
+			BIO_meth_set_read(m_pMethod, fg_SSLTransportBioRead);
+			BIO_meth_set_write(m_pMethod, fg_SSLTransportBioWrite);
+			BIO_meth_set_ctrl(m_pMethod, fg_SSLTransportBioCtrl);
+		}
+
+		CSSLTransportBioMethod::~CSSLTransportBioMethod()
+		{
+			BIO_meth_free(m_pMethod);
+		}
 
 		constinit NStorage::TCAggregate<CSSLTransportBioMethod> g_SSLTransportBioMethod = {DAggregateInit};
 	}
@@ -321,497 +326,505 @@ namespace NMib::NNetwork
 	// CSSLContext::CSession methods.
 	struct CSSLContext::CSession
 	{
-		CSession(SSL_CTX *_pContext)
-			: mp_pSSL(nullptr)
-			, mp_pContext(_pContext)
-		{
-			fg_RunProtectRegisters
-				(
-					[&]() -> decltype(auto)
-					{
-						mp_pSSL = SSL_new(_pContext);
-					}
-				)
-			;
-		}
-
-		~CSession()
-		{
-			if (mp_pSSL)
-			{
-				fg_RunProtectRegisters
-					(
-						[&]() -> decltype(auto)
-						{
-							SSL_set_shutdown(mp_pSSL, SSL_RECEIVED_SHUTDOWN | SSL_SENT_SHUTDOWN);
-							auto pSession = SSL_get_session(mp_pSSL);
-							if (pSession)
-								SSL_CTX_remove_session(mp_pContext, pSession);
-							SSL_free(mp_pSSL);
-						}
-					)
-				;
-			}
-		}
-
-		SSL *f_GetSSL()
-		{
-			return mp_pSSL;
-		}
+		CSession(SSL_CTX *_pContext);
+		~CSession();
+		SSL *f_GetSSL();
 
 	protected:
 		SSL_CTX *mp_pContext;
 		SSL *mp_pSSL;
 	};
 
+	CSSLContext::CSession::CSession(SSL_CTX *_pContext)
+		: mp_pSSL(nullptr)
+		, mp_pContext(_pContext)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					mp_pSSL = SSL_new(_pContext);
+				}
+			)
+		;
+	}
+
+	CSSLContext::CSession::~CSession()
+	{
+		if (mp_pSSL)
+		{
+			fg_RunProtectRegisters
+				(
+					[&]() -> decltype(auto)
+					{
+						SSL_set_shutdown(mp_pSSL, SSL_RECEIVED_SHUTDOWN | SSL_SENT_SHUTDOWN);
+						auto pSession = SSL_get_session(mp_pSSL);
+						if (pSession)
+							SSL_CTX_remove_session(mp_pContext, pSession);
+						SSL_free(mp_pSSL);
+					}
+				)
+			;
+		}
+	}
+
+	SSL *CSSLContext::CSession::f_GetSSL()
+	{
+		return mp_pSSL;
+	}
+
 	// CSSLContext methods
 	struct CSSLContext::CInternal
 	{
-		CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings)
-			: mp_pContext(nullptr)
-			, mp_Type(_Type)
-			, mp_State(CSSLContext::EState_None)
-			, mp_Settings(_Settings)
-		{
-			fg_RunProtectRegisters
-				(
-					[&]() -> decltype(auto)
-					{
-						auto Cleanup = g_OnScopeExit / [&]
-							{
-								if (mp_pContext)
-									SSL_CTX_free(mp_pContext);
-							}
-						;
+		CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings);
+		~CInternal();
+		bool f_IsServerContext() const;
+		bool f_IsClientContext() const;
+		NStorage::TCUniquePointer<CSSLContext::CSession> f_CreateSession();
+		CSSLContext::EState f_GetState() const;
+		void f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const;
+		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
+		CSSLSettings const &f_GetSettings() const;
+		static bool fs_VerifyHostname(NStr::CStr const &_Hostname, X509 *_pCertificate);
+		static int fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX *_pStoreContext);
+		static X509_CRL *fs_LoadCRL(NContainer::CByteVector const &_CRLData);
 
-						auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
-						if (Minimum != 0 && Minimum != 128 && Minimum != 192 && Minimum != 256)
-							DMibErrorCryptography("Unsupported minimum cryptographic strength");
+	protected:
+		void fp_ProcessSettings();
+		bool fp_LoadCertificateAuthority();
+		bool fp_LoadPublicCertificate();
+		void fp_LoadCRLs();
+		void fp_ConfigureAlgorithms(EVP_PKEY const *_pKey);
+		bool fp_LoadPrivateKey();
+		void fp_VerifyPublicCertAndPrivateKey();
+		void fp_LoadTrustedStoreFromOS();
 
-						if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_SSL)
+		SSL_CTX *mp_pContext;
+
+		CSSLContext::EType mp_Type;
+		CSSLContext::EState mp_State;
+
+		CSSLSettings mp_Settings;
+	};
+
+	CSSLContext::CInternal::CInternal(CSSLContext::EType _Type, CSSLSettings const &_Settings)
+		: mp_pContext(nullptr)
+		, mp_Type(_Type)
+		, mp_State(CSSLContext::EState_None)
+		, mp_Settings(_Settings)
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					auto Cleanup = g_OnScopeExit / [&]
 						{
-							if (f_IsClientContext())
-								mp_pContext = fg_CreateSSLContext(TLS_client_method());
-							else
-								mp_pContext = fg_CreateSSLContext(TLS_server_method());
-
-							auto MinVersion = mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS_1_3 ? TLS1_3_VERSION : TLS1_2_VERSION;
-							ERR_clear_error();
-							if (!SSL_CTX_set_min_proto_version(mp_pContext, MinVersion))
-								DMibErrorCryptography(fg_GetExceptionStr("Failed to set minimum TLS version"));
-
-							if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_TLS)
-							{
-								ERR_clear_error();
-								if (!SSL_CTX_set_max_proto_version(mp_pContext, MinVersion))
-									DMibErrorCryptography(fg_GetExceptionStr("Failed to set maximum TLS version"));
-							}
+							if (mp_pContext)
+								SSL_CTX_free(mp_pContext);
 						}
+					;
+
+					auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+					if (Minimum != 0 && Minimum != 128 && Minimum != 192 && Minimum != 256)
+						DMibErrorCryptography("Unsupported minimum cryptographic strength");
+
+					if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_SSL)
+					{
+						if (f_IsClientContext())
+							mp_pContext = fg_CreateSSLContext(TLS_client_method());
 						else
-						{
-							if (f_IsClientContext())
-								mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
-							else
-								mp_pContext = fg_CreateSSLContext(SSLv23_server_method());
-						}
+							mp_pContext = fg_CreateSSLContext(TLS_server_method());
 
-						SSL_CTX_set_app_data(mp_pContext, this);
-
+						auto MinVersion = mp_Settings.m_Protocol == CSSLSettings::EProtocol_TLS_1_3 ? TLS1_3_VERSION : TLS1_2_VERSION;
 						ERR_clear_error();
-						if (!SSL_CTX_set_tls13_cipher_policy(mp_pContext, Minimum, 1))
-							DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS 1.3 cipher strength"));
+						if (!SSL_CTX_set_min_proto_version(mp_pContext, MinVersion))
+							DMibErrorCryptography(fg_GetExceptionStr("Failed to set minimum TLS version"));
 
-						if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_DisallowEllipticCurveDHKeyExchange)
-							DMibErrorCryptography("Disabling elliptic-curve key exchange is not supported by this TLS backend");
-
-						if (Minimum)
+						if (mp_Settings.m_Protocol != CSSLSettings::EProtocol_TLS)
 						{
-							if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_SSL)
-							{
-								ERR_clear_error();
-								if (!SSL_CTX_set_min_proto_version(mp_pContext, TLS1_2_VERSION))
-									DMibErrorCryptography(fg_GetExceptionStr("Failed to set the minimum TLS version for cryptographic strength"));
-							}
+							ERR_clear_error();
+							if (!SSL_CTX_set_max_proto_version(mp_pContext, MinVersion))
+								DMibErrorCryptography(fg_GetExceptionStr("Failed to set maximum TLS version"));
 						}
-
-						SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
-
-						// Quiet shutdown sends no close_notify, so a Malterlib peer sees plain EOF; both receive paths treat that as truncation
-						SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
-						if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
-							SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-						SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET);
-						SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
-
-						char const *pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
-						if (Minimum >= 192)
-							pCipherList = "AES256+EECDH:CHACHA20:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
-						else if (Minimum)
-							pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
-						else if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites)
-							pCipherList = "AES256:CHACHA20:AES128:ALL";
-
-						ERR_clear_error();
-						if (!SSL_CTX_set_cipher_list(mp_pContext, pCipherList))
-							DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS cipher preferences"));
-
-						fp_ProcessSettings();
-						Cleanup.f_Clear();
 					}
-				)
-			;
-		}
-
-		~CInternal()
-		{
-			fg_RunProtectRegisters
-				(
-					[&]() -> decltype(auto)
+					else
 					{
-						if (mp_pContext)
-							SSL_CTX_free(mp_pContext);
+						if (f_IsClientContext())
+							mp_pContext = fg_CreateSSLContext(SSLv23_client_method());
+						else
+							mp_pContext = fg_CreateSSLContext(SSLv23_server_method());
 					}
-				)
-			;
-		}
 
-		bool f_IsServerContext() const
-		{
-			return mp_Type == CSSLContext::EType_Server;
-		}
+					SSL_CTX_set_app_data(mp_pContext, this);
 
-		bool f_IsClientContext() const
-		{
-			return mp_Type == CSSLContext::EType_Client;
-		}
+					ERR_clear_error();
+					if (!SSL_CTX_set_tls13_cipher_policy(mp_pContext, Minimum, 1))
+						DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS 1.3 cipher strength"));
 
-		NStorage::TCUniquePointer<CSSLContext::CSession> f_CreateSession()
-		{
-			return fg_Construct(mp_pContext);
-		}
+					if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_DisallowEllipticCurveDHKeyExchange)
+						DMibErrorCryptography("Disabling elliptic-curve key exchange is not supported by this TLS backend");
 
-		CSSLContext::EState f_GetState() const
-		{
-			return mp_State;
-		}
+					if (Minimum)
+					{
+						if (mp_Settings.m_Protocol == CSSLSettings::EProtocol_SSL)
+						{
+							ERR_clear_error();
+							if (!SSL_CTX_set_min_proto_version(mp_pContext, TLS1_2_VERSION))
+								DMibErrorCryptography(fg_GetExceptionStr("Failed to set the minimum TLS version for cryptographic strength"));
+						}
+					}
 
-		void f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const
-		{
-			if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityLocation)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityLocation);
+					SSL_CTX_set_default_passwd_cb_userdata(mp_pContext, nullptr);
 
-			if (mp_State & CSSLContext::EState_InvalidPublicCertificate)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPublicCertificate);
+					// Quiet shutdown sends no close_notify, so a Malterlib peer sees plain EOF; both receive paths treat that as truncation
+					SSL_CTX_set_quiet_shutdown(mp_pContext, 1);
+					if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureSSLVersions))
+						SSL_CTX_set_options(mp_pContext, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+					SSL_CTX_set_options(mp_pContext, SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET);
+					SSL_CTX_set_session_cache_mode(mp_pContext, SSL_SESS_CACHE_OFF);
 
-			if (mp_State & CSSLContext::EState_InvalidPrivateKey)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPrivateKey);
+					char const *pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+					if (Minimum >= 192)
+						pCipherList = "AES256+EECDH:CHACHA20:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+					else if (Minimum)
+						pCipherList = "AES256+EECDH:CHACHA20:AES128+EECDH:!aNULL:!SHA:!SHA256:!SHA384:!DSS";
+					else if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowInsecureCipherSuites)
+						pCipherList = "AES256:CHACHA20:AES128:ALL";
 
-			if (mp_State & CSSLContext::EState_CertificatePrivateKeyMisMatch)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_CertificatePrivateKeyMisMatch);
+					ERR_clear_error();
+					if (!SSL_CTX_set_cipher_list(mp_pContext, pCipherList))
+						DMibErrorCryptography(fg_GetExceptionStr("Failed to configure TLS cipher preferences"));
 
-			if (mp_State & CSSLContext::EState_InvalidCRLData)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLData);
-
-			if (mp_State & CSSLContext::EState_InvalidCRLPath)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLPath);
-
-			if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityData)
-				_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityData);
-		}
-
-		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
-		{
-			return mp_Settings.m_VerificationFlags;
-		}
-
-		CSSLSettings const &f_GetSettings() const
-		{
-			return mp_Settings;
-		}
-
-		static bool fs_VerifyHostname(NStr::CStr const &_Hostname, X509 *_pCertificate)
-		{
-			NContainer::CByteVector CertData = fg_ConvertX509ToBinary(_pCertificate);
-
-			NContainer::TCVector<NStr::CStr> Hostnames = CCertificate::fs_GetCertificateHostnames(CertData);
-			for (auto const &CertHostName : Hostnames)
-			{
-				if (_Hostname.f_CmpNoCase(CertHostName) == 0)
-					return true;
-
-				// Alternatively, check for wildcard domain matching.
-				if (CertHostName.f_StartsWith("*."))
-				{
-					aint iFirstPos = CertHostName.f_Find(".");
-					aint iLastPos = CertHostName.f_FindReverse(".");
-					if (iFirstPos == iLastPos)
-						continue;
-
-					aint iSubDomainPos = _Hostname.f_Find(".");
-					if (iSubDomainPos == -1 || iSubDomainPos == _Hostname.f_GetLen() - 1)
-						continue;
-
-					NStr::CStr NonWildCardPart = CertHostName.f_Extract(2);
-					NStr::CStr HostnameAfterSubDomainLevel = _Hostname.f_Extract(iSubDomainPos + 1);
-
-					if (NonWildCardPart.f_CmpNoCase(HostnameAfterSubDomainLevel) == 0)
-						return true;
+					fp_ProcessSettings();
+					Cleanup.f_Clear();
 				}
-			}
+			)
+		;
+	}
 
-			return false;
+	CSSLContext::CInternal::~CInternal()
+	{
+		fg_RunProtectRegisters
+			(
+				[&]() -> decltype(auto)
+				{
+					if (mp_pContext)
+						SSL_CTX_free(mp_pContext);
+				}
+			)
+		;
+	}
+
+	bool CSSLContext::CInternal::f_IsServerContext() const
+	{
+		return mp_Type == CSSLContext::EType_Server;
+	}
+
+	bool CSSLContext::CInternal::f_IsClientContext() const
+	{
+		return mp_Type == CSSLContext::EType_Client;
+	}
+
+	NStorage::TCUniquePointer<CSSLContext::CSession> CSSLContext::CInternal::f_CreateSession()
+	{
+		return fg_Construct(mp_pContext);
+	}
+
+	CSSLContext::EState CSSLContext::CInternal::f_GetState() const
+	{
+		return mp_State;
+	}
+
+	void CSSLContext::CInternal::f_ReportInvalidContext(CSSLConnectionResult &_ConnectionResult) const
+	{
+		if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityLocation)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityLocation);
+
+		if (mp_State & CSSLContext::EState_InvalidPublicCertificate)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPublicCertificate);
+
+		if (mp_State & CSSLContext::EState_InvalidPrivateKey)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidPrivateKey);
+
+		if (mp_State & CSSLContext::EState_CertificatePrivateKeyMisMatch)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_CertificatePrivateKeyMisMatch);
+
+		if (mp_State & CSSLContext::EState_InvalidCRLData)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLData);
+
+		if (mp_State & CSSLContext::EState_InvalidCRLPath)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCRLPath);
+
+		if (mp_State & CSSLContext::EState_InvalidCertificateAuthorityData)
+			_ConnectionResult.f_LogMiscError(CSSLConnectionResult::EMiscError_InvalidCertificateAuthorityData);
+	}
+
+	CSSLSettings::EVerificationFlag CSSLContext::CInternal::f_GetVerificationFlags() const
+	{
+		return mp_Settings.m_VerificationFlags;
+	}
+
+	CSSLSettings const &CSSLContext::CInternal::f_GetSettings() const
+	{
+		return mp_Settings;
+	}
+
+	bool CSSLContext::CInternal::fs_VerifyHostname(NStr::CStr const &_Hostname, X509 *_pCertificate)
+	{
+		NContainer::CByteVector CertData = fg_ConvertX509ToBinary(_pCertificate);
+
+		NContainer::TCVector<NStr::CStr> Hostnames = CCertificate::fs_GetCertificateHostnames(CertData);
+		for (auto const &CertHostName : Hostnames)
+		{
+			if (_Hostname.f_CmpNoCase(CertHostName) == 0)
+				return true;
+
+			// Alternatively, check for wildcard domain matching.
+			if (CertHostName.f_StartsWith("*."))
+			{
+				aint iFirstPos = CertHostName.f_Find(".");
+				aint iLastPos = CertHostName.f_FindReverse(".");
+				if (iFirstPos == iLastPos)
+					continue;
+
+				aint iSubDomainPos = _Hostname.f_Find(".");
+				if (iSubDomainPos == -1 || iSubDomainPos == _Hostname.f_GetLen() - 1)
+					continue;
+
+				NStr::CStr NonWildCardPart = CertHostName.f_Extract(2);
+				NStr::CStr HostnameAfterSubDomainLevel = _Hostname.f_Extract(iSubDomainPos + 1);
+
+				if (NonWildCardPart.f_CmpNoCase(HostnameAfterSubDomainLevel) == 0)
+					return true;
+			}
 		}
 
-		static int fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX *_pStoreContext)
+		return false;
+	}
+
+	int CSSLContext::CInternal::fs_VerifyCallback(int _PreVerifyOK, X509_STORE_CTX *_pStoreContext)
+	{
+		int Error = X509_STORE_CTX_get_error(_pStoreContext);
+		int Depth = X509_STORE_CTX_get_error_depth(_pStoreContext);
+
+		SSL *pSSL = (SSL *)X509_STORE_CTX_get_ex_data(_pStoreContext, SSL_get_ex_data_X509_STORE_CTX_idx());
+		if (!pSSL)
+			return 0;
+
+		CSSLConnection *pCSSL = (CSSLConnection *)SSL_get_ex_data(pSSL, fg_ExDataIndex());
+		if (!pCSSL)
+			return 0;
+
+		// Check for renegotiation and return the original result as we do not support our verification methods
+		// for renegotiations yet.
+		if (pCSSL->f_Connected())
+			return _PreVerifyOK;
+
+		if (_PreVerifyOK == 0)
 		{
-			int Error = X509_STORE_CTX_get_error(_pStoreContext);
-			int Depth = X509_STORE_CTX_get_error_depth(_pStoreContext);
-
-			SSL *pSSL = (SSL *)X509_STORE_CTX_get_ex_data(_pStoreContext, SSL_get_ex_data_X509_STORE_CTX_idx());
-			if (!pSSL)
-				return 0;
-
-			CSSLConnection *pCSSL = (CSSLConnection *)SSL_get_ex_data(pSSL, fg_ExDataIndex());
-			if (!pCSSL)
-				return 0;
-
-			// Check for renegotiation and return the original result as we do not support our verification methods
-			// for renegotiations yet.
-			if (pCSSL->f_Connected())
-				return _PreVerifyOK;
-
-			if (_PreVerifyOK == 0)
+			if (Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH || Error == X509_V_ERR_AKID_SKID_MISMATCH || Error == X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH)
 			{
-				if (Error == X509_V_ERR_SUBJECT_ISSUER_MISMATCH || Error == X509_V_ERR_AKID_SKID_MISMATCH || Error == X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH)
+				// Don't log these. And I quote:
+				// The presence of rejection messages does not itself imply that anything is wrong: during the normal verify process several rejections may take place.
+				// We must handle these because of our use of X509_V_FLAG_CB_ISSUER_CHECK:
+				// The X509_V_FLAG_CB_ISSUER_CHECK flag enables debugging of certificate issuer checks.
+				// It is not needed unless you are logging certificate verification.
+				// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard
+				// errors.
+				return 0;
+			}
+		}
+
+		CSSLConnectionResult &Result = pCSSL->f_GetConnectionResult();
+
+		auto *pContext = static_cast<CInternal *>(SSL_CTX_get_app_data(SSL_get_SSL_CTX(pSSL)));
+		auto Minimum = uint16(pContext->mp_Settings.m_MinimumCryptoStrength);
+		if (Minimum)
+		{
+			auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
+			auto nCertificates = sk_X509_num(pChain);
+			bool bTrustedRoot = nCertificates && fg_IsTrustedSelfIssuedRoot(_pStoreContext, sk_X509_value(pChain, nCertificates - 1));
+
+			for (umint iCertificate = 0; iCertificate < nCertificates; ++iCertificate)
+			{
+				if (!fg_CertificateMeetsStrength(sk_X509_value(pChain, iCertificate), Minimum, bTrustedRoot && iCertificate + 1 == nCertificates))
 				{
-					// Don't log these. And I quote:
-					// The presence of rejection messages does not itself imply that anything is wrong: during the normal verify process several rejections may take place.
-					// We must handle these because of our use of X509_V_FLAG_CB_ISSUER_CHECK:
-					// The X509_V_FLAG_CB_ISSUER_CHECK flag enables debugging of certificate issuer checks.
-					// It is not needed unless you are logging certificate verification.
-					// If this flag is set then additional status codes will be sent to the verification callback and it must be prepared to handle such cases without assuming they are hard
-					// errors.
+					Result.f_AddSSLError("Peer certificate chain does not meet the minimum cryptographic strength");
+					X509_STORE_CTX_set_error(_pStoreContext, X509_V_ERR_APPLICATION_VERIFICATION);
+
 					return 0;
 				}
 			}
-
-			CSSLConnectionResult &Result = pCSSL->f_GetConnectionResult();
-
-			auto *pContext = static_cast<CInternal *>(SSL_CTX_get_app_data(SSL_get_SSL_CTX(pSSL)));
-			auto Minimum = uint16(pContext->mp_Settings.m_MinimumCryptoStrength);
-			if (Minimum)
-			{
-				auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
-				auto nCertificates = sk_X509_num(pChain);
-				bool bTrustedRoot = nCertificates && fg_IsTrustedSelfIssuedRoot(_pStoreContext, sk_X509_value(pChain, nCertificates - 1));
-
-				for (umint iCertificate = 0; iCertificate < nCertificates; ++iCertificate)
-				{
-					if (!fg_CertificateMeetsStrength(sk_X509_value(pChain, iCertificate), Minimum, bTrustedRoot && iCertificate + 1 == nCertificates))
-					{
-						Result.f_AddSSLError("Peer certificate chain does not meet the minimum cryptographic strength");
-						X509_STORE_CTX_set_error(_pStoreContext, X509_V_ERR_APPLICATION_VERIFICATION);
-
-						return 0;
-					}
-				}
-			}
-
-			// Update chain of certificates
-			if (!Result.f_HasLoggedCertificateChain())
-			{
-				auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
-				auto nCertsInChain = sk_X509_num(pChain);
-				while (nCertsInChain)
-				{
-					X509 *pCert = sk_X509_value(pChain, nCertsInChain - 1);
-					NContainer::CByteVector CertData;
-					try
-					{
-						CertData = fg_ConvertX509ToBinary(pCert);
-
-						Result.f_LogCertificate(nCertsInChain - 1, CertData);
-						--nCertsInChain;
-
-						// Check the hostname on the peer certificate
-						if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
-						{
-							if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
-								Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
-						}
-					}
-					catch (CExceptionCryptography const &_Exception)
-					{
-						Result.f_LogMiscError(CSSLConnectionResult::EMiscError_InternalError);
-						Result.f_AddSSLError(_Exception.f_GetErrorStr());
-					}
-				}
-			}
-
-			if (_PreVerifyOK == 0)
-				Result.f_LogError(Depth, Error);
-
-			return 1;
 		}
 
-		static X509_CRL *fs_LoadCRL(NContainer::CByteVector const &_CRLData)
+		// Update chain of certificates
+		if (!Result.f_HasLoggedCertificateChain())
 		{
-			ERR_clear_error();
-			BIO *pMemoryBio = BIO_new_mem_buf(const_cast<void *>(static_cast<void const *>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
-			if (!pMemoryBio)
-				DMibErrorCryptography(fg_GetExceptionStr("Error creating BIO"));
-			auto Cleanup = g_OnScopeExit / [&]
+			auto *pChain = X509_STORE_CTX_get0_chain(_pStoreContext);
+			auto nCertsInChain = sk_X509_num(pChain);
+			while (nCertsInChain)
+			{
+				X509 *pCert = sk_X509_value(pChain, nCertsInChain - 1);
+				NContainer::CByteVector CertData;
+				try
 				{
-					BIO_free(pMemoryBio);
+					CertData = fg_ConvertX509ToBinary(pCert);
+
+					Result.f_LogCertificate(nCertsInChain - 1, CertData);
+					--nCertsInChain;
+
+					// Check the hostname on the peer certificate
+					if (nCertsInChain == 0 && pCSSL->f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_VerifyHostnameMatches)
+					{
+						if (!fs_VerifyHostname(pCSSL->f_GetHostname(), pCert))
+							Result.f_LogMiscError(CSSLConnectionResult::EMiscError_HostnameMisMatch);
+					}
 				}
-			;
-
-			ERR_clear_error();
-			X509_CRL *pCRL = PEM_read_bio_X509_CRL(pMemoryBio, nullptr, nullptr, nullptr);
-			if (!pCRL)
-				DMibErrorCryptography(fg_GetExceptionStr("Error reading x509 certificate revocation list from BIO"));
-
-			return pCRL;
+				catch (CExceptionCryptography const &_Exception)
+				{
+					Result.f_LogMiscError(CSSLConnectionResult::EMiscError_InternalError);
+					Result.f_AddSSLError(_Exception.f_GetErrorStr());
+				}
+			}
 		}
 
-	protected:
-		void fp_ProcessSettings()
-		{
-			bool bVerifyIssuer = false;
-			int VerifyFlags = SSL_VERIFY_PEER;
+		if (_PreVerifyOK == 0)
+			Result.f_LogError(Depth, Error);
 
-			if (fp_LoadCertificateAuthority())
+		return 1;
+	}
+
+	X509_CRL *CSSLContext::CInternal::fs_LoadCRL(NContainer::CByteVector const &_CRLData)
+	{
+		ERR_clear_error();
+		BIO *pMemoryBio = BIO_new_mem_buf(const_cast<void *>(static_cast<void const *>(_CRLData.f_GetArray())), _CRLData.f_GetLen());
+		if (!pMemoryBio)
+			DMibErrorCryptography(fg_GetExceptionStr("Error creating BIO"));
+		auto Cleanup = g_OnScopeExit / [&]
 			{
-				SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);
-
-				if (f_IsServerContext())
-				{
-					if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate))
-						VerifyFlags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-				}
-				else if (f_IsClientContext())
-					bVerifyIssuer = true;
+				BIO_free(pMemoryBio);
 			}
-			else if (f_IsClientContext() && mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified)
+		;
+
+		ERR_clear_error();
+		X509_CRL *pCRL = PEM_read_bio_X509_CRL(pMemoryBio, nullptr, nullptr, nullptr);
+		if (!pCRL)
+			DMibErrorCryptography(fg_GetExceptionStr("Error reading x509 certificate revocation list from BIO"));
+
+		return pCRL;
+	}
+
+	void CSSLContext::CInternal::fp_ProcessSettings()
+	{
+		bool bVerifyIssuer = false;
+		int VerifyFlags = SSL_VERIFY_PEER;
+
+		if (fp_LoadCertificateAuthority())
+		{
+			SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);
+
+			if (f_IsServerContext())
 			{
-				fp_LoadTrustedStoreFromOS();
+				if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate))
+					VerifyFlags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+			}
+			else if (f_IsClientContext())
 				bVerifyIssuer = true;
-			}
-
-			if (f_IsClientContext())
-			{
-				unsigned long ClientFlags = 0;
-				if (bVerifyIssuer)
-					ClientFlags |= X509_V_FLAG_CHECK_SS_SIGNATURE | X509_V_FLAG_CB_ISSUER_CHECK;
-				X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), ClientFlags);
-			}
-
-			SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
-
-			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
-
-			bool bVerifyCertAndKey = false;
-			if (fp_LoadPublicCertificate())
-				bVerifyCertAndKey = true;
-
-			if (fp_LoadPrivateKey())
-				bVerifyCertAndKey = true;
-
-			if (bVerifyCertAndKey)
-				fp_VerifyPublicCertAndPrivateKey();
-
-			if (Minimum && SSL_CTX_get0_certificate(mp_pContext))
-			{
-				if (!fg_CertificateMeetsStrength(SSL_CTX_get0_certificate(mp_pContext), Minimum, false))
-					DMibErrorCryptography("Local certificate does not meet the minimum cryptographic strength");
-
-				STACK_OF(X509) * pChain = nullptr;
-				SSL_CTX_get0_chain_certs(mp_pContext, &pChain);
-
-				for (umint iCertificate = 0; iCertificate < sk_X509_num(pChain); ++iCertificate)
-				{
-					auto *pCertificate = sk_X509_value(pChain, iCertificate);
-					bool bTrustAnchor = iCertificate + 1 == sk_X509_num(pChain) && fg_IsSelfIssuedCertificate(pCertificate);
-					if (!fg_CertificateMeetsStrength(pCertificate, Minimum, bTrustAnchor))
-						DMibErrorCryptography("Local certificate chain does not meet the minimum cryptographic strength");
-				}
-			}
-
-			fp_LoadCRLs();
+		}
+		else if (f_IsClientContext() && mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified)
+		{
+			fp_LoadTrustedStoreFromOS();
+			bVerifyIssuer = true;
 		}
 
-		bool fp_LoadCertificateAuthority()
+		if (f_IsClientContext())
 		{
-			bool bUsingCertificateAuthority = false;
-
-			if (!mp_Settings.m_CAStoreLocation.f_IsEmpty())
-			{
-				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
-
-				if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
-					DMibErrorCryptography(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
-				else
-				{
-					NContainer::TCVector<NStr::CStr> CertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
-
-					if (CertificateFiles.f_IsEmpty())
-						DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
-
-					for (auto iCertificateFile = CertificateFiles.f_GetIterator(); iCertificateFile; ++iCertificateFile)
-					{
-						NContainer::CByteVector CertificateData = NFile::CFile::fs_ReadFile(*iCertificateFile);
-						if (CertificateData.f_IsEmpty())
-							continue;
-
-						bUsingCertificateAuthority = true;
-
-						X509 *pCertificate = fg_LoadCertificate(CertificateData);
-						auto Cleanup0 = g_OnScopeExit / [&]
-							{
-								X509_free(pCertificate);
-							}
-						;
-
-						ERR_clear_error();
-						if (!X509_STORE_add_cert(pStore, pCertificate))
-							DMibErrorCryptography(fg_GetExceptionStr(fg_Format("Failed to add certificate '{}' to store", *iCertificateFile)));
-					}
-
-					if (!bUsingCertificateAuthority)
-						DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
-				}
-			}
-
-			if (!mp_Settings.m_CACertificateData.f_IsEmpty())
-			{
-				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
-				X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_CACertificateData);
-				auto Cleanup0 = g_OnScopeExit / [&]
-					{
-						X509_free(pCertificate);
-					}
-				;
-
-				ERR_clear_error();
-				if (!X509_STORE_add_cert(pStore, pCertificate))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
-
-				ERR_clear_error();
-				if (!SSL_CTX_add1_chain_cert(mp_pContext, pCertificate))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate '{}' to certificate chain"));
-
-				bUsingCertificateAuthority = true;
-			}
-
-			return bUsingCertificateAuthority;
+			unsigned long ClientFlags = 0;
+			if (bVerifyIssuer)
+				ClientFlags |= X509_V_FLAG_CHECK_SS_SIGNATURE | X509_V_FLAG_CB_ISSUER_CHECK;
+			X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), ClientFlags);
 		}
 
-		bool fp_LoadPublicCertificate()
-		{
-			if (mp_Settings.m_PublicCertificateData.f_IsEmpty())
-				return false;
+		SSL_CTX_set_verify(mp_pContext, VerifyFlags, fs_VerifyCallback);
 
-			X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_PublicCertificateData);
+		auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+
+		bool bVerifyCertAndKey = false;
+		if (fp_LoadPublicCertificate())
+			bVerifyCertAndKey = true;
+
+		if (fp_LoadPrivateKey())
+			bVerifyCertAndKey = true;
+
+		if (bVerifyCertAndKey)
+			fp_VerifyPublicCertAndPrivateKey();
+
+		if (Minimum && SSL_CTX_get0_certificate(mp_pContext))
+		{
+			if (!fg_CertificateMeetsStrength(SSL_CTX_get0_certificate(mp_pContext), Minimum, false))
+				DMibErrorCryptography("Local certificate does not meet the minimum cryptographic strength");
+
+			STACK_OF(X509) * pChain = nullptr;
+			SSL_CTX_get0_chain_certs(mp_pContext, &pChain);
+
+			for (umint iCertificate = 0; iCertificate < sk_X509_num(pChain); ++iCertificate)
+			{
+				auto *pCertificate = sk_X509_value(pChain, iCertificate);
+				bool bTrustAnchor = iCertificate + 1 == sk_X509_num(pChain) && fg_IsSelfIssuedCertificate(pCertificate);
+				if (!fg_CertificateMeetsStrength(pCertificate, Minimum, bTrustAnchor))
+					DMibErrorCryptography("Local certificate chain does not meet the minimum cryptographic strength");
+			}
+		}
+
+		fp_LoadCRLs();
+	}
+
+	bool CSSLContext::CInternal::fp_LoadCertificateAuthority()
+	{
+		bool bUsingCertificateAuthority = false;
+
+		if (!mp_Settings.m_CAStoreLocation.f_IsEmpty())
+		{
+			X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
+
+			if (!NFile::CFile::fs_FileExists(mp_Settings.m_CAStoreLocation, NFile::EFileAttrib_Directory))
+				DMibErrorCryptography(fg_Format("Certificate store location '{}' does not exist", mp_Settings.m_CAStoreLocation));
+			else
+			{
+				NContainer::TCVector<NStr::CStr> CertificateFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_CAStoreLocation + "/*", NFile::EFileAttrib_File, false);
+
+				if (CertificateFiles.f_IsEmpty())
+					DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
+
+				for (auto iCertificateFile = CertificateFiles.f_GetIterator(); iCertificateFile; ++iCertificateFile)
+				{
+					NContainer::CByteVector CertificateData = NFile::CFile::fs_ReadFile(*iCertificateFile);
+					if (CertificateData.f_IsEmpty())
+						continue;
+
+					bUsingCertificateAuthority = true;
+
+					X509 *pCertificate = fg_LoadCertificate(CertificateData);
+					auto Cleanup0 = g_OnScopeExit / [&]
+						{
+							X509_free(pCertificate);
+						}
+					;
+
+					ERR_clear_error();
+					if (!X509_STORE_add_cert(pStore, pCertificate))
+						DMibErrorCryptography(fg_GetExceptionStr(fg_Format("Failed to add certificate '{}' to store", *iCertificateFile)));
+				}
+
+				if (!bUsingCertificateAuthority)
+					DMibErrorCryptography(fg_Format("No certificates found at location '{}'", mp_Settings.m_CAStoreLocation));
+			}
+		}
+
+		if (!mp_Settings.m_CACertificateData.f_IsEmpty())
+		{
+			X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
+			X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_CACertificateData);
 			auto Cleanup0 = g_OnScopeExit / [&]
 				{
 					X509_free(pCertificate);
@@ -819,23 +832,84 @@ namespace NMib::NNetwork
 			;
 
 			ERR_clear_error();
-			if (SSL_CTX_use_certificate(mp_pContext, pCertificate) <= 0)
+			if (!X509_STORE_add_cert(pStore, pCertificate))
 				DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
 
-			return true;
+			ERR_clear_error();
+			if (!SSL_CTX_add1_chain_cert(mp_pContext, pCertificate))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate '{}' to certificate chain"));
+
+			bUsingCertificateAuthority = true;
 		}
 
-		void fp_LoadCRLs()
-		{
-			if (!mp_Settings.m_CRLData.f_IsEmpty())
+		return bUsingCertificateAuthority;
+	}
+
+	bool CSSLContext::CInternal::fp_LoadPublicCertificate()
+	{
+		if (mp_Settings.m_PublicCertificateData.f_IsEmpty())
+			return false;
+
+		X509 *pCertificate = fg_LoadCertificate(mp_Settings.m_PublicCertificateData);
+		auto Cleanup0 = g_OnScopeExit / [&]
 			{
-				ERR_clear_error();
-				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
-				if (!pStore)
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
+				X509_free(pCertificate);
+			}
+		;
 
-				X509_CRL *pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
+		ERR_clear_error();
+		if (SSL_CTX_use_certificate(mp_pContext, pCertificate) <= 0)
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate '{}' to store"));
 
+		return true;
+	}
+
+	void CSSLContext::CInternal::fp_LoadCRLs()
+	{
+		if (!mp_Settings.m_CRLData.f_IsEmpty())
+		{
+			ERR_clear_error();
+			X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
+			if (!pStore)
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
+
+			X509_CRL *pCRL = fs_LoadCRL(mp_Settings.m_CRLData);
+
+			auto Cleanup = g_OnScopeExit / [&]
+				{
+					X509_CRL_free(pCRL);
+				}
+			;
+
+			ERR_clear_error();
+			if (!X509_STORE_add_crl(pStore, pCRL))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
+
+			ERR_clear_error();
+			if (!X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to set store flags"));
+		}
+
+		if (!mp_Settings.m_PathToCRLs.f_IsEmpty())
+		{
+			ERR_clear_error();
+			X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
+			if (!pStore)
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
+
+			if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
+				DMibErrorCryptography(fg_Format("CRL path '{}' does not exist", mp_Settings.m_PathToCRLs));
+
+			NContainer::TCVector<NStr::CStr> RevocationListFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+
+			bool bAdded = false;
+			for (auto iCRLFile = RevocationListFiles.f_GetIterator(); iCRLFile; ++iCRLFile)
+			{
+				NContainer::CByteVector RevocationListData = NFile::CFile::fs_ReadFile(*iCRLFile);
+				if (RevocationListData.f_IsEmpty())
+					continue;
+
+				X509_CRL *pCRL = fs_LoadCRL(RevocationListData);
 				auto Cleanup = g_OnScopeExit / [&]
 					{
 						X509_CRL_free(pCRL);
@@ -845,177 +919,134 @@ namespace NMib::NNetwork
 				ERR_clear_error();
 				if (!X509_STORE_add_crl(pStore, pCRL))
 					DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
-
-				ERR_clear_error();
-				if (!X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to set store flags"));
+				bAdded = true;
 			}
 
-			if (!mp_Settings.m_PathToCRLs.f_IsEmpty())
+			if (bAdded)
+				X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
+		}
+	}
+
+	void CSSLContext::CInternal::fp_ConfigureAlgorithms(EVP_PKEY const *_pKey)
+	{
+		static uint16_t const s_DefaultAlgos[] =
 			{
-				ERR_clear_error();
-				X509_STORE *pStore = SSL_CTX_get_cert_store(mp_pContext);
-				if (!pStore)
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to get cert store"));
-
-				if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
-					DMibErrorCryptography(fg_Format("CRL path '{}' does not exist", mp_Settings.m_PathToCRLs));
-
-				NContainer::TCVector<NStr::CStr> RevocationListFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
-
-				bool bAdded = false;
-				for (auto iCRLFile = RevocationListFiles.f_GetIterator(); iCRLFile; ++iCRLFile)
-				{
-					NContainer::CByteVector RevocationListData = NFile::CFile::fs_ReadFile(*iCRLFile);
-					if (RevocationListData.f_IsEmpty())
-						continue;
-
-					X509_CRL *pCRL = fs_LoadCRL(RevocationListData);
-					auto Cleanup = g_OnScopeExit / [&]
-						{
-							X509_CRL_free(pCRL);
-						}
-					;
-
-					ERR_clear_error();
-					if (!X509_STORE_add_crl(pStore, pCRL))
-						DMibErrorCryptography(fg_GetExceptionStr("Failed to add certificate revocation list to store"));
-					bAdded = true;
-				}
-
-				if (bAdded)
-					X509_STORE_set_flags(pStore, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
+				SSL_SIGN_ECDSA_SECP521R1_SHA512
+				, SSL_SIGN_RSA_PSS_SHA512
+				, SSL_SIGN_RSA_PKCS1_SHA512
+				, SSL_SIGN_ECDSA_SECP384R1_SHA384
+				, SSL_SIGN_RSA_PSS_SHA384
+				, SSL_SIGN_RSA_PKCS1_SHA384
+				, SSL_SIGN_ECDSA_SECP256R1_SHA256
+				, SSL_SIGN_RSA_PSS_SHA256
+				, SSL_SIGN_RSA_PKCS1_SHA256
 			}
-		}
+		;
 
-		void fp_ConfigureAlgorithms(EVP_PKEY const *_pKey)
+		uint16 StrengthOrder[] = {256, 192, 128};
+		auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+		auto PreferredStrength = Minimum ? Minimum : uint16(256);
+		if (_pKey)
+			PreferredStrength = fg_PublicKeyStrength(_pKey);
+
+		if (PreferredStrength <= 128)
+			fg_Swap(StrengthOrder[0], StrengthOrder[2]);
+		else if (PreferredStrength <= 192)
+			fg_Swap(StrengthOrder[0], StrengthOrder[1]);
+
+		struct CGroup
 		{
-			static uint16_t const s_DefaultAlgos[] =
-				{
-					SSL_SIGN_ECDSA_SECP521R1_SHA512
-					, SSL_SIGN_RSA_PSS_SHA512
-					, SSL_SIGN_RSA_PKCS1_SHA512
-					, SSL_SIGN_ECDSA_SECP384R1_SHA384
-					, SSL_SIGN_RSA_PSS_SHA384
-					, SSL_SIGN_RSA_PKCS1_SHA384
-					, SSL_SIGN_ECDSA_SECP256R1_SHA256
-					, SSL_SIGN_RSA_PSS_SHA256
-					, SSL_SIGN_RSA_PKCS1_SHA256
-				}
-			;
-
-			uint16 StrengthOrder[] = {256, 192, 128};
-			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
-			auto PreferredStrength = Minimum ? Minimum : uint16(256);
-			if (_pKey)
-				PreferredStrength = fg_PublicKeyStrength(_pKey);
-
-			if (PreferredStrength <= 128)
-				fg_Swap(StrengthOrder[0], StrengthOrder[2]);
-			else if (PreferredStrength <= 192)
-				fg_Swap(StrengthOrder[0], StrengthOrder[1]);
-
-			struct CGroup
-			{
-				uint16 m_Strength;
-				uint16_t m_ID;
-			};
-
-			static constexpr CGroup c_Groups[] =
-				{
-					// malterlib-format table
-					  {256, SSL_GROUP_SECP521R1}
-					, {192, SSL_GROUP_SECP384R1}
-					, {128, SSL_GROUP_X25519}
-					, {128, SSL_GROUP_SECP256R1}
-				}
-			;
-			NContainer::TCVector<uint16_t> AllowedGroups;
-			NContainer::TCVector<uint16_t> AllowedAlgorithms;
-
-			for (auto Strength : StrengthOrder)
-			{
-				if (Strength < Minimum)
-					continue;
-
-				for (auto const &Group : c_Groups)
-				{
-					if (Group.m_Strength == Strength)
-						AllowedGroups.f_InsertLast(Group.m_ID);
-				}
-
-				for (auto Algorithm : s_DefaultAlgos)
-				{
-					auto *pDigest = SSL_get_signature_algorithm_digest(Algorithm);
-					if (pDigest && uint16(EVP_MD_size(pDigest) * 4) == Strength)
-						AllowedAlgorithms.f_InsertLast(Algorithm);
-				}
-			}
-
-			ERR_clear_error();
-			if (!SSL_CTX_set1_group_ids(mp_pContext, AllowedGroups.f_GetArray(), AllowedGroups.f_GetLen()))
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to set supported TLS groups"));
-
-			auto *pAlgos = AllowedAlgorithms.f_GetArray();
-			auto nAlgos = AllowedAlgorithms.f_GetLen();
-
-			ERR_clear_error();
-			if (!SSL_CTX_set_signing_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred signing algorithms on ssl context"));
-
-			ERR_clear_error();
-			if (!SSL_CTX_set_verify_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred verify algorithms on ssl context"));
-		}
-
-		bool fp_LoadPrivateKey()
-		{
-			if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
-			{
-				fp_ConfigureAlgorithms(nullptr);
-
-				return false;
-			}
-
-			EVP_PKEY *pKey = fg_LoadPrivateKey(mp_Settings.m_PrivateKeyData);
-			auto Cleanup = g_OnScopeExit / [&]
-				{
-					EVP_PKEY_free(pKey);
-				}
-			;
-
-			auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
-			if (Minimum && fg_PublicKeyStrength(pKey) < Minimum)
-				DMibErrorCryptography("Local private key does not meet the minimum cryptographic strength");
-
-			fp_ConfigureAlgorithms(pKey);
-
-			ERR_clear_error();
-			if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to use private key in SSL context"));
-
-			return true;
-		}
-
-		void fp_VerifyPublicCertAndPrivateKey()
-		{
-			ERR_clear_error();
-			if (!SSL_CTX_check_private_key(mp_pContext))
-				DMibErrorCryptography(fg_GetExceptionStr("Certificate private and public key verfication failed"));
-		}
-
-		void fp_LoadTrustedStoreFromOS()
-		{
-			CCertificate::fs_GetSystemCertificates(SSL_CTX_get_cert_store(mp_pContext));
+			uint16 m_Strength;
+			uint16_t m_ID;
 		};
 
-		SSL_CTX *mp_pContext;
+		static constexpr CGroup c_Groups[] =
+			{
+				// malterlib-format table
+				  {256, SSL_GROUP_SECP521R1}
+				, {192, SSL_GROUP_SECP384R1}
+				, {128, SSL_GROUP_X25519}
+				, {128, SSL_GROUP_SECP256R1}
+			}
+		;
+		NContainer::TCVector<uint16_t> AllowedGroups;
+		NContainer::TCVector<uint16_t> AllowedAlgorithms;
 
-		CSSLContext::EType mp_Type;
-		CSSLContext::EState mp_State;
+		for (auto Strength : StrengthOrder)
+		{
+			if (Strength < Minimum)
+				continue;
 
-		CSSLSettings mp_Settings;
-	};
+			for (auto const &Group : c_Groups)
+			{
+				if (Group.m_Strength == Strength)
+					AllowedGroups.f_InsertLast(Group.m_ID);
+			}
+
+			for (auto Algorithm : s_DefaultAlgos)
+			{
+				auto *pDigest = SSL_get_signature_algorithm_digest(Algorithm);
+				if (pDigest && uint16(EVP_MD_size(pDigest) * 4) == Strength)
+					AllowedAlgorithms.f_InsertLast(Algorithm);
+			}
+		}
+
+		ERR_clear_error();
+		if (!SSL_CTX_set1_group_ids(mp_pContext, AllowedGroups.f_GetArray(), AllowedGroups.f_GetLen()))
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to set supported TLS groups"));
+
+		auto *pAlgos = AllowedAlgorithms.f_GetArray();
+		auto nAlgos = AllowedAlgorithms.f_GetLen();
+
+		ERR_clear_error();
+		if (!SSL_CTX_set_signing_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred signing algorithms on ssl context"));
+
+		ERR_clear_error();
+		if (!SSL_CTX_set_verify_algorithm_prefs(mp_pContext, pAlgos, nAlgos))
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to set preferred verify algorithms on ssl context"));
+	}
+
+	bool CSSLContext::CInternal::fp_LoadPrivateKey()
+	{
+		if (mp_Settings.m_PrivateKeyData.f_IsEmpty())
+		{
+			fp_ConfigureAlgorithms(nullptr);
+
+			return false;
+		}
+
+		EVP_PKEY *pKey = fg_LoadPrivateKey(mp_Settings.m_PrivateKeyData);
+		auto Cleanup = g_OnScopeExit / [&]
+			{
+				EVP_PKEY_free(pKey);
+			}
+		;
+
+		auto Minimum = uint16(mp_Settings.m_MinimumCryptoStrength);
+		if (Minimum && fg_PublicKeyStrength(pKey) < Minimum)
+			DMibErrorCryptography("Local private key does not meet the minimum cryptographic strength");
+
+		fp_ConfigureAlgorithms(pKey);
+
+		ERR_clear_error();
+		if (SSL_CTX_use_PrivateKey(mp_pContext, pKey) <= 0)
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to use private key in SSL context"));
+
+		return true;
+	}
+
+	void CSSLContext::CInternal::fp_VerifyPublicCertAndPrivateKey()
+	{
+		ERR_clear_error();
+		if (!SSL_CTX_check_private_key(mp_pContext))
+			DMibErrorCryptography(fg_GetExceptionStr("Certificate private and public key verfication failed"));
+	}
+
+	void CSSLContext::CInternal::fp_LoadTrustedStoreFromOS()
+	{
+		CCertificate::fs_GetSystemCertificates(SSL_CTX_get_cert_store(mp_pContext));
+	}
 
 	CSSLContext::CSSLContext(CSSLContext::EType _Type, CSSLSettings const &_Settings)
 		: mp_pInternal(nullptr)
@@ -1149,713 +1180,78 @@ namespace NMib::NNetwork
 				, FUserTrustDecisionCallback &&_fUserTrustCallback
 				, NStr::CStr const &_Hostname
 			)
-			: mp_pSSL(_pSSL)
-			, mp_pSession(mp_pContext->fp_CreateSession())
-			, mp_pContext(_pContext)
-			, mp_Hostname(_Hostname)
-			, mp_State(EState_None)
-			, mp_bConnected(false)
-			, mp_fAuthenticationResultCallback(fg_Move(_fAuthenticationResultCallback))
-			, mp_fUserTrustCallback(fg_Move(_fUserTrustCallback))
-			, mp_bHandshakeInProgress(false)
-			, mp_bUsingTrustDecision(false)
-		{
-			fp_AttachTransport();
-
-			if (mp_pContext->f_IsClientContext())
-			{
-				auto Minimum = mp_pContext->f_GetSettings().m_MinimumCryptoStrength;
-				uint16_t Group = SSL_GROUP_SECP384R1;
-				if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric128bit)
-					Group = SSL_GROUP_X25519;
-				else if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric256bit)
-					Group = SSL_GROUP_SECP521R1;
-
-				ERR_clear_error();
-				if (!SSL_set1_client_key_shares(f_GetSSL(), &Group, 1))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to configure the initial TLS client key share"));
-			}
-
-			if (_Hostname)
-			{
-				ERR_clear_error();
-				if (!SSL_set_tlsext_host_name(mp_pSession->f_GetSSL(), _Hostname.f_GetStr()))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to set hostname in SSL"));
-			}
-		}
-
-		~CInternal()
-		{
-			// The library's hold on the transport goes first: the BIO reaches into this object, and
-			// freeing the session is what releases it
-			mp_pSession.f_Clear();
-		}
-
-		SSL *f_GetSSL()
-		{
-			return mp_pSession->f_GetSSL();
-		}
-
-		EState f_GetState() const
-		{
-			return mp_State;
-		}
-
-		void f_SetState(EState _State)
-		{
-			mp_State = _State;
-		}
-
-		// Whether the peer's close_notify has been opened (or a mutual shutdown completed):
-		// only then is an end of the TCP stream an authenticated end of the TLS stream
-		bool f_ReceivedShutdown() const
-		{
-			return mp_State == EState_ConnectionShutdown;
-		}
-
-		bool f_Connected() const
-		{
-			return mp_bConnected;
-		}
-
-		void f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult)
-		{
-			mp_bUsingTrustDecision = true;
-			mp_ExpectedResultCallback = _ExpectedResult;
-		}
-
-		void f_GiveSocket(CSocket *_pSocket)
-		{
-			mp_Transport.f_SetSocket(_pSocket);
-		}
-
-		bool f_HasSocket() const
-		{
-			return mp_Transport.f_HasSocket();
-		}
-
-		// Batch only sends; library read and shutdown paths can wait on the peer without flushing.
-		void f_SetSendBatching(bool _bBatching)
-		{
-			mp_Transport.f_SetDeferFlush(_bBatching && fg_SendBatchingEnabled(mp_pIo));
-		}
-
-		bool f_IsSendBufferFull() const
-		{
-			return mp_Transport.f_IsFull();
-		}
-
-		// Retry transport-held records after write readiness; the library will not offer them again.
-		CSocketOperationResult f_FlushPending()
-		{
-			CSocketOperationResult Result;
-
-			if (!mp_Transport.f_GetPendingWrite())
-				return Result;
-
-			umint nSentBefore = mp_Transport.f_GetBytesSent();
-			mp_Transport.f_Flush();
-			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
-
-			fp_CheckTransportError(EState_WriteFailed);
-
-			return Result;
-		}
-
-		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest()
-		{
-			DMibRequire(mp_bConnected);
-
-			if (SSL_version(f_GetSSL()) >= TLS1_3_VERSION)
-			{
-				// TLS 1.3 session master keys are resumption secrets, not a shared channel binding.
-				NContainer::CSecureByteVector KeyData;
-				KeyData.f_SetLen(32);
-				constexpr char c_Label[] = "EXPORTER-Malterlib-SessionKeyDigest";
-
-				ERR_clear_error();
-				if (!SSL_export_keying_material(f_GetSSL(), KeyData.f_GetArray(), KeyData.f_GetLen(), c_Label, sizeof(c_Label) - 1, nullptr, 0, 0))
-					DMibErrorCryptography(fg_GetExceptionStr("Failed to export TLS channel binding"));
-
-				return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyData.f_GetLen());
-			}
-
-			auto pSession = SSL_get_session(f_GetSSL());
-			DMibRequire(pSession);
-
-			auto KeyLength = SSL_SESSION_get_master_key(pSession, nullptr, 0);
-			NContainer::CSecureByteVector KeyData;
-			KeyData.f_SetLen(KeyLength);
-			SSL_SESSION_get_master_key(pSession, KeyData.f_GetArray(), KeyLength);
-
-			return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyLength);
-		}
-
-		uint16 f_GetCipherStrength()
-		{
-			auto *pCipher = SSL_get_current_cipher(f_GetSSL());
-
-			return pCipher ? uint16(SSL_CIPHER_get_bits(pCipher, nullptr)) : 0;
-		}
-
-		uint16 f_GetKeyExchangeStrength()
-		{
-			switch (SSL_get_group_id(f_GetSSL()))
-			{
-			case SSL_GROUP_SECP521R1: return 256;
-			case SSL_GROUP_SECP384R1: return 192;
-			case SSL_GROUP_SECP256R1:
-			case SSL_GROUP_X25519:
-				return 128;
-			default: return 0;
-			}
-		}
-
-		bool f_UsedHelloRetryRequest()
-		{
-			return SSL_used_hello_retry_request(f_GetSSL()) != 0;
-		}
-
-		NStr::CStr f_GetProtocolVersion()
-		{
-			return mp_bConnected ? NStr::CStr(SSL_get_version(f_GetSSL())) : NStr::CStr{};
-		}
-
-		bool f_Connect()
-		{
-			return fp_Process(false);
-		}
-
-		bool f_Accept()
-		{
-			return fp_Process(true);
-		}
-
-		bool f_Shutdown()
-		{
-			ERR_clear_error();
-			auto Ret = SSL_shutdown(f_GetSSL());
-
-			// The library does not flush warning close_notify alerts. Flush explicitly before waiting for the peer,
-			// or let the completion-send drain carry the alert when it is the sole writer.
-			if (!mp_Transport.f_IsCompletionSend())
-				mp_Transport.f_Flush();
-
-			if (Ret == 1)
-				return true;
-			else if (Ret == -1)
-			{
-				int Error = SSL_get_error(f_GetSSL(), Ret);
-				if (Error == SSL_ERROR_ZERO_RETURN)
-					f_SetState(EState_ConnectionShutdown);
-				else if (Error == SSL_ERROR_SYSCALL)
-				{
-					if (fp_CheckTransportError(EState_ShutdownFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL: {}") << mp_LastError).f_GetStr());
-
-					DMibErrorNet("SSL_shutdown: End of file encountered");
-				}
-				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
-				{
-					mp_LastError = fg_GetErrors();
-					f_SetState(EState_ShutdownFailed);
-				}
-			}
-			return false;
-		}
-
-		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
-		{
-			return mp_Transport.f_BeginSend(o_pData, o_nBytes, o_iBuffer);
-		}
-
-		bool f_IsSendPinned() const
-		{
-			return mp_Transport.f_IsSendPinned();
-		}
-
-		bool f_CanBeginSend() const
-		{
-			return mp_Transport.f_CanBeginSend();
-		}
-
-		void f_ConsiderSendWindowGrowth()
-		{
-			mp_Transport.f_ConsiderSendWindowGrowth();
-		}
-
-		smint f_NextBeginSend() const
-		{
-			return mp_Transport.f_NextBeginSend();
-		}
-
-		umint f_GetPendingSend() const
-		{
-			return mp_Transport.f_GetPendingWrite();
-		}
-
-		umint f_GetPendingSendUnpinned() const
-		{
-			return mp_Transport.f_GetPendingWriteUnpinned();
-		}
-
-		// Sealed records that cannot be sent leave the connection with a gap in its record
-		// numbering, which the peer cannot recover from, so it is failed rather than continued
-		void f_FailSend(NStr::CStr &&_Error)
-		{
-			mp_LastError = fg_Move(_Error);
-			f_SetState(EState_WriteFailed);
-		}
-
-		void f_FailReceive(NStr::CStr &&_Error)
-		{
-			mp_LastError = fg_Move(_Error);
-			f_SetState(EState_ReadFailed);
-		}
-
-		umint f_GetSendDepth() const
-		{
-			return mp_Transport.f_GetSendDepth();
-		}
-
-		void f_SetSendDepth(umint _nDepth)
-		{
-			mp_Transport.f_SetSendDepth(_nDepth);
-		}
-
-		void f_SetSendWindow(umint _nBytes)
-		{
-			mp_Transport.f_SetSendWindow(_nBytes);
-		}
-
-		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const
-		{
-			return mp_Transport.f_GetPinnedKeepAlive(_iBuffer);
-		}
-
-		void f_SetCompletionSend(bool _bCompletionSend)
-		{
-			mp_Transport.f_SetCompletionSend(_bCompletionSend);
-		}
-
-		bool f_IsCompletionSend() const
-		{
-			return mp_Transport.f_IsCompletionSend();
-		}
-
-		void f_SetCompletionReceive(bool _bCompletionReceive)
-		{
-			mp_Transport.f_SetCompletionReceive(_bCompletionReceive);
-		}
-
-		void f_AbortSend(umint _iBuffer)
-		{
-			mp_Transport.f_AbortSend(_iBuffer);
-		}
-
-		void f_SendCompleted(umint _iBuffer, umint _nBytes)
-		{
-			mp_Transport.f_SendCompleted(_iBuffer, _nBytes);
-		}
-
-		umint f_GetFillBuffer() const
-		{
-			return mp_Transport.f_GetFillBuffer();
-		}
-
-		void f_ReleaseSendBuffer(umint _iBuffer)
-		{
-			mp_Transport.f_ReleaseSendBuffer(_iBuffer);
-		}
-
-		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner)
-		{
-			mp_Transport.f_AppendCipherSegment(_pData, _nBytes, fg_Move(_pOwner));
-		}
-
-		void f_ClearCipherQueue()
-		{
-			mp_Transport.f_ClearCipherQueue();
-		}
-
-		void f_CompactCipherIfStalled()
-		{
-			mp_Transport.f_CompactCipherIfStalled();
-		}
-
-		umint f_GetInboundBufferSize() const
-		{
-			return fg_Max(mp_nTransferSizeHint, CSSLTransport::mc_nInboundBufferSize);
-		}
-
-		void f_SetTransferSizeHint(umint _nBytes)
-		{
-			mp_nTransferSizeHint = _nBytes;
-			mp_Transport.f_SetOutboundCap(_nBytes);
-			mp_Transport.f_SetInboundSize(_nBytes);
-		}
-
-		// Seals gathered plaintext into transport-owned ciphertext. False means unchanged state and permits fallback; only post-handshake steady state supports it.
-		bool f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result)
-		{
-			DMibRequire(mp_bConnected);
-			DMibRequire(!mp_bHandshakeInProgress);
-			DMibRequire(mp_State == EState_None);
-
-			if (!fg_ZeroCopyEnabled(mp_pIo))
-				return false;
-
-			// The spans as fragments. Zero length ones are dropped so they cannot spend a record's
-			// fragment budget
-			CRYPTO_IVEC Fragments[NSys::gc_IoLoopMaxSubmitSpans];
-			umint nFragments = 0;
-			umint nPlaintext = 0;
-
-			for (umint iSpan = 0; iSpan < _nSpans && nFragments < fg_ArraySize(Fragments); ++iSpan)
-			{
-				if (!_pSpans[iSpan].m_nBytes)
-					continue;
-
-				Fragments[nFragments].in = (uint8 const *)_pSpans[iSpan].m_pData;
-				Fragments[nFragments].len = _pSpans[iSpan].m_nBytes;
-				++nFragments;
-				nPlaintext += _pSpans[iSpan].m_nBytes;
-			}
-
-			if (!nFragments)
-				return true;
-
-			ERR_clear_error();
-			auto pSSL = f_GetSSL();
-
-			// Room for the plaintext and one record's framing for each record it will take, plus a record's worth of slack for post handshake output that goes out ahead of it
-			umint nRecords = nPlaintext / SSL3_RT_MAX_PLAIN_LENGTH + 1;
-			umint nWanted = nPlaintext + (nRecords + 1) * SSL_max_seal_overhead(pSSL) + SSL3_RT_MAX_PLAIN_LENGTH;
-
-			umint nRoom = 0;
-			uint8 *pOut = mp_Transport.f_BeginSeal(nWanted, nRoom);
-
-			size_t nWritten = 0;
-			size_t nConsumed = 0;
-			auto Ret = SSL_seal_app_datav(pSSL, pOut, &nWritten, nRoom, Fragments, nFragments, &nConsumed);
-
-			// Refusal permits fallback; failure may already have consumed control output or sequence numbers, so retain produced records and fail the connection.
-			if (Ret == ssl_seal_v_refused)
-			{
-				ERR_clear_error();
-				return false;
-			}
-
-			mp_Transport.f_CommitSeal(nWritten);
-			o_Result.m_nBytes += nConsumed;
-
-			if (Ret == ssl_seal_v_error)
-			{
-				mp_LastError = fg_GetErrors();
-				f_SetState(EState_WriteFailed);
-			}
-
-			return true;
-		}
-
-		CSocketOperationResult f_Send(void const *_pData, umint _nLen)
-		{
-			DMibRequire(_nLen > 0);
-			DMibRequire(mp_bConnected);
-			DMibRequire(!mp_bHandshakeInProgress);
-			DMibRequire(mp_State == EState_None);
-
-			CSocketOperationResult Result;
-			ERR_clear_error();
-			auto pSSL = f_GetSSL();
-			umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
-			umint nSentBefore = mp_Transport.f_GetBytesSent();
-			int Ret = SSL_write(pSSL, _pData, (int)_nLen);
-			Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
-			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
-			if (Ret <= 0)
-			{
-				// Write did not succeed.
-				int Error = SSL_get_error(pSSL, Ret);
-				DMibLog(DebugVerbose3, " **** SSL error {}", Error);
-				if (Error == SSL_ERROR_ZERO_RETURN)
-					f_SetState(EState_ConnectionShutdown);
-				else if (Error == SSL_ERROR_SYSCALL)
-				{
-					if (fp_CheckTransportError(EState_WriteFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL): {}") << mp_LastError).f_GetStr());
-
-					DMibErrorNet("send (write to SSL socket): End of file encountered");
-				}
-				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
-				{
-					mp_LastError = fg_GetErrors();
-					f_SetState(EState_WriteFailed);
-				}
-			}
-			else
-			{
-				DMibLog(DebugVerbose3, " **** SSL wrote {}", Ret);
-				// Write succeeded, return the number of bytes written.
-				Result.m_nBytes = (umint)Ret;
-			}
-
-			return Result;
-		}
-
-		// Opens directly into caller storage; false permits fallback without consuming input.
-		bool f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
-		{
-			DMibRequire(mp_bConnected);
-			DMibRequire(!mp_bHandshakeInProgress);
-			DMibRequire(mp_State == EState_None);
-
-			if (!fg_ZeroCopyEnabled(mp_pIo))
-				return false;
-
-			ERR_clear_error();
-			auto pSSL = f_GetSSL();
-
-			if (mp_Transport.f_GetHeld())
-			{
-				o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
-
-				// The close alert or failure that came in behind the held record takes effect
-				// once the hold has drained
-				if (!mp_Transport.f_GetHeld())
-				{
-					if (mp_bShutdownAfterHeld)
-					{
-						mp_bShutdownAfterHeld = false;
-						f_SetState(EState_ConnectionShutdown);
-					}
-					else if (mp_bReadFailedAfterHeld)
-					{
-						mp_bReadFailedAfterHeld = false;
-						f_SetState(EState_ReadFailed);
-					}
-				}
-
-				return true;
-			}
-
-			CRYPTO_IOVEC Destination{(uint8 *)_pData, nullptr, _nLen};
-
-			// Capture the thread-local error now, but deliver authenticated held plaintext before entering failed state.
-			auto fReadFailed = [&]
-				{
-					if (fp_CheckTransportError(EState_ReadFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
-
-					mp_LastError = fg_GetErrors();
-					if (mp_Transport.f_GetHeld())
-						mp_bReadFailedAfterHeld = true;
-					else
-						f_SetState(EState_ReadFailed);
-				}
-			;
-
-			// Remember close_notify after its ciphertext is consumed, but enter shutdown only after held plaintext drains.
-			auto fShutdown = [&]
-				{
-					if (mp_Transport.f_GetHeld())
-						mp_bShutdownAfterHeld = true;
-					else
-						f_SetState(EState_ConnectionShutdown);
-				}
-			;
-
-			for (;;)
-			{
-				CRYPTO_IVEC Fragments[CSSLTransport::mc_nMaxCipherFragments];
-				umint nFragments = mp_Transport.f_GetCipherFragments(Fragments);
-
-				if (nFragments)
-				{
-					size_t nProduced = 0;
-					size_t nConsumed = 0;
-					auto Ret = SSL_open_app_datav(pSSL, &Destination, 1, &nProduced, &nConsumed, Fragments, nFragments);
-
-					mp_Transport.f_ConsumeCipher(nConsumed);
-
-					if (Ret == ssl_open_v_refused)
-					{
-						// Refusal consumed no input; clear errors before fallback.
-						ERR_clear_error();
-						return false;
-					}
-
-					// Deliver opened plaintext even on a later error; its record sequence numbers cannot be replayed.
-					if (nProduced)
-					{
-						o_Result.m_nBytes += nProduced;
-						o_Result.m_bReceivedNetwork = true;
-					}
-
-					if (Ret == ssl_open_v_error)
-					{
-						fReadFailed();
-						return true;
-					}
-
-					if (Ret == ssl_open_v_close_notify)
-					{
-						fShutdown();
-						return true;
-					}
-
-					if (nProduced)
-						return true;
-
-					if (nConsumed)
-						continue;
-
-					// Use holdover storage when caller capacity cannot fit a record body or reads could stop making progress.
-					if (mp_Transport.f_GetCipherPending() > SSL3_RT_HEADER_LENGTH)
-					{
-						umint nRoom = 0;
-						uint8 *pHold = mp_Transport.f_BeginHold(nRoom);
-
-						CRYPTO_IOVEC Held{pHold, nullptr, nRoom};
-						size_t nHeld = 0;
-						size_t nHeldConsumed = 0;
-						auto HeldRet = SSL_open_app_datav(pSSL, &Held, 1, &nHeld, &nHeldConsumed, Fragments, nFragments);
-
-						mp_Transport.f_ConsumeCipher(nHeldConsumed);
-
-						if (nHeld)
-						{
-							mp_Transport.f_CommitHold(nHeld);
-							o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
-							o_Result.m_bReceivedNetwork = true;
-						}
-
-						if (HeldRet == ssl_open_v_error)
-						{
-							fReadFailed();
-							return true;
-						}
-
-						if (HeldRet == ssl_open_v_close_notify)
-						{
-							fShutdown();
-							return true;
-						}
-
-						if (nHeld)
-							return true;
-
-						if (nHeldConsumed)
-							continue;
-					}
-				}
-
-				// Only synchronous mode may fill ciphertext here; completion mode has a standing kernel reader.
-				auto Fill = mp_Transport.f_FillCipher();
-
-				if (Fill == CSSLTransport::ETransferResult::mc_Data)
-				{
-					o_Result.m_bReceivedNetwork = true;
-					continue;
-				}
-
-				if (Fill == CSSLTransport::ETransferResult::mc_EndOfStream)
-				{
-					// Transport EOF without close_notify is unauthenticated truncation.
-					if (fp_CheckTransportError(EState_ReadFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
-
-					DMibErrorNet("recv (read from SSL socket): End of file encountered");
-				}
-
-				if (Fill == CSSLTransport::ETransferResult::mc_Failed)
-				{
-					if (fp_CheckTransportError(EState_ReadFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
-
-					return true;
-				}
-
-				return true;
-			}
-		}
-
-		CSocketOperationResult f_Receive(void *_pData, umint _nLen)
-		{
-			DMibRequire(_nLen > 0);
-			DMibRequire(mp_bConnected);
-			DMibRequire(!mp_bHandshakeInProgress);
-			DMibRequire(mp_State == EState_None);
-
-			CSocketOperationResult Result;
-			ERR_clear_error();
-			auto pSSL = f_GetSSL();
-			umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
-			umint nSentBefore = mp_Transport.f_GetBytesSent();
-
-			// Flush transport-generated output before reads wait on the peer. Include it in activity counters so a drain cannot mistake progress for idle.
-			mp_Transport.f_Flush();
-
-			int Ret = SSL_read(pSSL, _pData, _nLen);
-			Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
-			Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
-
-			if (Ret <= 0)
-			{
-				int Error = SSL_get_error(pSSL, Ret);
-				if (Error == SSL_ERROR_ZERO_RETURN)
-					f_SetState(EState_ConnectionShutdown);
-				else if (Error == SSL_ERROR_SYSCALL)
-				{
-					if (fp_CheckTransportError(EState_ReadFailed))
-						DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
-
-					DMibErrorNet("recv (read from SSL socket): End of file encountered");
-				}
-				else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
-				{
-					mp_LastError = fg_GetErrors();
-					DMibLog(DebugVerbose3, " **** Read failed: {} {}", Error, mp_LastError);
-					f_SetState(EState_ReadFailed);
-				}
-			}
-			else
-				Result.m_nBytes = (umint)Ret;
-
-			return Result;
-		}
-
-		bool f_GetHandshakeInProgress() const
-		{
-			return mp_bHandshakeInProgress;
-		}
-
-		void f_SetHostname(NStr::CStr const &_Hostname)
-		{
-			mp_Hostname = _Hostname;
-		}
-
-		NStr::CStr f_GetHostname() const
-		{
-			return mp_Hostname;
-		}
-
-		NStr::CStr f_GetLastError() const
-		{
-			return mp_LastError;
-		}
-
-		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const
-		{
-			return mp_pContext->f_GetVerificationFlags();
-		}
-
-		NMib::NSys::CIoSubSystem *f_GetIo() const
-		{
-			return mp_pIo;
-		}
+		;
+		~CInternal();
+		SSL *f_GetSSL();
+		EState f_GetState() const;
+		void f_SetState(EState _State);
+
+		bool f_ReceivedShutdown() const;
+		bool f_Connected() const;
+		void f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult);
+		void f_GiveSocket(CSocket *_pSocket);
+		bool f_HasSocket() const;
+
+		void f_SetSendBatching(bool _bBatching);
+		bool f_IsSendBufferFull() const;
+
+		CSocketOperationResult f_FlushPending();
+		NCryptography::CHashDigest_SHA256 f_GetSessionKeyDigest();
+		uint16 f_GetCipherStrength();
+		uint16 f_GetKeyExchangeStrength();
+		bool f_UsedHelloRetryRequest();
+		NStr::CStr f_GetProtocolVersion();
+		bool f_Connect();
+		bool f_Accept();
+		bool f_Shutdown();
+		bool f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer);
+		bool f_IsSendPinned() const;
+		bool f_CanBeginSend() const;
+		void f_ConsiderSendWindowGrowth();
+		smint f_NextBeginSend() const;
+		umint f_GetPendingSend() const;
+		umint f_GetPendingSendUnpinned() const;
+
+		void f_FailSend(NStr::CStr &&_Error);
+		void f_FailReceive(NStr::CStr &&_Error);
+		umint f_GetSendDepth() const;
+		void f_SetSendDepth(umint _nDepth);
+		void f_SetSendWindow(umint _nBytes);
+		NStorage::TCSharedPointer<NContainer::CByteVector> f_GetPinnedKeepAlive(umint _iBuffer) const;
+		void f_SetCompletionSend(bool _bCompletionSend);
+		bool f_IsCompletionSend() const;
+		void f_SetCompletionReceive(bool _bCompletionReceive);
+		void f_AbortSend(umint _iBuffer);
+		void f_SendCompleted(umint _iBuffer, umint _nBytes);
+		umint f_GetFillBuffer() const;
+		void f_ReleaseSendBuffer(umint _iBuffer);
+		void f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner);
+		void f_ClearCipherQueue();
+		void f_CompactCipherIfStalled();
+		umint f_GetInboundBufferSize() const;
+		void f_SetTransferSizeHint(umint _nBytes);
+
+		bool f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result);
+		CSocketOperationResult f_Send(void const *_pData, umint _nLen);
+
+		bool f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result);
+		CSocketOperationResult f_Receive(void *_pData, umint _nLen);
+		bool f_GetHandshakeInProgress() const;
+		void f_SetHostname(NStr::CStr const &_Hostname);
+		NStr::CStr f_GetHostname() const;
+		NStr::CStr f_GetLastError() const;
+		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
+		NMib::NSys::CIoSubSystem *f_GetIo() const;
 
 	protected:
+		void fp_AttachTransport();
+
+		bool fp_CheckTransportError(EState _State);
+		bool fp_Process(bool _bAccept);
+		void fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult &_ResultForCallback);
+		static NStr::CStr fsp_GetErrorString(uint32_t _Error);
+		bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult &_Result, NStr::CStr &_SystemErrors, bool &_bConnectionRefused);
+
 		CSSLConnection *mp_pSSL;
 		NStorage::TCSharedPointer<CSSLContext> mp_pContext;
 		NMib::NSys::CIoSubSystem *mp_pIo = &NMib::NSys::fg_IoSubSystem();
@@ -1877,223 +1273,937 @@ namespace NMib::NNetwork
 		bool mp_bConnected;
 		bool mp_bHandshakeInProgress;
 		bool mp_bUsingTrustDecision;
+	};
 
-		void fp_AttachTransport()
+	CSSLConnection::CInternal::CInternal
+		(
+			CSSLConnection *_pSSL
+			, NStorage::TCSharedPointer<CSSLContext> const &_pContext
+			, FAuthenticationResultCallback &&_fAuthenticationResultCallback
+			, FUserTrustDecisionCallback &&_fUserTrustCallback
+			, NStr::CStr const &_Hostname
+		)
+		: mp_pSSL(_pSSL)
+		, mp_pSession(mp_pContext->fp_CreateSession())
+		, mp_pContext(_pContext)
+		, mp_Hostname(_Hostname)
+		, mp_State(EState_None)
+		, mp_bConnected(false)
+		, mp_fAuthenticationResultCallback(fg_Move(_fAuthenticationResultCallback))
+		, mp_fUserTrustCallback(fg_Move(_fUserTrustCallback))
+		, mp_bHandshakeInProgress(false)
+		, mp_bUsingTrustDecision(false)
+	{
+		fp_AttachTransport();
+
+		if (mp_pContext->f_IsClientContext())
 		{
-			BIO *pBio = BIO_new(g_SSLTransportBioMethod->m_pMethod);
-			if (!pBio)
-				DMibErrorCryptography(fg_GetExceptionStr("Failed to create the TLS transport"));
+			auto Minimum = mp_pContext->f_GetSettings().m_MinimumCryptoStrength;
+			uint16_t Group = SSL_GROUP_SECP384R1;
+			if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric128bit)
+				Group = SSL_GROUP_X25519;
+			else if (Minimum == NCryptography::ECryptoStrength::mc_EquivalentSymmetric256bit)
+				Group = SSL_GROUP_SECP521R1;
 
-			BIO_set_data(pBio, &mp_Transport);
-			BIO_set_init(pBio, 1);
-
-			// Both directions are the same transport, and each side takes a reference of its own
-			BIO_up_ref(pBio);
-			SSL_set0_rbio(f_GetSSL(), pBio);
-			SSL_set0_wbio(f_GetSSL(), pBio);
-
-			// Retries can use a newly gathered address. Keep partial writes disabled or a short success could wait for a nonexistent would-block edge.
-			SSL_set_mode(f_GetSSL(), SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+			ERR_clear_error();
+			if (!SSL_set1_client_key_shares(f_GetSSL(), &Group, 1))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to configure the initial TLS client key share"));
 		}
 
-		// Carry transport failures out of library frames through return values; throw only after the library call returns.
-		bool fp_CheckTransportError(EState _State)
+		if (_Hostname)
 		{
-			if (!mp_Transport.f_GetTransportError())
-				return false;
+			ERR_clear_error();
+			if (!SSL_set_tlsext_host_name(mp_pSession->f_GetSSL(), _Hostname.f_GetStr()))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to set hostname in SSL"));
+		}
+	}
 
-			mp_LastError = mp_Transport.f_GetTransportError();
-			f_SetState(_State);
+	CSSLConnection::CInternal::~CInternal()
+	{
+		// The library's hold on the transport goes first: the BIO reaches into this object, and
+		// freeing the session is what releases it
+		mp_pSession.f_Clear();
+	}
+
+	SSL *CSSLConnection::CInternal::f_GetSSL()
+	{
+		return mp_pSession->f_GetSSL();
+	}
+
+	CSSLConnection::EState CSSLConnection::CInternal::f_GetState() const
+	{
+		return mp_State;
+	}
+
+	void CSSLConnection::CInternal::f_SetState(EState _State)
+	{
+		mp_State = _State;
+	}
+
+	// Returns whether the peer's close_notify has been opened or a mutual shutdown completed. Only then is an end of the TCP
+	// stream an authenticated end of the TLS stream.
+	bool CSSLConnection::CInternal::f_ReceivedShutdown() const
+	{
+		return mp_State == EState_ConnectionShutdown;
+	}
+
+	bool CSSLConnection::CInternal::f_Connected() const
+	{
+		return mp_bConnected;
+	}
+
+	void CSSLConnection::CInternal::f_SetExpectedConnectionResult(CSSLConnectionResult const &_ExpectedResult)
+	{
+		mp_bUsingTrustDecision = true;
+		mp_ExpectedResultCallback = _ExpectedResult;
+	}
+
+	void CSSLConnection::CInternal::f_GiveSocket(CSocket *_pSocket)
+	{
+		mp_Transport.f_SetSocket(_pSocket);
+	}
+
+	bool CSSLConnection::CInternal::f_HasSocket() const
+	{
+		return mp_Transport.f_HasSocket();
+	}
+
+	// Batch only sends; library read and shutdown paths can wait on the peer without flushing.
+	void CSSLConnection::CInternal::f_SetSendBatching(bool _bBatching)
+	{
+		mp_Transport.f_SetDeferFlush(_bBatching && fg_SendBatchingEnabled(mp_pIo));
+	}
+
+	bool CSSLConnection::CInternal::f_IsSendBufferFull() const
+	{
+		return mp_Transport.f_IsFull();
+	}
+
+	// Retry transport-held records after write readiness; the library will not offer them again.
+	CSocketOperationResult CSSLConnection::CInternal::f_FlushPending()
+	{
+		CSocketOperationResult Result;
+
+		if (!mp_Transport.f_GetPendingWrite())
+			return Result;
+
+		umint nSentBefore = mp_Transport.f_GetBytesSent();
+		mp_Transport.f_Flush();
+		Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
+
+		fp_CheckTransportError(EState_WriteFailed);
+
+		return Result;
+	}
+
+	NCryptography::CHashDigest_SHA256 CSSLConnection::CInternal::f_GetSessionKeyDigest()
+	{
+		DMibRequire(mp_bConnected);
+
+		if (SSL_version(f_GetSSL()) >= TLS1_3_VERSION)
+		{
+			// TLS 1.3 session master keys are resumption secrets, not a shared channel binding.
+			NContainer::CSecureByteVector KeyData;
+			KeyData.f_SetLen(32);
+			constexpr char c_Label[] = "EXPORTER-Malterlib-SessionKeyDigest";
+
+			ERR_clear_error();
+			if (!SSL_export_keying_material(f_GetSSL(), KeyData.f_GetArray(), KeyData.f_GetLen(), c_Label, sizeof(c_Label) - 1, nullptr, 0, 0))
+				DMibErrorCryptography(fg_GetExceptionStr("Failed to export TLS channel binding"));
+
+			return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyData.f_GetLen());
+		}
+
+		auto pSession = SSL_get_session(f_GetSSL());
+		DMibRequire(pSession);
+
+		auto KeyLength = SSL_SESSION_get_master_key(pSession, nullptr, 0);
+		NContainer::CSecureByteVector KeyData;
+		KeyData.f_SetLen(KeyLength);
+		SSL_SESSION_get_master_key(pSession, KeyData.f_GetArray(), KeyLength);
+
+		return NCryptography::CHash_SHA256::fs_DigestFromData(KeyData.f_GetArray(), KeyLength);
+	}
+
+	uint16 CSSLConnection::CInternal::f_GetCipherStrength()
+	{
+		auto *pCipher = SSL_get_current_cipher(f_GetSSL());
+
+		return pCipher ? uint16(SSL_CIPHER_get_bits(pCipher, nullptr)) : 0;
+	}
+
+	uint16 CSSLConnection::CInternal::f_GetKeyExchangeStrength()
+	{
+		switch (SSL_get_group_id(f_GetSSL()))
+		{
+		case SSL_GROUP_SECP521R1: return 256;
+		case SSL_GROUP_SECP384R1: return 192;
+		case SSL_GROUP_SECP256R1:
+		case SSL_GROUP_X25519:
+			return 128;
+		default: return 0;
+		}
+	}
+
+	bool CSSLConnection::CInternal::f_UsedHelloRetryRequest()
+	{
+		return SSL_used_hello_retry_request(f_GetSSL()) != 0;
+	}
+
+	NStr::CStr CSSLConnection::CInternal::f_GetProtocolVersion()
+	{
+		return mp_bConnected ? NStr::CStr(SSL_get_version(f_GetSSL())) : NStr::CStr{};
+	}
+
+	bool CSSLConnection::CInternal::f_Connect()
+	{
+		return fp_Process(false);
+	}
+
+	bool CSSLConnection::CInternal::f_Accept()
+	{
+		return fp_Process(true);
+	}
+
+	bool CSSLConnection::CInternal::f_Shutdown()
+	{
+		ERR_clear_error();
+		auto Ret = SSL_shutdown(f_GetSSL());
+
+		// The library does not flush warning close_notify alerts. Flush explicitly before waiting for the peer,
+		// or let the completion-send drain carry the alert when it is the sole writer.
+		if (!mp_Transport.f_IsCompletionSend())
+			mp_Transport.f_Flush();
+
+		if (Ret == 1)
+			return true;
+		else if (Ret == -1)
+		{
+			int Error = SSL_get_error(f_GetSSL(), Ret);
+			if (Error == SSL_ERROR_ZERO_RETURN)
+				f_SetState(EState_ConnectionShutdown);
+			else if (Error == SSL_ERROR_SYSCALL)
+			{
+				if (fp_CheckTransportError(EState_ShutdownFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not shut down SSL: {}") << mp_LastError).f_GetStr());
+
+				DMibErrorNet("SSL_shutdown: End of file encountered");
+			}
+			else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+			{
+				mp_LastError = fg_GetErrors();
+				f_SetState(EState_ShutdownFailed);
+			}
+		}
+		return false;
+	}
+
+	bool CSSLConnection::CInternal::f_BeginSend(void const * &o_pData, umint &o_nBytes, umint &o_iBuffer)
+	{
+		return mp_Transport.f_BeginSend(o_pData, o_nBytes, o_iBuffer);
+	}
+
+	bool CSSLConnection::CInternal::f_IsSendPinned() const
+	{
+		return mp_Transport.f_IsSendPinned();
+	}
+
+	bool CSSLConnection::CInternal::f_CanBeginSend() const
+	{
+		return mp_Transport.f_CanBeginSend();
+	}
+
+	void CSSLConnection::CInternal::f_ConsiderSendWindowGrowth()
+	{
+		mp_Transport.f_ConsiderSendWindowGrowth();
+	}
+
+	smint CSSLConnection::CInternal::f_NextBeginSend() const
+	{
+		return mp_Transport.f_NextBeginSend();
+	}
+
+	umint CSSLConnection::CInternal::f_GetPendingSend() const
+	{
+		return mp_Transport.f_GetPendingWrite();
+	}
+
+	umint CSSLConnection::CInternal::f_GetPendingSendUnpinned() const
+	{
+		return mp_Transport.f_GetPendingWriteUnpinned();
+	}
+
+	// Sealed records that cannot be sent leave the connection with a gap in its record numbering, which the peer cannot
+	// recover from, so it is failed rather than continued.
+	void CSSLConnection::CInternal::f_FailSend(NStr::CStr &&_Error)
+	{
+		mp_LastError = fg_Move(_Error);
+		f_SetState(EState_WriteFailed);
+	}
+
+	void CSSLConnection::CInternal::f_FailReceive(NStr::CStr &&_Error)
+	{
+		mp_LastError = fg_Move(_Error);
+		f_SetState(EState_ReadFailed);
+	}
+
+	umint CSSLConnection::CInternal::f_GetSendDepth() const
+	{
+		return mp_Transport.f_GetSendDepth();
+	}
+
+	void CSSLConnection::CInternal::f_SetSendDepth(umint _nDepth)
+	{
+		mp_Transport.f_SetSendDepth(_nDepth);
+	}
+
+	void CSSLConnection::CInternal::f_SetSendWindow(umint _nBytes)
+	{
+		mp_Transport.f_SetSendWindow(_nBytes);
+	}
+
+	NStorage::TCSharedPointer<NContainer::CByteVector> CSSLConnection::CInternal::f_GetPinnedKeepAlive(umint _iBuffer) const
+	{
+		return mp_Transport.f_GetPinnedKeepAlive(_iBuffer);
+	}
+
+	void CSSLConnection::CInternal::f_SetCompletionSend(bool _bCompletionSend)
+	{
+		mp_Transport.f_SetCompletionSend(_bCompletionSend);
+	}
+
+	bool CSSLConnection::CInternal::f_IsCompletionSend() const
+	{
+		return mp_Transport.f_IsCompletionSend();
+	}
+
+	void CSSLConnection::CInternal::f_SetCompletionReceive(bool _bCompletionReceive)
+	{
+		mp_Transport.f_SetCompletionReceive(_bCompletionReceive);
+	}
+
+	void CSSLConnection::CInternal::f_AbortSend(umint _iBuffer)
+	{
+		mp_Transport.f_AbortSend(_iBuffer);
+	}
+
+	void CSSLConnection::CInternal::f_SendCompleted(umint _iBuffer, umint _nBytes)
+	{
+		mp_Transport.f_SendCompleted(_iBuffer, _nBytes);
+	}
+
+	umint CSSLConnection::CInternal::f_GetFillBuffer() const
+	{
+		return mp_Transport.f_GetFillBuffer();
+	}
+
+	void CSSLConnection::CInternal::f_ReleaseSendBuffer(umint _iBuffer)
+	{
+		mp_Transport.f_ReleaseSendBuffer(_iBuffer);
+	}
+
+	void CSSLConnection::CInternal::f_AppendCipherSegment(void const *_pData, umint _nBytes, NStorage::TCSharedPointer<CVirtualDestroyBase const> &&_pOwner)
+	{
+		mp_Transport.f_AppendCipherSegment(_pData, _nBytes, fg_Move(_pOwner));
+	}
+
+	void CSSLConnection::CInternal::f_ClearCipherQueue()
+	{
+		mp_Transport.f_ClearCipherQueue();
+	}
+
+	void CSSLConnection::CInternal::f_CompactCipherIfStalled()
+	{
+		mp_Transport.f_CompactCipherIfStalled();
+	}
+
+	umint CSSLConnection::CInternal::f_GetInboundBufferSize() const
+	{
+		return fg_Max(mp_nTransferSizeHint, CSSLTransport::mc_nInboundBufferSize);
+	}
+
+	void CSSLConnection::CInternal::f_SetTransferSizeHint(umint _nBytes)
+	{
+		mp_nTransferSizeHint = _nBytes;
+		mp_Transport.f_SetOutboundCap(_nBytes);
+		mp_Transport.f_SetInboundSize(_nBytes);
+	}
+
+	// Seals gathered plaintext into transport-owned ciphertext. False means unchanged state and permits fallback; only post-handshake steady state supports it.
+	bool CSSLConnection::CInternal::f_TrySealVectored(NSys::CIoSpan const *_pSpans, umint _nSpans, CSocketOperationResult &o_Result)
+	{
+		DMibRequire(mp_bConnected);
+		DMibRequire(!mp_bHandshakeInProgress);
+		DMibRequire(mp_State == EState_None);
+
+		if (!fg_ZeroCopyEnabled(mp_pIo))
+			return false;
+
+		// The spans as fragments. Zero length ones are dropped so they cannot spend a record's
+		// fragment budget
+		CRYPTO_IVEC Fragments[NSys::gc_IoLoopMaxSubmitSpans];
+		umint nFragments = 0;
+		umint nPlaintext = 0;
+
+		for (umint iSpan = 0; iSpan < _nSpans && nFragments < fg_ArraySize(Fragments); ++iSpan)
+		{
+			if (!_pSpans[iSpan].m_nBytes)
+				continue;
+
+			Fragments[nFragments].in = (uint8 const *)_pSpans[iSpan].m_pData;
+			Fragments[nFragments].len = _pSpans[iSpan].m_nBytes;
+			++nFragments;
+			nPlaintext += _pSpans[iSpan].m_nBytes;
+		}
+
+		if (!nFragments)
+			return true;
+
+		ERR_clear_error();
+		auto pSSL = f_GetSSL();
+
+		// Room for the plaintext and one record's framing for each record it will take, plus a record's worth of slack for post handshake output that goes out ahead of it
+		umint nRecords = nPlaintext / SSL3_RT_MAX_PLAIN_LENGTH + 1;
+		umint nWanted = nPlaintext + (nRecords + 1) * SSL_max_seal_overhead(pSSL) + SSL3_RT_MAX_PLAIN_LENGTH;
+
+		umint nRoom = 0;
+		uint8 *pOut = mp_Transport.f_BeginSeal(nWanted, nRoom);
+
+		size_t nWritten = 0;
+		size_t nConsumed = 0;
+		auto Ret = SSL_seal_app_datav(pSSL, pOut, &nWritten, nRoom, Fragments, nFragments, &nConsumed);
+
+		// Refusal permits fallback; failure may already have consumed control output or sequence numbers, so retain produced records and fail the connection.
+		if (Ret == ssl_seal_v_refused)
+		{
+			ERR_clear_error();
+			return false;
+		}
+
+		mp_Transport.f_CommitSeal(nWritten);
+		o_Result.m_nBytes += nConsumed;
+
+		if (Ret == ssl_seal_v_error)
+		{
+			mp_LastError = fg_GetErrors();
+			f_SetState(EState_WriteFailed);
+		}
+
+		return true;
+	}
+
+	CSocketOperationResult CSSLConnection::CInternal::f_Send(void const *_pData, umint _nLen)
+	{
+		DMibRequire(_nLen > 0);
+		DMibRequire(mp_bConnected);
+		DMibRequire(!mp_bHandshakeInProgress);
+		DMibRequire(mp_State == EState_None);
+
+		CSocketOperationResult Result;
+		ERR_clear_error();
+		auto pSSL = f_GetSSL();
+		umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
+		umint nSentBefore = mp_Transport.f_GetBytesSent();
+		int Ret = SSL_write(pSSL, _pData, (int)_nLen);
+		Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
+		Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
+		if (Ret <= 0)
+		{
+			// Write did not succeed.
+			int Error = SSL_get_error(pSSL, Ret);
+			DMibLog(DebugVerbose3, " **** SSL error {}", Error);
+			if (Error == SSL_ERROR_ZERO_RETURN)
+				f_SetState(EState_ConnectionShutdown);
+			else if (Error == SSL_ERROR_SYSCALL)
+			{
+				if (fp_CheckTransportError(EState_WriteFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not write to socket (SSL): {}") << mp_LastError).f_GetStr());
+
+				DMibErrorNet("send (write to SSL socket): End of file encountered");
+			}
+			else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+			{
+				mp_LastError = fg_GetErrors();
+				f_SetState(EState_WriteFailed);
+			}
+		}
+		else
+		{
+			DMibLog(DebugVerbose3, " **** SSL wrote {}", Ret);
+			// Write succeeded, return the number of bytes written.
+			Result.m_nBytes = (umint)Ret;
+		}
+
+		return Result;
+	}
+
+	// Opens directly into caller storage; false permits fallback without consuming input.
+	bool CSSLConnection::CInternal::f_TryOpenInto(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
+	{
+		DMibRequire(mp_bConnected);
+		DMibRequire(!mp_bHandshakeInProgress);
+		DMibRequire(mp_State == EState_None);
+
+		if (!fg_ZeroCopyEnabled(mp_pIo))
+			return false;
+
+		ERR_clear_error();
+		auto pSSL = f_GetSSL();
+
+		if (mp_Transport.f_GetHeld())
+		{
+			o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
+
+			// The close alert or failure that came in behind the held record takes effect
+			// once the hold has drained
+			if (!mp_Transport.f_GetHeld())
+			{
+				if (mp_bShutdownAfterHeld)
+				{
+					mp_bShutdownAfterHeld = false;
+					f_SetState(EState_ConnectionShutdown);
+				}
+				else if (mp_bReadFailedAfterHeld)
+				{
+					mp_bReadFailedAfterHeld = false;
+					f_SetState(EState_ReadFailed);
+				}
+			}
 
 			return true;
 		}
 
-		bool fp_Process(bool _bAccept)
-		{
-			mp_bHandshakeInProgress = true;
+		CRYPTO_IOVEC Destination{(uint8 *)_pData, nullptr, _nLen};
 
-			EAuthenticationResult ResultForCallback = EAuthenticationResult_SocketNotReady;
-
-			if (!mp_pContext->f_IsValid())
+		// Capture the thread-local error now, but deliver authenticated held plaintext before entering failed state.
+		auto fReadFailed = [&]
 			{
-				ResultForCallback = EAuthenticationResult_Failure;
-				mp_State = EState_InvalidContext;
-				mp_pContext->f_ReportInvalidContext(mp_pSSL->f_GetConnectionResult());
-			}
-			else
-			{
-				SSL_set_ex_data(f_GetSSL(), fg_ExDataIndex(), mp_pSSL);
+				if (fp_CheckTransportError(EState_ReadFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
 
-				ERR_clear_error();
-				int Ret = _bAccept ? SSL_accept(f_GetSSL()) : SSL_connect(f_GetSSL());
-
-				fp_ProcessConnection(Ret, !_bAccept, ResultForCallback);
-			}
-
-			if (mp_fAuthenticationResultCallback)
-				mp_fAuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
-			mp_bHandshakeInProgress = ResultForCallback == EAuthenticationResult_SocketNotReady;
-
-#if 0
-			if (ResultForCallback == EAuthenticationResult_Success)
-			{
-				auto pChipher = SSL_get_current_cipher(f_GetSSL());
-				auto pVerson = SSL_get_version(f_GetSSL());
-				DMibConOut("Negotiated: {}   {}\n", pVerson, SSL_CIPHER_get_name(pChipher));
-			}
-#endif
-			return ResultForCallback == EAuthenticationResult_Success;
-		}
-
-		void fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult &_ResultForCallback)
-		{
-			// OpenSSL has established a connection but we will fail it here if the CSSLConnectionResult does
-			// not satisfy our demands
-			if (_Ret == 1)
-			{
-				CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
-				_ResultForCallback = EAuthenticationResult_Failure;
-
-				bool bCallTrustCallback = false;
-				bool bCanManageTrust = mp_pContext->f_GetSettings().f_UserCanIgnoreTrustFailures();
-				bool bCanManageVerification = mp_pContext->f_GetSettings().f_UserCanIgnoreVerificationFailures();
-
-				bool bTrustErrors = Result.f_ContainsTrustErrors();
-				bool bVerificationErrors = Result.f_ContainsVerificationErrors();
-
-				if (bVerificationErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreVerificationFailures))
-					bVerificationErrors = false;
-				if (bTrustErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreTrustFailures))
-					bTrustErrors = false;
-
-				// We can only accept one specific peer certificate
-				if (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate)
-				{
-					if (!Result.f_ContainsVerificationErrors())
-					{
-						if (Result.f_PeerCertificatesMatchesSpecificCertificate(mp_pContext->f_GetSettings().m_CACertificateData))
-							_ResultForCallback = EAuthenticationResult_Success;
-						else
-							Result.f_LogMiscError(CSSLConnectionResult::EMiscError_MismatchingSpecificCertificate);
-					}
-				}
-				// This was a connection based on user trust/verification decision, ensure connection results match up.
-				else if (mp_bUsingTrustDecision)
-				{
-					if (mp_ExpectedResultCallback == mp_pSSL->f_GetConnectionResult())
-						_ResultForCallback = EAuthenticationResult_Success;
-				}
-				// The peer certificate matches a remembered certificate and does not contain any verification errors.
-				else if (!bVerificationErrors && bTrustErrors && Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
-					_ResultForCallback = EAuthenticationResult_Success;
-				// No errors were reported.
-				else if (!bTrustErrors && !bVerificationErrors)
-					_ResultForCallback = EAuthenticationResult_Success;
-				// User can manage certificates but cannot ignore verification failures
-				else if (bCanManageTrust && !bCanManageVerification)
-				{
-					if (bTrustErrors && !bVerificationErrors)
-						bCallTrustCallback = true;
-				}
-				// User cannot manage both
-				else if (bCanManageTrust && bCanManageVerification)
-				{
-					if (bTrustErrors || bVerificationErrors)
-						bCallTrustCallback = true;
-				}
-				// User can only manage verification failures.
-				else if (!bCanManageTrust && bCanManageVerification)
-				{
-					if (!bTrustErrors && bVerificationErrors)
-						bCallTrustCallback = true;
-				}
-
-				if (_ResultForCallback == EAuthenticationResult_Success)
-					mp_bConnected = true;
+				mp_LastError = fg_GetErrors();
+				if (mp_Transport.f_GetHeld())
+					mp_bReadFailedAfterHeld = true;
 				else
+					f_SetState(EState_ReadFailed);
+			}
+		;
+
+		// Remember close_notify after its ciphertext is consumed, but enter shutdown only after held plaintext drains.
+		auto fShutdown = [&]
+			{
+				if (mp_Transport.f_GetHeld())
+					mp_bShutdownAfterHeld = true;
+				else
+					f_SetState(EState_ConnectionShutdown);
+			}
+		;
+
+		for (;;)
+		{
+			CRYPTO_IVEC Fragments[CSSLTransport::mc_nMaxCipherFragments];
+			umint nFragments = mp_Transport.f_GetCipherFragments(Fragments);
+
+			if (nFragments)
+			{
+				size_t nProduced = 0;
+				size_t nConsumed = 0;
+				auto Ret = SSL_open_app_datav(pSSL, &Destination, 1, &nProduced, &nConsumed, Fragments, nFragments);
+
+				mp_Transport.f_ConsumeCipher(nConsumed);
+
+				if (Ret == ssl_open_v_refused)
 				{
-					f_SetState(EState_ConnectionFailed);
-					if (bCallTrustCallback)
+					// Refusal consumed no input; clear errors before fallback.
+					ERR_clear_error();
+					return false;
+				}
+
+				// Deliver opened plaintext even on a later error; its record sequence numbers cannot be replayed.
+				if (nProduced)
+				{
+					o_Result.m_nBytes += nProduced;
+					o_Result.m_bReceivedNetwork = true;
+				}
+
+				if (Ret == ssl_open_v_error)
+				{
+					fReadFailed();
+					return true;
+				}
+
+				if (Ret == ssl_open_v_close_notify)
+				{
+					fShutdown();
+					return true;
+				}
+
+				if (nProduced)
+					return true;
+
+				if (nConsumed)
+					continue;
+
+				// Use holdover storage when caller capacity cannot fit a record body or reads could stop making progress.
+				if (mp_Transport.f_GetCipherPending() > SSL3_RT_HEADER_LENGTH)
+				{
+					umint nRoom = 0;
+					uint8 *pHold = mp_Transport.f_BeginHold(nRoom);
+
+					CRYPTO_IOVEC Held{pHold, nullptr, nRoom};
+					size_t nHeld = 0;
+					size_t nHeldConsumed = 0;
+					auto HeldRet = SSL_open_app_datav(pSSL, &Held, 1, &nHeld, &nHeldConsumed, Fragments, nFragments);
+
+					mp_Transport.f_ConsumeCipher(nHeldConsumed);
+
+					if (nHeld)
 					{
-						f_SetState(EState_RequiresUserDecisionOnTrust);
-						if (mp_fUserTrustCallback)
-							mp_fUserTrustCallback(mp_pSSL->f_GetConnectionResult());
+						mp_Transport.f_CommitHold(nHeld);
+						o_Result.m_nBytes += mp_Transport.f_TakeHeld(_pData, _nLen);
+						o_Result.m_bReceivedNetwork = true;
 					}
+
+					if (HeldRet == ssl_open_v_error)
+					{
+						fReadFailed();
+						return true;
+					}
+
+					if (HeldRet == ssl_open_v_close_notify)
+					{
+						fShutdown();
+						return true;
+					}
+
+					if (nHeld)
+						return true;
+
+					if (nHeldConsumed)
+						continue;
 				}
 			}
-			else
+
+			// Only synchronous mode may fill ciphertext here; completion mode has a standing kernel reader.
+			auto Fill = mp_Transport.f_FillCipher();
+
+			if (Fill == CSSLTransport::ETransferResult::mc_Data)
 			{
-				NStr::CStr SystemErrors;
-				bool bConnectionRefused = false;
-				if (fp_GenerateSystemErrors(_Ret, _ResultForCallback, SystemErrors, bConnectionRefused))
-				{
-					CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
-					Result.f_AddSSLError(SystemErrors);
-
-					if (bConnectionRefused)
-						Result.f_SetConnectionRefused();
-					f_SetState(EState_ConnectionFailed);
-				}
-			}
-		}
-
-		static NStr::CStr fsp_GetErrorString(uint32_t _Error)
-		{
-			uint32_t const Lib = ERR_GET_LIB(_Error);
-			uint32_t const Reason = ERR_GET_REASON(_Error);
-
-			if (Lib == ERR_LIB_SYS)
-			{
-				if (Reason < 127)
-					return NStr::CStr::CFormat("{cc}") << NMib::NPlatform::fg_ErrnoString<NStr::CStr>(Reason);
+				o_Result.m_bReceivedNetwork = true;
+				continue;
 			}
 
-			return NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(_Error);
-		}
-
-		bool fp_GenerateSystemErrors(int _Ret, EAuthenticationResult &_Result, NStr::CStr &_SystemErrors, bool &_bConnectionRefused)
-		{
-			uint32_t SysError;
-			NStr::CStr AllErrors;
-
-			if ((SysError = ERR_peek_error()) != 0)
+			if (Fill == CSSLTransport::ETransferResult::mc_EndOfStream)
 			{
-				char const *pFile;
-				int Line;
-				while ((SysError = ERR_get_error_line(&pFile, &Line)))
-					NStr::fg_AddStrSep(AllErrors, fsp_GetErrorString(SysError), "\n");
+				// Transport EOF without close_notify is unauthenticated truncation.
+				if (fp_CheckTransportError(EState_ReadFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
 
-				_Result = EAuthenticationResult_Failure;
-				_SystemErrors = AllErrors;
-				_bConnectionRefused = true;
+				DMibErrorNet("recv (read from SSL socket): End of file encountered");
+			}
+
+			if (Fill == CSSLTransport::ETransferResult::mc_Failed)
+			{
+				if (fp_CheckTransportError(EState_ReadFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
+
 				return true;
 			}
-			else
+
+			return true;
+		}
+	}
+
+	CSocketOperationResult CSSLConnection::CInternal::f_Receive(void *_pData, umint _nLen)
+	{
+		DMibRequire(_nLen > 0);
+		DMibRequire(mp_bConnected);
+		DMibRequire(!mp_bHandshakeInProgress);
+		DMibRequire(mp_State == EState_None);
+
+		CSocketOperationResult Result;
+		ERR_clear_error();
+		auto pSSL = f_GetSSL();
+		umint nReceivedBefore = mp_Transport.f_GetBytesReceived();
+		umint nSentBefore = mp_Transport.f_GetBytesSent();
+
+		// Flush transport-generated output before reads wait on the peer. Include it in activity counters so a drain cannot mistake progress for idle.
+		mp_Transport.f_Flush();
+
+		int Ret = SSL_read(pSSL, _pData, _nLen);
+		Result.m_bReceivedNetwork = mp_Transport.f_GetBytesReceived() != nReceivedBefore;
+		Result.m_bSentNetwork = mp_Transport.f_GetBytesSent() != nSentBefore;
+
+		if (Ret <= 0)
+		{
+			int Error = SSL_get_error(pSSL, Ret);
+			if (Error == SSL_ERROR_ZERO_RETURN)
+				f_SetState(EState_ConnectionShutdown);
+			else if (Error == SSL_ERROR_SYSCALL)
 			{
-				int Error = SSL_get_error(f_GetSSL(), _Ret);
-				if (Error == SSL_ERROR_SYSCALL)
-				{
-					_Result = EAuthenticationResult_Failure;
+				if (fp_CheckTransportError(EState_ReadFailed))
+					DMibErrorNet((NStr::CStr::CFormat("Could not read from socket (SSL): {}") << mp_LastError).f_GetStr());
 
-					// The transport reports its own failure; a handshake that ends without one ended because the peer stopped talking
-					_SystemErrors = mp_Transport.f_GetTransportError();
-					if (!_SystemErrors)
-						_SystemErrors = "End of file encountered";
+				DMibErrorNet("recv (read from SSL socket): End of file encountered");
+			}
+			else if (Error != SSL_ERROR_WANT_READ && Error != SSL_ERROR_WANT_WRITE)
+			{
+				mp_LastError = fg_GetErrors();
+				DMibLog(DebugVerbose3, " **** Read failed: {} {}", Error, mp_LastError);
+				f_SetState(EState_ReadFailed);
+			}
+		}
+		else
+			Result.m_nBytes = (umint)Ret;
 
-					return true;
-				}
-				else if (Error != SSL_ERROR_WANT_WRITE && Error != SSL_ERROR_WANT_READ)
+		return Result;
+	}
+
+	bool CSSLConnection::CInternal::f_GetHandshakeInProgress() const
+	{
+		return mp_bHandshakeInProgress;
+	}
+
+	void CSSLConnection::CInternal::f_SetHostname(NStr::CStr const &_Hostname)
+	{
+		mp_Hostname = _Hostname;
+	}
+
+	NStr::CStr CSSLConnection::CInternal::f_GetHostname() const
+	{
+		return mp_Hostname;
+	}
+
+	NStr::CStr CSSLConnection::CInternal::f_GetLastError() const
+	{
+		return mp_LastError;
+	}
+
+	CSSLSettings::EVerificationFlag CSSLConnection::CInternal::f_GetVerificationFlags() const
+	{
+		return mp_pContext->f_GetVerificationFlags();
+	}
+
+	NMib::NSys::CIoSubSystem *CSSLConnection::CInternal::f_GetIo() const
+	{
+		return mp_pIo;
+	}
+
+	void CSSLConnection::CInternal::fp_AttachTransport()
+	{
+		BIO *pBio = BIO_new(g_SSLTransportBioMethod->m_pMethod);
+		if (!pBio)
+			DMibErrorCryptography(fg_GetExceptionStr("Failed to create the TLS transport"));
+
+		BIO_set_data(pBio, &mp_Transport);
+		BIO_set_init(pBio, 1);
+
+		// Both directions are the same transport, and each side takes a reference of its own
+		BIO_up_ref(pBio);
+		SSL_set0_rbio(f_GetSSL(), pBio);
+		SSL_set0_wbio(f_GetSSL(), pBio);
+
+		// Retries can use a newly gathered address. Keep partial writes disabled or a short success could wait for a nonexistent would-block edge.
+		SSL_set_mode(f_GetSSL(), SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+	}
+
+	// Carry transport failures out of library frames through return values; throw only after the library call returns.
+	bool CSSLConnection::CInternal::fp_CheckTransportError(EState _State)
+	{
+		if (!mp_Transport.f_GetTransportError())
+			return false;
+
+		mp_LastError = mp_Transport.f_GetTransportError();
+		f_SetState(_State);
+
+		return true;
+	}
+
+	bool CSSLConnection::CInternal::fp_Process(bool _bAccept)
+	{
+		mp_bHandshakeInProgress = true;
+
+		EAuthenticationResult ResultForCallback = EAuthenticationResult_SocketNotReady;
+
+		if (!mp_pContext->f_IsValid())
+		{
+			ResultForCallback = EAuthenticationResult_Failure;
+			mp_State = EState_InvalidContext;
+			mp_pContext->f_ReportInvalidContext(mp_pSSL->f_GetConnectionResult());
+		}
+		else
+		{
+			SSL_set_ex_data(f_GetSSL(), fg_ExDataIndex(), mp_pSSL);
+
+			ERR_clear_error();
+			int Ret = _bAccept ? SSL_accept(f_GetSSL()) : SSL_connect(f_GetSSL());
+
+			fp_ProcessConnection(Ret, !_bAccept, ResultForCallback);
+		}
+
+		if (mp_fAuthenticationResultCallback)
+			mp_fAuthenticationResultCallback(ResultForCallback, mp_pSSL->f_GetConnectionResult());
+		mp_bHandshakeInProgress = ResultForCallback == EAuthenticationResult_SocketNotReady;
+
+#if 0
+		if (ResultForCallback == EAuthenticationResult_Success)
+		{
+			auto pChipher = SSL_get_current_cipher(f_GetSSL());
+			auto pVerson = SSL_get_version(f_GetSSL());
+			DMibConOut("Negotiated: {}   {}\n", pVerson, SSL_CIPHER_get_name(pChipher));
+		}
+#endif
+		return ResultForCallback == EAuthenticationResult_Success;
+	}
+
+	void CSSLConnection::CInternal::fp_ProcessConnection(int _Ret, bool _bConnect, EAuthenticationResult &_ResultForCallback)
+	{
+		// OpenSSL has established a connection but we will fail it here if the CSSLConnectionResult does
+		// not satisfy our demands
+		if (_Ret == 1)
+		{
+			CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
+			_ResultForCallback = EAuthenticationResult_Failure;
+
+			bool bCallTrustCallback = false;
+			bool bCanManageTrust = mp_pContext->f_GetSettings().f_UserCanIgnoreTrustFailures();
+			bool bCanManageVerification = mp_pContext->f_GetSettings().f_UserCanIgnoreVerificationFailures();
+
+			bool bTrustErrors = Result.f_ContainsTrustErrors();
+			bool bVerificationErrors = Result.f_ContainsVerificationErrors();
+
+			if (bVerificationErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreVerificationFailures))
+				bVerificationErrors = false;
+			if (bTrustErrors && (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_IgnoreTrustFailures))
+				bTrustErrors = false;
+
+			// We can only accept one specific peer certificate
+			if (f_GetVerificationFlags() & CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate)
+			{
+				if (!Result.f_ContainsVerificationErrors())
 				{
-					_Result = EAuthenticationResult_Failure;
-					_bConnectionRefused = true;
-					_SystemErrors = fsp_GetErrorString(SysError);
-					return true;
+					if (Result.f_PeerCertificatesMatchesSpecificCertificate(mp_pContext->f_GetSettings().m_CACertificateData))
+						_ResultForCallback = EAuthenticationResult_Success;
+					else
+						Result.f_LogMiscError(CSSLConnectionResult::EMiscError_MismatchingSpecificCertificate);
 				}
 			}
+			// This was a connection based on user trust/verification decision, ensure connection results match up.
+			else if (mp_bUsingTrustDecision)
+			{
+				if (mp_ExpectedResultCallback == mp_pSSL->f_GetConnectionResult())
+					_ResultForCallback = EAuthenticationResult_Success;
+			}
+			// The peer certificate matches a remembered certificate and does not contain any verification errors.
+			else if (!bVerificationErrors && bTrustErrors && Result.f_PeerCertificateMatchesRememberedCertificates(mp_pContext->f_GetSettings().m_LocalCertificateStore))
+				_ResultForCallback = EAuthenticationResult_Success;
+			// No errors were reported.
+			else if (!bTrustErrors && !bVerificationErrors)
+				_ResultForCallback = EAuthenticationResult_Success;
+			// User can manage certificates but cannot ignore verification failures
+			else if (bCanManageTrust && !bCanManageVerification)
+			{
+				if (bTrustErrors && !bVerificationErrors)
+					bCallTrustCallback = true;
+			}
+			// User cannot manage both
+			else if (bCanManageTrust && bCanManageVerification)
+			{
+				if (bTrustErrors || bVerificationErrors)
+					bCallTrustCallback = true;
+			}
+			// User can only manage verification failures.
+			else if (!bCanManageTrust && bCanManageVerification)
+			{
+				if (!bTrustErrors && bVerificationErrors)
+					bCallTrustCallback = true;
+			}
 
-			return false;
+			if (_ResultForCallback == EAuthenticationResult_Success)
+				mp_bConnected = true;
+			else
+			{
+				f_SetState(EState_ConnectionFailed);
+				if (bCallTrustCallback)
+				{
+					f_SetState(EState_RequiresUserDecisionOnTrust);
+					if (mp_fUserTrustCallback)
+						mp_fUserTrustCallback(mp_pSSL->f_GetConnectionResult());
+				}
+			}
 		}
-	};
+		else
+		{
+			NStr::CStr SystemErrors;
+			bool bConnectionRefused = false;
+			if (fp_GenerateSystemErrors(_Ret, _ResultForCallback, SystemErrors, bConnectionRefused))
+			{
+				CSSLConnectionResult &Result = mp_pSSL->f_GetConnectionResult();
+				Result.f_AddSSLError(SystemErrors);
+
+				if (bConnectionRefused)
+					Result.f_SetConnectionRefused();
+				f_SetState(EState_ConnectionFailed);
+			}
+		}
+	}
+
+	NStr::CStr CSSLConnection::CInternal::fsp_GetErrorString(uint32_t _Error)
+	{
+		uint32_t const Lib = ERR_GET_LIB(_Error);
+		uint32_t const Reason = ERR_GET_REASON(_Error);
+
+		if (Lib == ERR_LIB_SYS)
+		{
+			if (Reason < 127)
+				return NStr::CStr::CFormat("{cc}") << NMib::NPlatform::fg_ErrnoString<NStr::CStr>(Reason);
+		}
+
+		return NStr::CStr::CFormat("{cc}") << ERR_reason_error_string(_Error);
+	}
+
+	bool CSSLConnection::CInternal::fp_GenerateSystemErrors(int _Ret, EAuthenticationResult &_Result, NStr::CStr &_SystemErrors, bool &_bConnectionRefused)
+	{
+		uint32_t SysError;
+		NStr::CStr AllErrors;
+
+		if ((SysError = ERR_peek_error()) != 0)
+		{
+			char const *pFile;
+			int Line;
+			while ((SysError = ERR_get_error_line(&pFile, &Line)))
+				NStr::fg_AddStrSep(AllErrors, fsp_GetErrorString(SysError), "\n");
+
+			_Result = EAuthenticationResult_Failure;
+			_SystemErrors = AllErrors;
+			_bConnectionRefused = true;
+			return true;
+		}
+		else
+		{
+			int Error = SSL_get_error(f_GetSSL(), _Ret);
+			if (Error == SSL_ERROR_SYSCALL)
+			{
+				_Result = EAuthenticationResult_Failure;
+
+				// The transport reports its own failure; a handshake that ends without one ended because the peer stopped talking
+				_SystemErrors = mp_Transport.f_GetTransportError();
+				if (!_SystemErrors)
+					_SystemErrors = "End of file encountered";
+
+				return true;
+			}
+			else if (Error != SSL_ERROR_WANT_WRITE && Error != SSL_ERROR_WANT_READ)
+			{
+				_Result = EAuthenticationResult_Failure;
+				_bConnectionRefused = true;
+				_SystemErrors = fsp_GetErrorString(SysError);
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	CSSLConnection::CSendBatch::CSendBatch(CSSLConnection &_Connection)
 		: mp_Connection(_Connection)

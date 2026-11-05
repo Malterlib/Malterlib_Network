@@ -10,15 +10,14 @@ namespace NMib::NNetwork
 {
 	struct CAsyncSocketServerActor::CInternal
 	{
-		CInternal(CAsyncSocketServerActor *_pThis);
-
-	public:
 		struct CListen
 		{
 			NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketNewServerConnection _NewConnection)> m_fOnNewConnection;
 			NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (CAsyncSocketActor::CConnectionInfo _ConnectionInfo)> m_fOnFailedConnection;
 			NContainer::TCVector<NConcurrency::TCActor<NAsyncSocket::CListenActor>> m_ListenSockets;
 		};
+
+		CInternal(CAsyncSocketServerActor *_pThis);
 
 		NContainer::TCMap<umint, CListen> m_Listens;
 

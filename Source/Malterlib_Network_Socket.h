@@ -22,9 +22,9 @@ namespace NMib::NNetwork
 		CInheritedSocketHandle() = default;
 		explicit CInheritedSocketHandle(void *_pSocketHandle);
 		CInheritedSocketHandle(CInheritedSocketHandle &&_Other);
-		CInheritedSocketHandle &operator = (CInheritedSocketHandle &&_Other);
 		~CInheritedSocketHandle();
 
+		CInheritedSocketHandle &operator = (CInheritedSocketHandle &&_Other);
 		void *f_Detach();
 
 	private:
