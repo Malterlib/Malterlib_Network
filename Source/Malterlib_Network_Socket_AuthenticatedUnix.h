@@ -42,10 +42,10 @@ namespace NMib::NNetwork
 	struct CSocket_AuthenticatedUnix final : public ICSocket, public ICSocketCompletionIo
 	{
 		CSocket_AuthenticatedUnix(CSocket_AuthenticatedUnix const &_Other) = delete;
-		CSocket_AuthenticatedUnix &operator = (CSocket_AuthenticatedUnix const &_Other) = delete;
-
 		CSocket_AuthenticatedUnix(NStorage::TCSharedPointer<CAuthenticatedUnixContext> const &_pContext);
 		virtual ~CSocket_AuthenticatedUnix() override;
+
+		CSocket_AuthenticatedUnix &operator = (CSocket_AuthenticatedUnix const &_Other) = delete;
 
 		virtual bool f_IsValid() const override;
 		virtual bool f_HandshakeDone() const override;

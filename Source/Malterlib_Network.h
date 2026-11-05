@@ -92,11 +92,10 @@ namespace NMib::NNetwork
 {
 	struct CNetAddressIPv4
 	{
-		uint8 m_IP[4] = {};
-
 		CNetAddressIPv4() = default;
 		CNetAddressIPv4(uint8 _Octet0, uint8 _Octet1, uint8 _Octet2, uint8 _Octet3);
 		CNetAddressIPv4(CNetAddressIPv4 const &_Src);
+
 		CNetAddressIPv4 &operator = (CNetAddressIPv4 const &_Src);
 
 		template <typename tf_CStream>
@@ -105,12 +104,12 @@ namespace NMib::NNetwork
 		void f_Format(tf_CStr &o_String) const;
 
 		void f_SetLocalhost();
+
+		uint8 m_IP[4] = {};
 	};
 
 	struct CNetAddressIPv6
 	{
-		uint8 m_IP[16] = {};
-
 		CNetAddressIPv6() = default;
 
 		CNetAddressIPv6
@@ -135,12 +134,15 @@ namespace NMib::NNetwork
 		;
 
 		CNetAddressIPv6(CNetAddressIPv6 const &_Src);
+
 		CNetAddressIPv6 &operator = (CNetAddressIPv6 const &_Src);
 
 		template <typename tf_CStream>
 		void f_Stream(tf_CStream &_Stream);
 
 		void f_SetLocalhost();
+
+		uint8 m_IP[16] = {};
 	};
 
 	enum ENetAddressType : uint32
@@ -161,18 +163,19 @@ namespace NMib::NNetwork
 	template <typename t_CIPAddress, ENetAddressType t_Type>
 	struct TCNetAddressTCP : public t_CIPAddress
 	{
-		uint16 m_Port;
-
-		static constexpr ENetAddressType mc_Type = t_Type;
-
 		TCNetAddressTCP();
 		TCNetAddressTCP(TCNetAddressTCP const &_Src);
 		TCNetAddressTCP(t_CIPAddress const &_Src, uint16 _Port);
+
 		TCNetAddressTCP &operator = (TCNetAddressTCP const &_Src);
 		TCNetAddressTCP &operator = (t_CIPAddress const &_Src);
 
 		t_CIPAddress const &f_GetIP() const;
 		static ENetAddressType fs_GetType();
+
+		static constexpr ENetAddressType mc_Type = t_Type;
+
+		uint16 m_Port;
 	};
 
 	using CNetAddressTCPv4 = TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4>;
@@ -359,22 +362,18 @@ namespace NMib::NNetwork
 {
 	struct CNetAddress
 	{
-	protected:
-		NMib::NSys::NNetwork::CAddress mp_pAddress;
-
-	public:
 		CNetAddress();
 		explicit CNetAddress(NMib::NSys::NNetwork::CAddress _pAddress);
 		CNetAddress(CNetAddress &&_ToMove);
 		CNetAddress(CNetAddress const &_ToCopy);
 		template <typename tf_CAddress>
 		CNetAddress(tf_CAddress const &_Address);
+		~CNetAddress();
 
 		template <typename tf_CAddress>
 		CNetAddress &operator = (tf_CAddress const &_Address);
 		CNetAddress &operator = (CNetAddress &&_ToMove);
 		CNetAddress &operator = (CNetAddress const &_ToCopy);
-		~CNetAddress();
 
 		void f_Clear();
 		void *f_Detach();
@@ -401,16 +400,20 @@ namespace NMib::NNetwork
 
 		template <typename tf_CStr>
 		void f_Format(tf_CStr &o_Str) const;
+
+	protected:
+		NMib::NSys::NNetwork::CAddress mp_pAddress;
 	};
 
 	struct CAsyncResolver
 	{
 		CAsyncResolver(CAsyncResolver const &_Other) = delete;
-		CAsyncResolver &operator = (CAsyncResolver const &_Other) = delete;
 		CAsyncResolver(CAsyncResolver &&_Other);
-		CAsyncResolver &operator = (CAsyncResolver &&_Other);
 		CAsyncResolver();
 		~CAsyncResolver();
+
+		CAsyncResolver &operator = (CAsyncResolver const &_Other) = delete;
+		CAsyncResolver &operator = (CAsyncResolver &&_Other);
 
 		void f_Close();
 		void f_CloseAsync(NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
@@ -421,17 +424,18 @@ namespace NMib::NNetwork
 		bool f_GetResult(NMib::NNetwork::CNetAddress &_Address, NStr::CStr &_Error);
 
 	private:
-		void *mp_pResolver;
 		void fp_CheckValid() const;
+
+		void *mp_pResolver;
 	};
 
 	struct CSocketOperationResult
 	{
+		CSocketOperationResult &operator += (CSocketOperationResult const &_Other);
+
 		umint m_nBytes = 0;
 		bool m_bSentNetwork = false;
 		bool m_bReceivedNetwork = false;
-
-		CSocketOperationResult &operator += (CSocketOperationResult const &_Other);
 	};
 
 	struct CSocket
@@ -439,6 +443,7 @@ namespace NMib::NNetwork
 		CSocket();
 		~CSocket();
 		CSocket(CSocket &&_Other);
+
 		CSocket &operator = (CSocket &&_Other);
 
 		bool f_IsValid() const;
@@ -534,11 +539,9 @@ namespace NMib::NNetwork
 		static NMib::NNetwork::CNetAddress fs_ResolveAddress(NMib::NStr::CStr const &_Address, ::NMib::NNetwork::ENetAddressType _PreferType = ::NMib::NNetwork::ENetAddressType_None);
 
 	private:
-		void *mp_pSocket;
+		CSocket(CSocket const &_Other);
 
-		umint mp_nSendWindowBytes = 0; // Retained before creation, then applied to the platform socket.
-		bool mp_bSendWindowConfigured = false;
-		bool mp_bInheritable = false;
+		CSocket &operator = (CSocket const &_Other);
 
 		void fp_ApplyInheritable();
 		void fp_ApplySendWindow();
@@ -546,10 +549,13 @@ namespace NMib::NNetwork
 
 		static NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> fsp_GetChangeReportTo(NMib::NThread::CSemaphoreAggregate *_pReportTo);
 
-		CSocket(CSocket const &_Other);
-		CSocket &operator = (CSocket const &_Other);
-
 		static NContainer::TCVector<CNetAddress> fsp_AdoptAddresses(NContainer::TCVector<NMib::NSys::NNetwork::CAddress> &&_Addresses);
+
+		void *mp_pSocket;
+
+		umint mp_nSendWindowBytes = 0; // Retained before creation, then applied to the platform socket.
+		bool mp_bSendWindowConfigured = false;
+		bool mp_bInheritable = false;
 	};
 
 	bool fg_IsValidHostname(NStr::CStr const &_String, ch8 const *_pSeparatorChars = "", ch8 const *_pLabelChars = "");

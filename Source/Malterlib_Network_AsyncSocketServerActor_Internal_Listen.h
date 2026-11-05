@@ -12,8 +12,6 @@ namespace NMib::NNetwork::NAsyncSocket
 {
 	struct CListenActor : public NConcurrency::CActor
 	{
-		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep accept work on the connection actors' pool.
-
 		CListenActor
 			(
 				NConcurrency::TCActor<CAsyncSocketServerActor> const &_Server
@@ -30,11 +28,12 @@ namespace NMib::NNetwork::NAsyncSocket
 		void f_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
 		void f_StateAdded(NNetwork::ENetTCPState _StateAdded);
 
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep accept work on the connection actors' pool.
+
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy();
 		void fp_ProcessState();
 
-	private:
 		fp64 mp_Timeout;
 		NStorage::TCUniquePointer<NNetwork::ICSocket> mp_pSocket;
 		NConcurrency::TCWeakActor<CAsyncSocketServerActor> mp_Server;

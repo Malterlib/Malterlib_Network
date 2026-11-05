@@ -98,19 +98,25 @@ namespace NMib::NNetwork
 
 		struct CResultCertificate
 		{
+			bool operator == (CResultCertificate const &_Other) const noexcept;
+
 			NContainer::CByteVector m_Data;
 			NContainer::TCMap<int, int> m_Errors;
-
-			bool operator == (CResultCertificate const &_Other) const noexcept;
 		};
+
+		enum EFormat
+		{
+			EFormat_Html
+			, EFormat_CommaSeperated
+		};
+
+		CSSLConnectionResult();
+		~CSSLConnectionResult();
 
 		bool operator == (CSSLConnectionResult const &_Other) const noexcept;
 
 		NContainer::CByteVector f_GetPeerCertificate() const;
 		NContainer::TCVector<NContainer::CByteVector> f_GetCertificateChain() const;
-
-		CSSLConnectionResult();
-		~CSSLConnectionResult();
 
 		void f_LogError(umint _Depth, int _Error);
 		void f_LogMiscError(EMiscError _Error);
@@ -131,12 +137,6 @@ namespace NMib::NNetwork
 		bool f_PeerCertificatesMatchesSpecificCertificate(NContainer::CByteVector const &_SpecificCertificate) const;
 		bool f_PeerCertificateMatchesRememberedCertificates(NContainer::TCVector<NContainer::CByteVector> const &_LocalStore) const;
 		void f_AddSSLError(NStr::CStr const &_SSLError);
-
-		enum EFormat
-		{
-			EFormat_Html
-			, EFormat_CommaSeperated
-		};
 
 		NStr::CStr f_GetErrorMessage(EFormat _Format = EFormat_CommaSeperated) const;
 
@@ -193,8 +193,6 @@ namespace NMib::NNetwork
 		protected:
 			CSSLConnection &mp_Connection;
 		};
-
-		static constexpr umint mc_nMaxRecordSize = 17 * 1024; // Capacity for a complete framed TLS record.
 
 		CSSLConnection
 			(
@@ -275,6 +273,8 @@ namespace NMib::NNetwork
 		uint16 f_GetKeyExchangeStrength() const;
 		bool f_UsedHelloRetryRequest() const;
 
+		static constexpr umint mc_nMaxRecordSize = 17 * 1024; // Capacity for a complete framed TLS record.
+
 	protected:
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 		CSSLConnectionResult mp_Result;
@@ -300,6 +300,8 @@ namespace NMib::NNetwork
 			, EState_InvalidCertificateAuthorityData     = DMibBit(7)
 		};
 
+		struct CInternal;
+
 		CSSLContext(EType _Type, CSSLSettings const &_Settings);
 		~CSSLContext();
 
@@ -314,14 +316,12 @@ namespace NMib::NNetwork
 		CSSLSettings::EVerificationFlag f_GetVerificationFlags() const;
 		bool f_CanAskUserToTrustServers() const;
 
-		struct CInternal;
-
 	protected:
-		struct CSession;
-		NStorage::TCUniquePointer<CSession> fp_CreateSession();
-
 		friend struct CSSLConnectionResult;
 		friend struct CSSLConnection::CInternal;
+
+		struct CSession;
+		NStorage::TCUniquePointer<CSession> fp_CreateSession();
 
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 	};

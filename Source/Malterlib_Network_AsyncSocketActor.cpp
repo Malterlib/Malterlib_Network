@@ -41,15 +41,17 @@ namespace NMib::NNetwork
 
 		struct COutgoingMessage
 		{
-			~COutgoingMessage()
-			{
-				if (m_Promise)
-					m_Promise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
-			}
+			~COutgoingMessage();
 
 			NContainer::CSharedByteVector m_Data;
 			NStorage::TCOptionalClearOnMove<NConcurrency::TCPromise<void>> m_Promise;
 		};
+
+		COutgoingMessage::~COutgoingMessage()
+		{
+			if (m_Promise)
+				m_Promise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
+		}
 
 		// Retains shared payload until its final byte is sent.
 		struct COutgoingSegment
@@ -63,15 +65,17 @@ namespace NMib::NNetwork
 			COutgoingDataPromise() = default;
 			COutgoingDataPromise(COutgoingDataPromise &&_Other) = default;
 
-			~COutgoingDataPromise()
-			{
-				if (m_Promise)
-					m_Promise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
-			}
+			~COutgoingDataPromise();
 
 			uint64 m_Position = 0;
 			NStorage::TCOptionalClearOnMove<NConcurrency::TCPromise<void>> m_Promise;
 		};
+
+		COutgoingDataPromise::~COutgoingDataPromise()
+		{
+			if (m_Promise)
+				m_Promise->f_SetException(DMibErrorInstance("Outgoing message abandoned"));
+		}
 
 		struct CNotifyClose
 		{
@@ -95,30 +99,18 @@ namespace NMib::NNetwork
 			uint32 m_iNextFree = mc_iNone;
 		};
 
-		CInternal(CAsyncSocketActor *_pThis, bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
-			: m_pThis(_pThis)
-			, m_IncomingData(gc_IncomingPageSize)
-			, m_UpgradeCheckData(gc_IncomingPageSize)
-			, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
-			, m_bClient(_bClient)
-			, m_MaxMessageSize(_MaxMessageSize)
-			, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30)) // Bounded so every gather size derived from it stays well inside umint, on 32 bit platforms included
-			, m_Timeout(_Timeout)
-		{
-			m_nSendWindowBytes = fg_Min(_SendWindowBytes, gc_SocketMaxSendWindowBytes);
-			f_SizeSendReservations();
-		}
-
-		~CInternal()
-		{
-			DMibFastCheck(!m_bDestroyed || m_OutgoingDataPromises.empty());
-			DMibFastCheck(!m_bDestroyed || m_PendingMessages.f_IsEmpty());
-
-			if (m_ClosePromise)
-				m_ClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
-			if (m_UpgradeSocketPromise)
-				m_UpgradeSocketPromise->f_SetException(DMibErrorInstance("Abandoned socket upgrade"));
-		}
+		CInternal
+			(
+				CAsyncSocketActor *_pThis
+				, bool _bClient
+				, umint _MaxMessageSize
+				, umint _FragmentationSize
+				, umint _SendWindowBytes
+				, fp64 _Timeout
+				, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
+			)
+		;
+		~CInternal();
 
 		void f_OnReceivedData();
 		void f_OnSentData();
@@ -240,6 +232,40 @@ namespace NMib::NNetwork
 		bool m_bDestroyed = false;
 #endif
 	};
+
+	CAsyncSocketActor::CInternal::CInternal
+		(
+			CAsyncSocketActor *_pThis
+			, bool _bClient
+			, umint _MaxMessageSize
+			, umint _FragmentationSize
+			, umint _SendWindowBytes
+			, fp64 _Timeout
+			, FAsyncSocketUpgradeCheck &&_fCheckUpgrade
+		)
+		: m_pThis(_pThis)
+		, m_IncomingData(gc_IncomingPageSize)
+		, m_UpgradeCheckData(gc_IncomingPageSize)
+		, m_fCheckUpgrade(fg_Move(_fCheckUpgrade))
+		, m_bClient(_bClient)
+		, m_MaxMessageSize(_MaxMessageSize)
+		, m_FramentationSize(fg_Min(_FragmentationSize, umint(1) << 30)) // Bounded so every gather size derived from it stays well inside umint, on 32 bit platforms included
+		, m_Timeout(_Timeout)
+	{
+		m_nSendWindowBytes = fg_Min(_SendWindowBytes, gc_SocketMaxSendWindowBytes);
+		f_SizeSendReservations();
+	}
+
+	CAsyncSocketActor::CInternal::~CInternal()
+	{
+		DMibFastCheck(!m_bDestroyed || m_OutgoingDataPromises.empty());
+		DMibFastCheck(!m_bDestroyed || m_PendingMessages.f_IsEmpty());
+
+		if (m_ClosePromise)
+			m_ClosePromise->f_SetException(DMibErrorInstance("Abandoned close"));
+		if (m_UpgradeSocketPromise)
+			m_UpgradeSocketPromise->f_SetException(DMibErrorInstance("Abandoned socket upgrade"));
+	}
 
 	CAsyncSocketActor::CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade)
 		: mp_pInternal(fg_Construct(this, _bClient, _MaxMessageSize, _FragmentationSize, _SendWindowBytes, _Timeout, fg_Move(_fCheckUpgrade)))

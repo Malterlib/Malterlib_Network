@@ -27,96 +27,12 @@ namespace
 
 	struct CBenchState
 	{
-		CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho, uint64 _AckTargetBytes)
-			: m_pRunLoop(_pRunLoop)
-			, m_bEcho(_bEcho)
-			, m_AckTargetBytes(_AckTargetBytes)
-		{
-		}
+		CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho, uint64 _AckTargetBytes);
+		~CBenchState();
 
-		~CBenchState()
-		{
-			TCFutureVector<void> Destroys;
-			{
-				DMibLock(m_Lock);
-				if (m_ClientSocket)
-					fg_Move(m_ClientSocket).f_Destroy() > Destroys;
-				if (m_ServerConnection)
-					fg_Move(m_ServerConnection).f_Destroy() > Destroys;
-				if (m_ClientActor)
-					fg_Move(m_ClientActor).f_Destroy() > Destroys;
-				if (m_ListenSubscription)
-				{
-					m_ListenSubscription->f_Destroy() > Destroys;
-					m_ListenSubscription.f_Clear();
-				}
-			}
-			fg_AllDoneWrapped(Destroys).f_CallSync(m_pRunLoop, g_Timeout);
-
-			if (m_ServerActor)
-			{
-				m_ServerActor->f_BlockDestroy(m_pRunLoop->f_ActorDestroyLoop());
-				m_ServerActor.f_Clear();
-			}
-		}
-
-		// Detach the promise under lock and resolve outside it: inline resumption can install another promise before this frame returns.
-		void f_ClientReceived(umint _nBytes)
-		{
-			TCUniquePointer<TCPromise<void>> pPromise;
-			{
-				DMibLock(m_Lock);
-				m_nClientReceivedBytes += _nBytes;
-				if (m_pClientWaitPromise && m_nClientReceivedBytes >= m_ClientWaitTargetBytes)
-					pPromise = fg_Move(m_pClientWaitPromise);
-			}
-
-			if (pPromise)
-				pPromise->f_SetResult();
-		}
-
-		// Accept can deliver data before assigning the connection; wait for that assignment before replying.
-		TCFuture<void> f_WaitServerConnection()
-		{
-			TCUniquePointer<TCPromise<void>> pPromise = fg_Construct();
-			TCFuture<void> Future = pPromise->f_Future();
-
-			{
-				DMibLock(m_Lock);
-				if (!m_ServerConnection)
-				{
-					m_ServerConnectionWaiters.f_InsertLast(fg_Move(pPromise));
-					return Future;
-				}
-			}
-
-			pPromise->f_SetResult();
-
-			return Future;
-		}
-
-		TCFuture<void> f_WaitClientReceived(uint64 _TargetBytes)
-		{
-			// Resolve after unlocking because waiters can resume inline and reenter this state.
-			TCUniquePointer<TCPromise<void>> pPromise = fg_Construct();
-			TCFuture<void> Future = pPromise->f_Future();
-
-			{
-				DMibLock(m_Lock);
-				DMibCheck(!m_pClientWaitPromise);
-
-				m_ClientWaitTargetBytes = _TargetBytes;
-
-				// Already-arrived data still needs a ready promise; a default future has no awaitable state.
-				if (m_nClientReceivedBytes < _TargetBytes)
-					m_pClientWaitPromise = fg_Move(pPromise);
-			}
-
-			if (pPromise)
-				pPromise->f_SetResult();
-
-			return Future;
-		}
+		void f_ClientReceived(umint _nBytes);
+		TCFuture<void> f_WaitServerConnection();
+		TCFuture<void> f_WaitClientReceived(uint64 _TargetBytes);
 
 		CIntrusiveRefCountWithWeak m_RefCount;
 
@@ -139,6 +55,97 @@ namespace
 		uint64 m_ClientWaitTargetBytes = 0;
 		TCUniquePointer<TCPromise<void>> m_pClientWaitPromise;
 	};
+
+	CBenchState::CBenchState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop, bool _bEcho, uint64 _AckTargetBytes)
+		: m_pRunLoop(_pRunLoop)
+		, m_bEcho(_bEcho)
+		, m_AckTargetBytes(_AckTargetBytes)
+	{
+	}
+
+	CBenchState::~CBenchState()
+	{
+		TCFutureVector<void> Destroys;
+		{
+			DMibLock(m_Lock);
+			if (m_ClientSocket)
+				fg_Move(m_ClientSocket).f_Destroy() > Destroys;
+			if (m_ServerConnection)
+				fg_Move(m_ServerConnection).f_Destroy() > Destroys;
+			if (m_ClientActor)
+				fg_Move(m_ClientActor).f_Destroy() > Destroys;
+			if (m_ListenSubscription)
+			{
+				m_ListenSubscription->f_Destroy() > Destroys;
+				m_ListenSubscription.f_Clear();
+			}
+		}
+		fg_AllDoneWrapped(Destroys).f_CallSync(m_pRunLoop, g_Timeout);
+
+		if (m_ServerActor)
+		{
+			m_ServerActor->f_BlockDestroy(m_pRunLoop->f_ActorDestroyLoop());
+			m_ServerActor.f_Clear();
+		}
+	}
+
+	// Detach the promise under lock and resolve outside it: inline resumption can install another promise before this frame returns.
+	void CBenchState::f_ClientReceived(umint _nBytes)
+	{
+		TCUniquePointer<TCPromise<void>> pPromise;
+		{
+			DMibLock(m_Lock);
+			m_nClientReceivedBytes += _nBytes;
+			if (m_pClientWaitPromise && m_nClientReceivedBytes >= m_ClientWaitTargetBytes)
+				pPromise = fg_Move(m_pClientWaitPromise);
+		}
+
+		if (pPromise)
+			pPromise->f_SetResult();
+	}
+
+	// Accept can deliver data before assigning the connection; wait for that assignment before replying.
+	TCFuture<void> CBenchState::f_WaitServerConnection()
+	{
+		TCUniquePointer<TCPromise<void>> pPromise = fg_Construct();
+		TCFuture<void> Future = pPromise->f_Future();
+
+		{
+			DMibLock(m_Lock);
+			if (!m_ServerConnection)
+			{
+				m_ServerConnectionWaiters.f_InsertLast(fg_Move(pPromise));
+				return Future;
+			}
+		}
+
+		pPromise->f_SetResult();
+
+		return Future;
+	}
+
+	TCFuture<void> CBenchState::f_WaitClientReceived(uint64 _TargetBytes)
+	{
+		// Resolve after unlocking because waiters can resume inline and reenter this state.
+		TCUniquePointer<TCPromise<void>> pPromise = fg_Construct();
+		TCFuture<void> Future = pPromise->f_Future();
+
+		{
+			DMibLock(m_Lock);
+			DMibCheck(!m_pClientWaitPromise);
+
+			m_ClientWaitTargetBytes = _TargetBytes;
+
+			// Already-arrived data still needs a ready promise; a default future has no awaitable state.
+			if (m_nClientReceivedBytes < _TargetBytes)
+				m_pClientWaitPromise = fg_Move(pPromise);
+		}
+
+		if (pPromise)
+			pPromise->f_SetResult();
+
+		return Future;
+	}
 
 	// Host callbacks on a pool actor; the ambient test actor is not in a pool.
 	template <EPriority t_Priority>
@@ -347,73 +354,78 @@ namespace
 	template <EPriority t_Priority>
 	struct TCBenchDriverActor : public CActor
 	{
+		TCFuture<void> f_RunPing(TCSharedPointerSupportWeak<CBenchState> _pState, umint _nRoundTrips);
+		TCFuture<void> f_RunUpload(TCSharedPointerSupportWeak<CBenchState> _pState, CSharedByteVector _Chunk, uint64 _nBytes);
+
 		static constexpr EPriority mc_Priority = t_Priority;
+	};
 
-		TCFuture<void> f_RunPing(TCSharedPointerSupportWeak<CBenchState> _pState, umint _nRoundTrips)
+	template <EPriority t_Priority>
+	TCFuture<void> TCBenchDriverActor<t_Priority>::f_RunPing(TCSharedPointerSupportWeak<CBenchState> _pState, umint _nRoundTrips)
+	{
+		CIOByteVector Ping;
+		Ping.f_SetLen(8);
+		NMemory::fg_ObjectSet(Ping.f_GetArray(), (uint8)0x5A, 8);
+		CSharedByteVector Chunk(fg_Move(Ping));
+
+		uint64 TargetBytes = 0;
 		{
-			CIOByteVector Ping;
-			Ping.f_SetLen(8);
-			NMemory::fg_ObjectSet(Ping.f_GetArray(), (uint8)0x5A, 8);
-			CSharedByteVector Chunk(fg_Move(Ping));
-
-			uint64 TargetBytes = 0;
-			{
-				DMibLock(_pState->m_Lock);
-				TargetBytes = _pState->m_nClientReceivedBytes;
-			}
-
-			for (umint iRoundTrip = 0; iRoundTrip < _nRoundTrips; ++iRoundTrip)
-			{
-				TargetBytes += 8;
-				_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(Chunk), 0).f_DiscardResult();
-				co_await _pState->f_WaitClientReceived(TargetBytes);
-			}
-
-			co_return {};
+			DMibLock(_pState->m_Lock);
+			TargetBytes = _pState->m_nClientReceivedBytes;
 		}
 
-		TCFuture<void> f_RunUpload(TCSharedPointerSupportWeak<CBenchState> _pState, CSharedByteVector _Chunk, uint64 _nBytes)
+		for (umint iRoundTrip = 0; iRoundTrip < _nRoundTrips; ++iRoundTrip)
 		{
-			umint ChunkSize = _Chunk.f_GetLen();
+			TargetBytes += 8;
+			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(Chunk), 0).f_DiscardResult();
+			co_await _pState->f_WaitClientReceived(TargetBytes);
+		}
 
-			_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchControlMessage(_nBytes), 0).f_DiscardResult();
+		co_return {};
+	}
 
-			uint64 AckTargetBytes = 0;
+	template <EPriority t_Priority>
+	TCFuture<void> TCBenchDriverActor<t_Priority>::f_RunUpload(TCSharedPointerSupportWeak<CBenchState> _pState, CSharedByteVector _Chunk, uint64 _nBytes)
+	{
+		umint ChunkSize = _Chunk.f_GetLen();
+
+		_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_BenchControlMessage(_nBytes), 0).f_DiscardResult();
+
+		uint64 AckTargetBytes = 0;
+		{
+			DMibLock(_pState->m_Lock);
+			AckTargetBytes = _pState->m_nClientReceivedBytes + 8;
+		}
+
+		// Keep enough sends outstanding to avoid measuring per-chunk idle gaps.
+		umint PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(umint(16));
+
+		uint64 nChunks = (_nBytes + ChunkSize - 1) / ChunkSize;
+		uint64 nQueued = 0;
+
+		TCVector<TCFuture<void>> InFlight;
+		while (nQueued < nChunks && InFlight.f_GetLen() < PipelineLength)
+		{
+			InFlight.f_InsertLast(_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0));
+			++nQueued;
+		}
+
+		for (uint64 iChunk = 0; iChunk < nChunks; ++iChunk)
+		{
+			umint iSlot = umint(iChunk % InFlight.f_GetLen());
+			co_await fg_Move(InFlight[iSlot]);
+
+			if (nQueued < nChunks)
 			{
-				DMibLock(_pState->m_Lock);
-				AckTargetBytes = _pState->m_nClientReceivedBytes + 8;
-			}
-
-			// Keep enough sends outstanding to avoid measuring per-chunk idle gaps.
-			umint PipelineLength = fg_GetSys()->f_GetEnvironmentVariable("PipelineLength").f_ToInt(umint(16));
-
-			uint64 nChunks = (_nBytes + ChunkSize - 1) / ChunkSize;
-			uint64 nQueued = 0;
-
-			TCVector<TCFuture<void>> InFlight;
-			while (nQueued < nChunks && InFlight.f_GetLen() < PipelineLength)
-			{
-				InFlight.f_InsertLast(_pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0));
+				InFlight[iSlot] = _pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0);
 				++nQueued;
 			}
-
-			for (uint64 iChunk = 0; iChunk < nChunks; ++iChunk)
-			{
-				umint iSlot = umint(iChunk % InFlight.f_GetLen());
-				co_await fg_Move(InFlight[iSlot]);
-
-				if (nQueued < nChunks)
-				{
-					InFlight[iSlot] = _pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(_Chunk), 0);
-					++nQueued;
-				}
-			}
-
-			co_await _pState->f_WaitClientReceived(AckTargetBytes);
-
-			co_return {};
 		}
-	};
+
+		co_await _pState->f_WaitClientReceived(AckTargetBytes);
+
+		co_return {};
+	}
 
 	using CBenchDriverActor = TCBenchDriverActor<EPriority_Normal>;
 	using CBenchDriverActorHighCpu = TCBenchDriverActor<EPriority_NormalHighCPU>;
@@ -486,174 +498,13 @@ namespace
 
 	struct CAsyncSocketPerformance_Tests : public CTest
 	{
-		void f_DoTests()
-		{
-			DMibTestSuite(CTestCategory("AsyncSocketPing") << CTestGroup("Performance"))
-			{
-				CActorRunLoopTestHelper RunLoopHelper;
-
-				CTestPerformance PerfTest(0.015);
-
-				fsp_MeasureTransports
-					(
-						"Ping"
-						, PerfTest
-						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
-						{
-							DMibTestPath(_Tag);
-
-							fg_MeasurePing<CBenchDriverActor, CBenchHandlerActor>
-								(
-									RunLoopHelper
-									, PerfTest
-									, "Ping_{}"_f << _Tag
-									, _Address
-									, _fServerFactory
-									, _fClientFactory
-									, mcp_nPingRoundTrips
-									, mcp_nRepetitions
-								)
-							;
-
-							fg_MeasurePing<CBenchDriverActorHighCpu, CBenchHandlerActorHighCpu>
-								(
-									RunLoopHelper
-									, PerfTest
-									, "PingHigh_{}"_f << _Tag
-									, _Address
-									, _fServerFactory
-									, _fClientFactory
-									, mcp_nPingRoundTrips
-									, mcp_nRepetitions
-								)
-							;
-						}
-					)
-				;
-			};
-
-			DMibTestSuite(CTestCategory("AsyncSocketThroughput") << CTestGroup("Performance"))
-			{
-				CActorRunLoopTestHelper RunLoopHelper;
-
-				CTestPerformance PerfTest(0.015);
-
-				uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
-				uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
-
-				fsp_MeasureTransports
-					(
-						"Thr"
-						, PerfTest
-						, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
-						{
-							DMibTestPath(_Tag);
-
-							TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
-							fg_SetupConnection(RunLoopHelper, pState, _Address, _fServerFactory, _fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
-
-							fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mcp_nRepetitions, g_Timeout);
-						}
-					)
-				;
-			};
-
-			DMibTestSuite(CTestCategory("AsyncSocketRemoteServe") << CTestGroup("Manual"))
-			{
-				CStr Host = fg_GetSys()->f_GetEnvironmentVariable("BenchHost");
-				if (!Host.f_IsEmpty())
-				{
-					CStr Scheme = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
-					if (Scheme.f_IsEmpty())
-						Scheme = "tls";
-					uint32 Port = fg_GetSys()->f_GetEnvironmentVariable("BenchPort").f_ToInt(uint32(39301));
-					CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
-					if (TicketFile.f_IsEmpty())
-						TicketFile = NFile::CFile::fs_GetProgramDirectory() / "AsyncSocketBench.ticket";
-					fp64 ServeSeconds = fg_GetSys()->f_GetEnvironmentVariable("BenchServeSeconds").f_ToFloat(fp64(600.0));
-
-					CActorRunLoopTestHelper RunLoopHelper;
-
-					FVirtualSocketFactory fServerFactory;
-					if (Scheme == "tls")
-					{
-						CSSLSettings ServerSettings;
-						CCertificateOptions Options;
-						Options.m_CommonName = "Malterlib async socket benchmark";
-						Options.m_Hostnames = fg_CreateVector<CStr>(Host);
-						Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
-						CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-						fServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
-					}
-
-					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
-
-					fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), fServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
-
-					CStr TicketString = "{}://{}:{}"_f << Scheme << Host << Port;
-					NFile::CFile::fs_WriteStringToFile(TicketFile, TicketString, false);
-
-					NSys::fg_ConsoleOutput(CStr("AsyncSocketRemoteServe: {} for {} seconds, ticket at {}\n"_f << TicketString << ServeSeconds << TicketFile));
-
-					// Removing the ticket file ends the serve early, which is how a driver
-					// script releases the server the moment its client is done
-					NTime::CStopwatch Serving(true);
-					while (Serving.f_GetTime() < ServeSeconds && NFile::CFile::fs_FileExists(TicketFile))
-						NSys::fg_Thread_Sleep(0.25);
-				}
-			};
-
-			DMibTestSuite(CTestCategory("AsyncSocketRemoteThroughput") << CTestGroup("Manual"))
-			{
-				CStr TicketString = fg_GetSys()->f_GetEnvironmentVariable("BenchTicket");
-				CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
-				if (TicketString.f_IsEmpty() && !TicketFile.f_IsEmpty())
-					TicketString = NFile::CFile::fs_ReadStringFromFile(TicketFile);
-
-				if (!TicketString.f_IsEmpty())
-				{
-					CStr Scheme = "tcp";
-					CStr Address = TicketString;
-					if (TicketString.f_StartsWith("tls://"))
-					{
-						Scheme = "tls";
-						Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
-					}
-					else if (TicketString.f_StartsWith("tcp://"))
-						Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
-
-					uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
-					uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
-					fp64 CallTimeout = fg_GetSys()->f_GetEnvironmentVariable("BenchCallTimeout").f_ToFloat(fp64(600.0));
-
-					CActorRunLoopTestHelper RunLoopHelper;
-
-					CTestPerformance PerfTest(0.015);
-
-					FVirtualSocketFactory fClientFactory;
-					if (Scheme == "tls")
-					{
-						// The per-run self-signed certificate is accepted explicitly by this benchmark client.
-						CSSLSettings ClientSettings;
-						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
-						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreTrustFailures;
-						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-						fClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
-					}
-
-					TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
-					fg_SetupClient(RunLoopHelper, pState, Address, fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
-
-					DMibTestPath("Remote");
-					fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mcp_nRepetitions, CallTimeout);
-
-					DMibExpectTrue(PerfTest);
-				}
-			};
-		}
+		void f_DoTests();
 
 	private:
+		static bool fsp_BenchSchemeEnabled(CStr const &_Tag);
+		template <typename tf_FMeasure>
+		static void fsp_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure);
+
 #if defined(DMibDebug) || defined(DMibSanitizerEnabled)
 		static constexpr uint64 mcp_nTransferBytes = 8ull << 20;
 		static constexpr umint mcp_nPingRoundTrips = 128;
@@ -664,53 +515,220 @@ namespace
 		static constexpr umint mcp_nRepetitions = 5;
 #endif
 		static constexpr uint32 mcp_ChunkSize = NFile::gc_IdealIoSize;
-
-		static bool fsp_BenchSchemeEnabled(CStr const &_Tag)
-		{
-			CStr Schemes = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
-			if (Schemes.f_IsEmpty())
-				return true;
-
-			return ("," + Schemes + ",").f_Find("," + _Tag + ",") >= 0;
-		}
-
-		template <typename tf_FMeasure>
-		static void fsp_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
-		{
-			CStr RootDirectory = NFile::CFile::fs_GetProgramDirectory() / ("AsyncSocketPerf_{}"_f << _SuiteTag);
-			fg_TestAddCleanupPath(RootDirectory);
-
-			auto fAddress = [&](CStr const &_Tag)
-				{
-					return "UNIX:" + fg_GetSafeUnixSocketPath("{}/{}_{}.socket"_f << RootDirectory << _SuiteTag << _Tag);
-				}
-			;
-
-			if (fsp_BenchSchemeEnabled("unix"))
-				_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
-
-			if (fsp_BenchSchemeEnabled("tcp"))
-				_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
-
-			CSSLSettings ServerSettings;
-			CCertificateOptions Options;
-			Options.m_CommonName = "Malterlib async socket benchmark";
-			Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-			Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
-			CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-			TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-			CSSLSettings ClientSettings;
-			ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-			ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-			TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-			if (fsp_BenchSchemeEnabled("tls"))
-				_fMeasure("tls", fAddress("tls"), CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext));
-
-			DMibExpectTrue(_PerfTest);
-		}
 	};
+
+	void CAsyncSocketPerformance_Tests::f_DoTests()
+	{
+		DMibTestSuite(CTestCategory("AsyncSocketPing") << CTestGroup("Performance"))
+		{
+			CActorRunLoopTestHelper RunLoopHelper;
+
+			CTestPerformance PerfTest(0.015);
+
+			fsp_MeasureTransports
+				(
+					"Ping"
+					, PerfTest
+					, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
+					{
+						DMibTestPath(_Tag);
+
+						fg_MeasurePing<CBenchDriverActor, CBenchHandlerActor>
+							(
+								RunLoopHelper
+								, PerfTest
+								, "Ping_{}"_f << _Tag
+								, _Address
+								, _fServerFactory
+								, _fClientFactory
+								, mcp_nPingRoundTrips
+								, mcp_nRepetitions
+							)
+						;
+
+						fg_MeasurePing<CBenchDriverActorHighCpu, CBenchHandlerActorHighCpu>
+							(
+								RunLoopHelper
+								, PerfTest
+								, "PingHigh_{}"_f << _Tag
+								, _Address
+								, _fServerFactory
+								, _fClientFactory
+								, mcp_nPingRoundTrips
+								, mcp_nRepetitions
+							)
+						;
+					}
+				)
+			;
+		};
+
+		DMibTestSuite(CTestCategory("AsyncSocketThroughput") << CTestGroup("Performance"))
+		{
+			CActorRunLoopTestHelper RunLoopHelper;
+
+			CTestPerformance PerfTest(0.015);
+
+			uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
+			uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
+
+			fsp_MeasureTransports
+				(
+					"Thr"
+					, PerfTest
+					, [&](CStr const &_Tag, CStr const &_Address, FVirtualSocketFactory const &_fServerFactory, FVirtualSocketFactory const &_fClientFactory)
+					{
+						DMibTestPath(_Tag);
+
+						TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+						fg_SetupConnection(RunLoopHelper, pState, _Address, _fServerFactory, _fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
+
+						fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "Thr_{}"_f << _Tag, TransferBytes, ChunkSize, mcp_nRepetitions, g_Timeout);
+					}
+				)
+			;
+		};
+
+		DMibTestSuite(CTestCategory("AsyncSocketRemoteServe") << CTestGroup("Manual"))
+		{
+			CStr Host = fg_GetSys()->f_GetEnvironmentVariable("BenchHost");
+			if (!Host.f_IsEmpty())
+			{
+				CStr Scheme = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
+				if (Scheme.f_IsEmpty())
+					Scheme = "tls";
+				uint32 Port = fg_GetSys()->f_GetEnvironmentVariable("BenchPort").f_ToInt(uint32(39301));
+				CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
+				if (TicketFile.f_IsEmpty())
+					TicketFile = NFile::CFile::fs_GetProgramDirectory() / "AsyncSocketBench.ticket";
+				fp64 ServeSeconds = fg_GetSys()->f_GetEnvironmentVariable("BenchServeSeconds").f_ToFloat(fp64(600.0));
+
+				CActorRunLoopTestHelper RunLoopHelper;
+
+				FVirtualSocketFactory fServerFactory;
+				if (Scheme == "tls")
+				{
+					CSSLSettings ServerSettings;
+					CCertificateOptions Options;
+					Options.m_CommonName = "Malterlib async socket benchmark";
+					Options.m_Hostnames = fg_CreateVector<CStr>(Host);
+					Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
+					CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+					TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+					fServerFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+				}
+
+				TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+
+				fg_SetupServer(RunLoopHelper, pState, CSocket::fs_ResolveAddress("{}:{}"_f << Host << Port), fServerFactory, fg_ConstructActor<CBenchHandlerActorHighCpu>());
+
+				CStr TicketString = "{}://{}:{}"_f << Scheme << Host << Port;
+				NFile::CFile::fs_WriteStringToFile(TicketFile, TicketString, false);
+
+				NSys::fg_ConsoleOutput(CStr("AsyncSocketRemoteServe: {} for {} seconds, ticket at {}\n"_f << TicketString << ServeSeconds << TicketFile));
+
+				// Removing the ticket file ends the serve early, which is how a driver
+				// script releases the server the moment its client is done
+				NTime::CStopwatch Serving(true);
+				while (Serving.f_GetTime() < ServeSeconds && NFile::CFile::fs_FileExists(TicketFile))
+					NSys::fg_Thread_Sleep(0.25);
+			}
+		};
+
+		DMibTestSuite(CTestCategory("AsyncSocketRemoteThroughput") << CTestGroup("Manual"))
+		{
+			CStr TicketString = fg_GetSys()->f_GetEnvironmentVariable("BenchTicket");
+			CStr TicketFile = fg_GetSys()->f_GetEnvironmentVariable("BenchTicketFile");
+			if (TicketString.f_IsEmpty() && !TicketFile.f_IsEmpty())
+				TicketString = NFile::CFile::fs_ReadStringFromFile(TicketFile);
+
+			if (!TicketString.f_IsEmpty())
+			{
+				CStr Scheme = "tcp";
+				CStr Address = TicketString;
+				if (TicketString.f_StartsWith("tls://"))
+				{
+					Scheme = "tls";
+					Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
+				}
+				else if (TicketString.f_StartsWith("tcp://"))
+					Address = TicketString.f_Right(TicketString.f_GetLen() - 6);
+
+				uint32 ChunkSize = fg_GetSys()->f_GetEnvironmentVariable("ChunkSize").f_ToInt(mcp_ChunkSize);
+				uint64 TransferBytes = fg_GetSys()->f_GetEnvironmentVariable("TransferBytes").f_ToInt(mcp_nTransferBytes);
+				fp64 CallTimeout = fg_GetSys()->f_GetEnvironmentVariable("BenchCallTimeout").f_ToFloat(fp64(600.0));
+
+				CActorRunLoopTestHelper RunLoopHelper;
+
+				CTestPerformance PerfTest(0.015);
+
+				FVirtualSocketFactory fClientFactory;
+				if (Scheme == "tls")
+				{
+					// The per-run self-signed certificate is accepted explicitly by this benchmark client.
+					CSSLSettings ClientSettings;
+					ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreVerificationFailures;
+					ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_IgnoreTrustFailures;
+					TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+					fClientFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+				}
+
+				TCSharedPointerSupportWeak<CBenchState> pState = fg_Construct(RunLoopHelper.m_pRunLoop, false, uint64(0));
+				fg_SetupClient(RunLoopHelper, pState, Address, fClientFactory, fg_ConstructActor<CBenchHandlerActor>());
+
+				DMibTestPath("Remote");
+				fg_MeasureUpload(RunLoopHelper, PerfTest, pState, "ThrRemote_{}"_f << Scheme, TransferBytes, ChunkSize, mcp_nRepetitions, CallTimeout);
+
+				DMibExpectTrue(PerfTest);
+			}
+		};
+	}
+
+	bool CAsyncSocketPerformance_Tests::fsp_BenchSchemeEnabled(CStr const &_Tag)
+	{
+		CStr Schemes = fg_GetSys()->f_GetEnvironmentVariable("BenchSchemes");
+		if (Schemes.f_IsEmpty())
+			return true;
+
+		return ("," + Schemes + ",").f_Find("," + _Tag + ",") >= 0;
+	}
+
+	template <typename tf_FMeasure>
+	void CAsyncSocketPerformance_Tests::fsp_MeasureTransports(CStr const &_SuiteTag, CTestPerformance &_PerfTest, tf_FMeasure const &_fMeasure)
+	{
+		CStr RootDirectory = NFile::CFile::fs_GetProgramDirectory() / ("AsyncSocketPerf_{}"_f << _SuiteTag);
+		fg_TestAddCleanupPath(RootDirectory);
+
+		auto fAddress = [&](CStr const &_Tag)
+			{
+				return "UNIX:" + fg_GetSafeUnixSocketPath("{}/{}_{}.socket"_f << RootDirectory << _SuiteTag << _Tag);
+			}
+		;
+
+		if (fsp_BenchSchemeEnabled("unix"))
+			_fMeasure("unix", fAddress("unix"), FVirtualSocketFactory(), FVirtualSocketFactory());
+
+		if (fsp_BenchSchemeEnabled("tcp"))
+			_fMeasure("tcp", "127.0.0.1:0", FVirtualSocketFactory(), FVirtualSocketFactory());
+
+		CSSLSettings ServerSettings;
+		CCertificateOptions Options;
+		Options.m_CommonName = "Malterlib async socket benchmark";
+		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+		Options.m_KeySetting = CPublicKeySettings_EC_Secp256r1{};
+		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+		TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+		CSSLSettings ClientSettings;
+		ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+		if (fsp_BenchSchemeEnabled("tls"))
+			_fMeasure("tls", fAddress("tls"), CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext));
+
+		DMibExpectTrue(_PerfTest);
+	}
 
 	DMibTestRegister(CAsyncSocketPerformance_Tests, Malterlib::Network);
 }

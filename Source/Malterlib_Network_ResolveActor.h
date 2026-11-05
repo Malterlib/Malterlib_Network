@@ -12,15 +12,8 @@ namespace NMib::NNetwork
 {
 	struct CResolveActor : public NConcurrency::CActor
 	{
-		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
-
 		using CAddresses = NContainer::TCVector<CNetAddress>;
 		using FHostResolver = NFunction::TCFunction<CAddresses (NStr::CStr const &_Host, ENetAddressType _PreferType)>;
-
-		CResolveActor(FHostResolver const &_fHostResolver = {}, umint _MaxConcurrent = 4, CNetAddress const &_NameServer = {});
-		~CResolveActor();
-
-		static NConcurrency::TCWrapped<NConcurrency::TCActor<CResolveActor>> fs_GetShared(NConcurrency::CConcurrencyManager &_Manager);
 
 		template <typename t_CResult>
 		struct TCLookup
@@ -32,8 +25,15 @@ namespace NMib::NNetwork
 
 		using CLookup = TCLookup<CAddresses>;
 
+		CResolveActor(FHostResolver const &_fHostResolver = {}, umint _MaxConcurrent = 4, CNetAddress const &_NameServer = {});
+		~CResolveActor();
+
+		static NConcurrency::TCWrapped<NConcurrency::TCActor<CResolveActor>> fs_GetShared(NConcurrency::CConcurrencyManager &_Manager);
+
 		NConcurrency::TCFuture<CLookup> f_Resolve(NStr::CStr _Address, ENetAddressType _PreferType);
 		NConcurrency::TCFuture<CLookup> f_ResolveHost(NStr::CStr _Host, ENetAddressType _PreferType = ENetAddressType_None);
+
+		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
 
 	private:
 		struct CInternal;

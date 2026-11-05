@@ -37,167 +37,204 @@ namespace
 	// Hold the actor's handshake transition until a readiness read also returns application data.
 	struct CHandshakeWithDataSocket : ICSocket
 	{
-		explicit CHandshakeWithDataSocket(TCUniquePointer<ICSocket> &&_pSocket)
-			: m_pSocket(fg_Move(_pSocket))
-		{
-		}
-
-		bool f_IsValid() const override
-		{
-			return m_pSocket->f_IsValid();
-		}
-
-		bool f_HandshakeDone() const override
-		{
-			return m_bReceivedData && m_pSocket->f_HandshakeDone();
-		}
-
-		void f_Close() override
-		{
-			m_pSocket->f_Close();
-		}
-
-		void f_CloseAsync(NFunction::TCFunctionMovable<void ()> &&_fOnClosed) override
-		{
-			m_pSocket->f_CloseAsync(fg_Move(_fOnClosed));
-		}
-
-		void f_Shutdown() override
-		{
-			m_pSocket->f_Shutdown();
-		}
-
-		void f_SetAbortOnClose() override
-		{
-			m_pSocket->f_SetAbortOnClose();
-		}
-
-		void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
-		{
-			m_pSocket->f_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
-		}
-
-		void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override
-		{
-			m_pSocket->f_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
-		}
-
-		void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
-		{
-			m_pSocket->f_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
-		}
-
-		void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override
-		{
-			m_pSocket->f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
-		}
-
-		TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
-		{
-			return m_pSocket->f_Accept(fg_Move(_fOnStateChange));
-		}
-
-		void f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
-		{
-			m_pSocket->f_InheritHandle(_pHandle, fg_Move(_fOnStateChange));
-		}
-
-		void *f_GiveUpForInherit() override
-		{
-			return m_pSocket->f_GiveUpForInherit();
-		}
-
-		void *f_GetOSSocket() override
-		{
-			return m_pSocket->f_GetOSSocket();
-		}
-
-		void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
-		{
-			m_pSocket->f_SetOnStateChange(fg_Move(_fOnStateChange));
-		}
-
-		ENetTCPState f_GetState() override
-		{
-			return m_pSocket->f_GetState();
-		}
-
-		CStr f_GetCloseReason() override
-		{
-			return m_pSocket->f_GetCloseReason();
-		}
-
-		CSocketOperationResult f_Receive(void *_pData, umint _nBytes) override
-		{
-			auto Result = m_pSocket->f_Receive(_pData, _nBytes);
-			m_bReceivedData |= Result.m_nBytes != 0;
-
-			return Result;
-		}
-
-		CSocketOperationResult f_Send(void const *_pData, umint _nBytes) override
-		{
-			return m_pSocket->f_Send(_pData, _nBytes);
-		}
-
-		CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override
-		{
-			return m_pSocket->f_SendVectored(_pSpans, _nSpans);
-		}
-
-		umint f_SendDatagram(CNetAddress const &_Address, void const *_pData, umint _nBytes) override
-		{
-			return m_pSocket->f_SendDatagram(_Address, _pData, _nBytes);
-		}
-
-		umint f_ReceiveDatagram(CNetAddress &_Address, void *_pData, umint _nBytes) override
-		{
-			return m_pSocket->f_ReceiveDatagram(_Address, _pData, _nBytes);
-		}
-
-		CNetAddress f_GetPeerAddress() const override
-		{
-			return m_pSocket->f_GetPeerAddress();
-		}
-
-		uint32 f_GetListenPort() const override
-		{
-			return m_pSocket->f_GetListenPort();
-		}
-
-		TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override
-		{
-			return m_pSocket->f_GetConnectionInfo();
-		}
-
-		void f_SetTransferSizeHint(umint _nBytes) override
-		{
-			m_pSocket->f_SetTransferSizeHint(_nBytes);
-		}
-
-		void f_SetSendWindow(umint _nBytes, bool _bConfigured) override
-		{
-			m_pSocket->f_SetSendWindow(_nBytes, _bConfigured);
-		}
-
-		void f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override
-		{
-			m_pSocket->f_AdoptSocket(fg_Move(_Socket), fg_Move(_fOnStateChange));
-		}
-
-		ICSocketCompletionIo *f_GetCompletionIo() override
-		{
-			return m_pSocket->f_GetCompletionIo();
-		}
-
-		NSys::ICIoLoop *f_GetOwningIoLoop() override
-		{
-			return m_pSocket->f_GetOwningIoLoop();
-		}
+		explicit CHandshakeWithDataSocket(TCUniquePointer<ICSocket> &&_pSocket);
+		bool f_IsValid() const override;
+		bool f_HandshakeDone() const override;
+		void f_Close() override;
+		void f_CloseAsync(NFunction::TCFunctionMovable<void ()> &&_fOnClosed) override;
+		void f_Shutdown() override;
+		void f_SetAbortOnClose() override;
+		void f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override;
+		void f_AsyncConnect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress) override;
+		void f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override;
+		void f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags) override;
+		TCUniquePointer<ICSocket> f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		void f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		void *f_GiveUpForInherit() override;
+		void *f_GetOSSocket() override;
+		void f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		ENetTCPState f_GetState() override;
+		CStr f_GetCloseReason() override;
+		CSocketOperationResult f_Receive(void *_pData, umint _nBytes) override;
+		CSocketOperationResult f_Send(void const *_pData, umint _nBytes) override;
+		CSocketOperationResult f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans) override;
+		umint f_SendDatagram(CNetAddress const &_Address, void const *_pData, umint _nBytes) override;
+		umint f_ReceiveDatagram(CNetAddress &_Address, void *_pData, umint _nBytes) override;
+		CNetAddress f_GetPeerAddress() const override;
+		uint32 f_GetListenPort() const override;
+		TCUniquePointer<ICSocketConnectionInfo> f_GetConnectionInfo() const override;
+		void f_SetTransferSizeHint(umint _nBytes) override;
+		void f_SetSendWindow(umint _nBytes, bool _bConfigured) override;
+		void f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange) override;
+		ICSocketCompletionIo *f_GetCompletionIo() override;
+		NSys::ICIoLoop *f_GetOwningIoLoop() override;
 
 		TCUniquePointer<ICSocket> m_pSocket;
 		bool m_bReceivedData = false;
 	};
+
+	CHandshakeWithDataSocket::CHandshakeWithDataSocket(TCUniquePointer<ICSocket> &&_pSocket)
+		: m_pSocket(fg_Move(_pSocket))
+	{
+	}
+
+	bool CHandshakeWithDataSocket::f_IsValid() const
+	{
+		return m_pSocket->f_IsValid();
+	}
+
+	bool CHandshakeWithDataSocket::f_HandshakeDone() const
+	{
+		return m_bReceivedData && m_pSocket->f_HandshakeDone();
+	}
+
+	void CHandshakeWithDataSocket::f_Close()
+	{
+		m_pSocket->f_Close();
+	}
+
+	void CHandshakeWithDataSocket::f_CloseAsync(NFunction::TCFunctionMovable<void ()> &&_fOnClosed)
+	{
+		m_pSocket->f_CloseAsync(fg_Move(_fOnClosed));
+	}
+
+	void CHandshakeWithDataSocket::f_Shutdown()
+	{
+		m_pSocket->f_Shutdown();
+	}
+
+	void CHandshakeWithDataSocket::f_SetAbortOnClose()
+	{
+		m_pSocket->f_SetAbortOnClose();
+	}
+
+	void CHandshakeWithDataSocket::f_Connect(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, CNetAddress const &_BindAddress)
+	{
+		m_pSocket->f_Connect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+	}
+
+	void CHandshakeWithDataSocket::f_AsyncConnect
+		(
+			CNetAddress const &_Address
+			, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange
+			, CNetAddress const &_BindAddress
+		)
+	{
+		m_pSocket->f_AsyncConnect(_Address, fg_Move(_fOnStateChange), _BindAddress);
+	}
+
+	void CHandshakeWithDataSocket::f_Listen(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
+	{
+		m_pSocket->f_Listen(_Address, fg_Move(_fOnStateChange), _Flags);
+	}
+
+	void CHandshakeWithDataSocket::f_ListenDatagram(CNetAddress const &_Address, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange, ENetFlag _Flags)
+	{
+		m_pSocket->f_ListenDatagram(_Address, fg_Move(_fOnStateChange), _Flags);
+	}
+
+	TCUniquePointer<ICSocket> CHandshakeWithDataSocket::f_Accept(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		return m_pSocket->f_Accept(fg_Move(_fOnStateChange));
+	}
+
+	void CHandshakeWithDataSocket::f_InheritHandle(void *_pHandle, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		m_pSocket->f_InheritHandle(_pHandle, fg_Move(_fOnStateChange));
+	}
+
+	void *CHandshakeWithDataSocket::f_GiveUpForInherit()
+	{
+		return m_pSocket->f_GiveUpForInherit();
+	}
+
+	void *CHandshakeWithDataSocket::f_GetOSSocket()
+	{
+		return m_pSocket->f_GetOSSocket();
+	}
+
+	void CHandshakeWithDataSocket::f_SetOnStateChange(NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		m_pSocket->f_SetOnStateChange(fg_Move(_fOnStateChange));
+	}
+
+	ENetTCPState CHandshakeWithDataSocket::f_GetState()
+	{
+		return m_pSocket->f_GetState();
+	}
+
+	CStr CHandshakeWithDataSocket::f_GetCloseReason()
+	{
+		return m_pSocket->f_GetCloseReason();
+	}
+
+	CSocketOperationResult CHandshakeWithDataSocket::f_Receive(void *_pData, umint _nBytes)
+	{
+		auto Result = m_pSocket->f_Receive(_pData, _nBytes);
+		m_bReceivedData |= Result.m_nBytes != 0;
+
+		return Result;
+	}
+
+	CSocketOperationResult CHandshakeWithDataSocket::f_Send(void const *_pData, umint _nBytes)
+	{
+		return m_pSocket->f_Send(_pData, _nBytes);
+	}
+
+	CSocketOperationResult CHandshakeWithDataSocket::f_SendVectored(NSys::CIoSpan const *_pSpans, umint _nSpans)
+	{
+		return m_pSocket->f_SendVectored(_pSpans, _nSpans);
+	}
+
+	umint CHandshakeWithDataSocket::f_SendDatagram(CNetAddress const &_Address, void const *_pData, umint _nBytes)
+	{
+		return m_pSocket->f_SendDatagram(_Address, _pData, _nBytes);
+	}
+
+	umint CHandshakeWithDataSocket::f_ReceiveDatagram(CNetAddress &_Address, void *_pData, umint _nBytes)
+	{
+		return m_pSocket->f_ReceiveDatagram(_Address, _pData, _nBytes);
+	}
+
+	CNetAddress CHandshakeWithDataSocket::f_GetPeerAddress() const
+	{
+		return m_pSocket->f_GetPeerAddress();
+	}
+
+	uint32 CHandshakeWithDataSocket::f_GetListenPort() const
+	{
+		return m_pSocket->f_GetListenPort();
+	}
+
+	TCUniquePointer<ICSocketConnectionInfo> CHandshakeWithDataSocket::f_GetConnectionInfo() const
+	{
+		return m_pSocket->f_GetConnectionInfo();
+	}
+
+	void CHandshakeWithDataSocket::f_SetTransferSizeHint(umint _nBytes)
+	{
+		m_pSocket->f_SetTransferSizeHint(_nBytes);
+	}
+
+	void CHandshakeWithDataSocket::f_SetSendWindow(umint _nBytes, bool _bConfigured)
+	{
+		m_pSocket->f_SetSendWindow(_nBytes, _bConfigured);
+	}
+
+	void CHandshakeWithDataSocket::f_AdoptSocket(CSocket &&_Socket, NFunction::TCFunctionMovable<void (ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		m_pSocket->f_AdoptSocket(fg_Move(_Socket), fg_Move(_fOnStateChange));
+	}
+
+	ICSocketCompletionIo *CHandshakeWithDataSocket::f_GetCompletionIo()
+	{
+		return m_pSocket->f_GetCompletionIo();
+	}
+
+	NSys::ICIoLoop *CHandshakeWithDataSocket::f_GetOwningIoLoop()
+	{
+		return m_pSocket->f_GetOwningIoLoop();
+	}
 }
 char const *g_pCloseMessage = "Socket closed: Connection gracefully disconnected";
 fp64 g_Timeout = 30.0 * gc_TimeoutMultiplier;
@@ -225,19 +262,13 @@ void fg_SendBeneathRecordLayer(void *_pOSSocket, uint8 const *_pData, umint _nBy
 
 struct CAsyncSocket_Tests : public CTest
 {
-private:
-	void fp_Test(TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories, CStr const &_AcceptError, CStr const &_ConnectError, bool _bTestTimeout = false)
-	{
-		{
-			DMibTestPath("IP");
-			fp_TestImp(_fGetFactories, _AcceptError, _ConnectError, "localhost", _bTestTimeout);
-		}
-		{
-			DMibTestPath("Unix");
-			fp_TestImp(_fGetFactories, _AcceptError, _ConnectError, "UNIX:" + fg_GetSafeUnixSocketPath("{}/AsyncSocket.socket"_f << NFile::CFile::fs_GetProgramDirectory()), false);
-		}
-	}
+	static CAsyncSocketUpgradeCheckResult fs_CheckUpgradeMessage(CPagedByteVector const &_Data, CStr const &_UpgradeMessage);
+	void f_DoTests();
 
+	// Keep TCP open after corrupting a record so only protocol termination can finish the receive stream.
+	static constexpr umint mc_RetainedDeliveriesMessageBytes = 4 * 1024 * 1024;
+
+private:
 	struct CState
 	{
 		struct CServerConnection
@@ -247,21 +278,15 @@ private:
 			bool m_bFinished = false;
 		};
 
-		CState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop)
-			: m_pRunLoop(_pRunLoop)
-		{
-		}
+		CState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop);
+		~CState();
 
-		~CState()
-		{
-			DMibLock(m_Lock);
-			m_ServerActor.f_Clear();
-			m_ListenCallbackReference.f_Clear();
-			m_ServerConnections.f_Clear();
-			m_ClientActor.f_Clear();
-			m_ClientSocket.f_Clear();
-			m_Messages.f_Clear();
-		}
+		bool f_AllServerConnectionsFinished();
+		void f_Signal();
+		bool f_Wait();
+		void f_Clear();
+		void f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_fServerFactory);
+		void f_Connect(CStr const &_Address, FVirtualSocketFactory const &_fClientFactory);
 
 		CIntrusiveRefCountWithWeak m_RefCount;
 
@@ -297,947 +322,14 @@ private:
 		TCVector<CStr> m_Messages;
 
 		bool m_bCleared = false;
-
-		bool f_AllServerConnectionsFinished()
-		{
-			DMibLock(m_Lock);
-			for (auto &Connection : m_ServerConnections)
-			{
-				if (!Connection.m_bFinished)
-					return false;
-			}
-			return true;
-		}
-
-		void f_Signal()
-		{
-			DMibLock(m_Lock);
-			m_bSignalCompletion = true;
-			m_pRunLoop->f_Wake();
-		}
-
-		bool f_Wait()
-		{
-			while (true)
-			{
-				{
-					DMibLock(m_Lock);
-					if (m_bSignalCompletion)
-					{
-						m_bSignalCompletion = false;
-						break;
-					}
-				}
-				if (m_pRunLoop->f_WaitOnceTimeout(g_Timeout))
-					return true;
-			}
-			return false;
-		}
-
-		void f_Clear()
-		{
-			TCFutureVector<void> Destroys;
-			{
-				DMibLock(m_Lock);
-				m_bCleared = true;
-
-				m_ClientSocket.f_Destroy() > Destroys;
-
-				if (m_ClientSocket)
-					fg_Move(m_ClientSocket).f_Destroy() > Destroys;
-
-				if (m_ClientActor)
-					fg_Move(m_ClientActor).f_Destroy() > Destroys;
-
-				if (m_ListenCallbackReference)
-				{
-					m_ListenCallbackReference->f_Destroy() > Destroys;
-					m_ListenCallbackReference.f_Clear();
-				}
-
-				for (auto &Connection : m_ServerConnections)
-				{
-					if (Connection.m_Actor)
-						fg_Move(Connection.m_Actor).f_Destroy() > Destroys;
-				}
-
-				m_ServerConnections.f_Clear();
-			}
-
-			fg_AllDoneWrapped(Destroys).f_CallSync(m_pRunLoop);
-
-			{
-				DMibLock(m_Lock);
-				if (m_ServerActor)
-				{
-					auto ServerActor = m_ServerActor;
-					{
-						DMibUnlock(m_Lock);
-						ServerActor->f_BlockDestroy(m_pRunLoop->f_ActorDestroyLoop()); // Make sure to release listen socket
-					}
-					m_ServerActor.f_Clear();
-				}
-			}
-		}
-
-		void f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_fServerFactory)
-		{
-			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
-			CAsyncSocketServerCallbacks ListenCallbacks;
-
-			ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _ConnectionInfo) -> TCFuture<void>
-				{
-					CAsyncSocketCallbacks Callbacks;
-					CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
-					CStr ServerConnectionID;
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-						DMibLock(pState->m_Lock);
-
-						ServerConnectionID = fg_RandomID(pState->m_ServerConnections);
-
-						auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
-
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [=](CSharedByteVector _Data) -> TCFuture<void>
-							{
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-									co_return {};
-
-								DMibLock(pState->m_Lock);
-								auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
-								if (!pServerConnection || pState->m_bCleared)
-									co_return {};
-
-								for (auto &Connection : pState->m_ServerConnections)
-								{
-									if (Connection.m_Actor)
-										Connection.m_Actor(&CAsyncSocketActor::f_SendData, CSharedByteVector(_Data), 0).f_DiscardResult();
-								}
-
-								pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-
-								while (pServerConnection->m_MessageBuffer.f_FindChar('\n') >= 0)
-								{
-									CStr Command = fg_GetStrLineSep(pServerConnection->m_MessageBuffer);
-									if (Command == "Disconnect")
-									{
-										DMibLock(pState->m_Lock);
-										for (auto &Connection : pState->m_ServerConnections)
-											Connection.m_Actor(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, g_pCloseMessage).f_DiscardResult();
-									}
-								}
-
-								co_return {};
-							}
-						;
-
-						Callbacks.m_fOnClose = g_ActorFunctor / [=](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-							{
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-									co_return {};
-								DMibLock(pState->m_Lock);
-								auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
-								if (!pServerConnection || pState->m_bCleared)
-									co_return {};
-
-								pState->m_ServerConnectionCloseMessage = _Message;
-								pState->m_ServerConnectionCloseStatus = _Status;
-								pState->m_ServerConnectionCloseOrigin = _Origin;
-								pState->m_ServerConnections.f_Remove(pServerConnection);
-								pState->f_Signal();
-
-								co_return {};
-							}
-						;
-					}
-
-					auto Cleanup = g_OnScopeExit / [=]
-						{
-							auto pState = pStateWeak.f_Lock();
-							if (!pState)
-								return;
-
-							DMibLock(pState->m_Lock);
-							auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
-							if (!pServerConnection || pState->m_bCleared)
-								return;
-
-							pServerConnection->m_bFinished = true;
-							pState->f_Signal();
-						}
-					;
-
-					auto Actor = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
-					auto Cleanup2 = co_await fg_AsyncDestroy(Actor);
-
-					auto pState = pStateWeak.f_Lock();
-					if (!pState)
-						co_return {};
-
-					{
-						DMibLock(pState->m_Lock);
-						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
-						if (!pServerConnection || pState->m_bCleared)
-							co_return {};
-
-						pServerConnection->m_Actor = fg_Move(Actor);
-						Cleanup2.f_Clear();
-					}
-
-					co_return {};
-				}
-			;
-
-			ListenCallbacks.m_fFailedConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
-				{
-					auto pState = pStateWeak.f_Lock();
-					if (!pState)
-						co_return {};
-
-					DMibLock(pState->m_Lock);
-					pState->m_bAcceptError = true;
-					pState->m_AcceptError = _ConnectionInfo.m_Error;
-					pState->f_Signal();
-
-					co_return {};
-				}
-			;
-
-			m_ServerActor(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector(_ListenAddress), ENetFlag_None, fg_Move(ListenCallbacks), fg_TempCopy(_fServerFactory))
-				> [pStateWeak](TCAsyncResult<CAsyncSocketServerActor::CListenResult> &&_Result)
-				{
-					auto pState = pStateWeak.f_Lock();
-					if (!pState)
-						return;
-
-					DMibLock(pState->m_Lock);
-					if (_Result)
-						pState->m_ListenCallbackReference = fg_Move(_Result->m_Subscription);
-					else
-						pState->m_ListenError = _Result.f_GetExceptionStr();
-					pState->f_Signal();
-				}
-			;
-			bool bTimedOutListenStart = f_Wait();
-			DMibAssert(m_ListenError, ==, "");
-			DMibAssertFalse(bTimedOutListenStart);
-			DMibAssertTrue(m_ListenCallbackReference);
-		}
-
-		void f_Connect(CStr const &_Address, FVirtualSocketFactory const &_fClientFactory)
-		{
-			TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
-			m_ClientActor(&CAsyncSocketClientActor::f_Connect, _Address, "", ENetAddressType_None, 10502, fg_TempCopy(_fClientFactory)) > [pStateWeak]
-				(TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
-				{
-					auto pState = pStateWeak.f_Lock();
-					if (!pState)
-						return;
-					DMibLock(pState->m_Lock);
-					if (_Result)
-					{
-						auto &Result = *_Result;
-
-						CAsyncSocketCallbacks Callbacks;
-
-						Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-							{
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-									co_return {};
-
-								DMibLock(pState->m_Lock);
-								pState->m_ClientConnectionCloseMessage = _Message;
-								pState->m_ClientConnectionCloseStatus = _Status;
-								pState->m_ClientConnectionCloseOrigin = _Origin;
-								pState->f_Signal();
-
-								co_return {};
-							}
-						;
-
-						Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-							{
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-									co_return {};
-								DMibLock(pState->m_Lock);
-								pState->m_ClientMessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-
-								while (pState->m_ClientMessageBuffer.f_FindChar('\n') >= 0)
-									pState->m_Messages.f_Insert(fg_GetStrLineSep(pState->m_ClientMessageBuffer));
-
-								pState->f_Signal();
-
-								co_return {};
-							}
-						;
-
-						auto Cleanup = g_OnScopeExitActor / [pStateWeak]
-							{
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-									return;
-
-								DMibLock(pState->m_Lock);
-								pState->m_bClientConnectionResult = true;
-								pState->f_Signal();
-							}
-						;
-
-						Result.f_Accept(fg_Move(Callbacks)) > [pStateWeak, Cleanup](TCAsyncResult<TCActorInterface<CAsyncSocketActor>> &&_Socket)
-							{
-								if (!_Socket)
-									return;
-
-								auto pState = pStateWeak.f_Lock();
-								if (!pState)
-								{
-									fg_Move(*_Socket).f_Destroy().f_DiscardResult();
-									return;
-								}
-
-								DMibLock(pState->m_Lock);
-
-								if (pState->m_bCleared)
-								{
-									fg_Move(*_Socket).f_Destroy().f_DiscardResult();
-									return;
-								}
-
-								pState->m_ClientSocket = fg_Move(*_Socket);
-							}
-						;
-					}
-					else
-					{
-						pState->m_bClientConnectionResult = true;
-						pState->m_ClientConnectionError = _Result.f_GetExceptionStr();
-					}
-
-					pState->f_Signal();
-				}
-			;
-		}
 	};
 
-	bool fp_TestConnect(TCSharedPointerSupportWeak<CState> const &_pState, CStr const &_AcceptError, CStr const &_ConnectError)
-	{
-		auto pState = _pState;
-		DMibTestPath("Connect");
-
-		bool bTimedOut = false;
-
-		while (!bTimedOut)
-		{
-			{
-				DMibLock(pState->m_Lock);
-				if (pState->m_bAcceptError && pState->m_bClientConnectionResult)
-					break; // Server accept failed
-				if (pState->m_bClientConnectionResult)
-				{
-					if
-					(
-						!pState->m_ClientSocket
-						&& (pState->m_bAcceptError || !pState->m_ServerConnections.f_IsEmpty() || (!pState->m_ClientConnectionError.f_IsEmpty() && _AcceptError.f_IsEmpty()))
-					)
-					{
-						break; // Client connection failed
-					}
-
-					if (pState->m_ClientSocket && !pState->m_ServerConnections.f_IsEmpty() && pState->f_AllServerConnectionsFinished())
-						break; // Successfully done
-				}
-			}
-			bTimedOut = pState->f_Wait();
-		}
-
-		DMibTest(!DMibExpr(bTimedOut));
-
-		if (!_ConnectError.f_IsEmpty())
-		{
-			DMibExpect(pState->m_ClientConnectionError, ==, _ConnectError);
-			return false;
-		}
-
-		if (!_AcceptError.f_IsEmpty())
-		{
-			DMibTest(DMibExpr(pState->m_bAcceptError));
-			DMibExpect(pState->m_AcceptError, ==, _AcceptError);
-			return false;
-		}
-
-		DMibTest(!DMibExpr(pState->m_bAcceptError));
-		DMibTest(DMibExpr(pState->m_AcceptError) == DMibExpr(""));
-
-		DMibTest(DMibExpr(pState->m_ClientConnectionError) == DMibExpr(""));
-
-		DMibAssertFalse(pState->m_ServerConnections.f_IsEmpty());
-		DMibAssertTrue(pState->m_ClientSocket);
-		return true;
-	}
-
-	bool fp_WaitForCondition(TCFunction<bool ()> const &_fPredicate)
-	{
-		bool bTimedOut = false;
-
-		NTime::CStopwatch Stopwatch;
-		Stopwatch.f_Start();
-
-		while (!_fPredicate())
-		{
-			NSys::fg_Thread_Sleep(0.01f);
-			if (Stopwatch.f_GetTime() > 30.0)
-			{
-				bTimedOut = true;
-				break;
-			}
-		}
-
-		return bTimedOut;
-	}
-
-public:
-	static CAsyncSocketUpgradeCheckResult fs_CheckUpgradeMessage(CPagedByteVector const &_Data, CStr const &_UpgradeMessage)
-	{
-		CAsyncSocketUpgradeCheckResult Result;
-		if (_Data.f_IsEmpty())
-			return Result;
-
-		bool bMatches = true;
-		umint iData = 0;
-		umint const nCompare = fg_Min(_Data.f_GetLen(), _UpgradeMessage.f_GetLen());
-		_Data.f_ReadFront
-			(
-				nCompare
-				, [&](umint _iStart, uint8 const *_pData, umint _nBytes) -> bool
-				{
-					if (NMemory::fg_MemCmp((uint8 const *)_UpgradeMessage.f_GetStr() + iData, _pData, _nBytes) == 0)
-					{
-						iData += _nBytes;
-						return _iStart + _nBytes < nCompare;
-					}
-
-					bMatches = false;
-					return false;
-				}
-			)
-		;
-
-		if (!bMatches)
-		{
-			Result.m_nBytesConsumed = 1;
-			return Result;
-		}
-
-		if (_Data.f_GetLen() >= _UpgradeMessage.f_GetLen())
-		{
-			Result.m_Result = EAsyncSocketUpgradeCheckResult_Upgrade;
-			Result.m_nBytesConsumed = _UpgradeMessage.f_GetLen();
-		}
-
-		return Result;
-	}
-
-private:
-	void fp_TestUpgradeCheckDeferredBytes()
-	{
-		DMibTestPath("Upgrade Check Deferred Bytes");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-		struct CUpgradeCheckDeferredState
-		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
-			CStr m_ServerBuffer;
-			bool m_bCheckUpgradeCalled = false;
-			bool m_bServerAccepted = false;
-			bool m_bServerReceivedPlain = false;
-			bool m_bServerReceived = false;
-		};
-
-		TCSharedPointerSupportWeak<CUpgradeCheckDeferredState> pState = fg_Construct();
-		TCWeakPointer<CUpgradeCheckDeferredState> pStateWeak = pState;
-		auto fTextBuffer = [](CStr const &_Text)
-			{
-				CIOByteVector Buffer;
-				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return CSharedByteVector(fg_Move(Buffer));
-			}
-		;
-		auto fWaitForCondition = [&](auto const &_fCondition)
-			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
-
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		auto Cleanup = g_OnScopeExit / [&]
-			{
-				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [pStateWeak]() -> FAsyncSocketUpgradeCheck
-			{
-				return [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
-					{
-						CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
-						if (Result.m_Result == EAsyncSocketUpgradeCheckResult_Upgrade)
-						{
-							if (auto pState = pStateWeak.f_Lock())
-							{
-								DMibLock(pState->m_Lock);
-								pState->m_bCheckUpgradeCalled = true;
-							}
-						}
-
-						return Result;
-					}
-				;
-			}
-		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				co_await NConcurrency::fg_Timeout(0.1);
-
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-						if (pState->m_ServerBuffer == "Plain")
-						{
-							pState->m_bServerReceivedPlain = true;
-							pState->m_ServerBuffer.f_Clear();
-						}
-						else if (pState->m_ServerBuffer == "STARTTLS")
-						{
-							pState->m_bServerReceived = true;
-							pState->m_ServerBuffer.f_Clear();
-						}
-
-						co_return {};
-					}
-				;
-
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-					pState->m_bServerAccepted = true;
-				}
-
-				co_return {};
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-
-		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, CStr("localhost")
-				, CStr()
-				, ENetAddressType_TCPv4
-				, ListenResult.m_ListenPorts[0]
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		CAsyncSocketCallbacks ClientCallbacks;
-		pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("PlainSTARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		bool bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerAccepted && pState->m_bServerReceivedPlain && pState->m_bCheckUpgradeCalled && pState->m_bServerReceived;
-				}
-			)
-		;
-		DMibExpectFalse(bTimedOut);
-	}
-
-	void fp_TestUpgradeCheckRemoteCloseFlush()
-	{
-		DMibTestPath("Upgrade Check Remote Close Flush");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-		struct CUpgradeCheckCloseState
-		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
-			CStr m_ServerBuffer;
-			bool m_bServerCheckWaiting = false;
-			bool m_bServerClosed = false;
-			bool m_bServerReceivedPartial = false;
-		};
-
-		TCSharedPointerSupportWeak<CUpgradeCheckCloseState> pState = fg_Construct();
-		TCWeakPointer<CUpgradeCheckCloseState> pStateWeak = pState;
-		auto fTextBuffer = [](CStr const &_Text)
-			{
-				CIOByteVector Buffer;
-				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return CSharedByteVector(fg_Move(Buffer));
-			}
-		;
-		auto fWaitForCondition = [&](auto const &_fCondition)
-			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
-
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-		auto fCheckUpgradePrefix = [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
-			{
-				CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
-
-				if (Result.m_Result == EAsyncSocketUpgradeCheckResult_MoreDataNeeded && !Result.m_nBytesConsumed && _Data.f_GetLen() == CStr("STAR").f_GetLen())
-				{
-					if (auto pState = pStateWeak.f_Lock())
-					{
-						DMibLock(pState->m_Lock);
-						pState->m_bServerCheckWaiting = true;
-					}
-				}
-
-				return Result;
-			}
-		;
-
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		auto Cleanup = g_OnScopeExit / [&]
-			{
-				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [fCheckUpgradePrefix]() -> FAsyncSocketUpgradeCheck
-			{
-				return fCheckUpgradePrefix;
-			}
-		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-						if (pState->m_ServerBuffer == "STAR")
-							pState->m_bServerReceivedPartial = true;
-
-						co_return {};
-					}
-				;
-				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						pState->m_bServerClosed = true;
-
-						co_return {};
-					}
-				;
-
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-				}
-
-				co_return {};
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-
-		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, CStr("localhost")
-				, CStr()
-				, ENetAddressType_TCPv4
-				, ListenResult.m_ListenPorts[0]
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		CAsyncSocketCallbacks ClientCallbacks;
-		pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STAR"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		bool bCheckTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerCheckWaiting;
-				}
-			)
-		;
-		DMibExpectFalse(bCheckTimedOut);
-
-		pState->m_ClientSocket(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, CStr("Done")).f_DiscardResult();
-
-		bool bCloseTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerReceivedPartial && pState->m_bServerClosed;
-				}
-			)
-		;
-		DMibExpectFalse(bCloseTimedOut);
-		{
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_bServerReceivedPartial, ==, true);
-			DMibExpect(pState->m_bServerClosed, ==, true);
-			DMibExpect(pState->m_ServerBuffer, ==, CStr("STAR"));
-		}
-	}
-
-	void fp_TestDeferredBytesBeforeAcceptClose()
-	{
-		DMibTestPath("Deferred Bytes Before Accept Close");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-		struct CDeferredCloseState
-		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
-			CStr m_ServerBuffer;
-			bool m_bServerAccepted = false;
-			bool m_bServerReceived = false;
-			bool m_bServerClosed = false;
-		};
-
-		TCSharedPointerSupportWeak<CDeferredCloseState> pState = fg_Construct();
-		TCWeakPointer<CDeferredCloseState> pStateWeak = pState;
-		auto fTextBuffer = [](CStr const &_Text)
-			{
-				CIOByteVector Buffer;
-				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return CSharedByteVector(fg_Move(Buffer));
-			}
-		;
-		auto fWaitForCondition = [&](auto const &_fCondition)
-			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
-
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		auto Cleanup = g_OnScopeExit / [&]
-			{
-				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				co_await NConcurrency::fg_Timeout(0.1);
-
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-						if (pState->m_ServerBuffer == "BeforeClose")
-							pState->m_bServerReceived = true;
-
-						co_return {};
-					}
-				;
-				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-					{
-						auto pState = pStateWeak.f_Lock();
-						if (!pState)
-							co_return {};
-
-						DMibLock(pState->m_Lock);
-						pState->m_bServerClosed = true;
-
-						co_return {};
-					}
-				;
-
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-					pState->m_bServerAccepted = true;
-				}
-
-				co_return {};
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-
-		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, CStr("localhost")
-				, CStr()
-				, ENetAddressType_TCPv4
-				, ListenResult.m_ListenPorts[0]
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		CAsyncSocketCallbacks ClientCallbacks;
-		pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("BeforeClose"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		pState->m_ClientSocket(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, CStr("Done")).f_DiscardResult();
-
-		bool bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerAccepted && pState->m_bServerReceived && pState->m_bServerClosed;
-				}
-			)
-		;
-		DMibExpectFalse(bTimedOut);
-		{
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_ServerBuffer, ==, CStr("BeforeClose"));
-		}
-	}
-
+	void fp_Test(TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories, CStr const &_AcceptError, CStr const &_ConnectError, bool _bTestTimeout = false);
+	bool fp_TestConnect(TCSharedPointerSupportWeak<CState> const &_pState, CStr const &_AcceptError, CStr const &_ConnectError);
+	bool fp_WaitForCondition(TCFunction<bool ()> const &_fPredicate);
+	void fp_TestUpgradeCheckDeferredBytes();
+	void fp_TestUpgradeCheckRemoteCloseFlush();
+	void fp_TestDeferredBytesBeforeAcceptClose();
 	void fp_TestImp
 		(
 			TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories
@@ -1246,1352 +338,2331 @@ private:
 			, CStr const &_Address
 			, bool _bTestTimeout
 		)
+	;
+
+	void fp_TestRetainedDeliveries();
+	void fp_TestCorruptRecordEndsStream();
+	void fp_TestUpgradeToSSL(bool _bHandshakeWithData = false);
+};
+
+CAsyncSocketUpgradeCheckResult CAsyncSocket_Tests::fs_CheckUpgradeMessage(CPagedByteVector const &_Data, CStr const &_UpgradeMessage)
+{
+	CAsyncSocketUpgradeCheckResult Result;
+	if (_Data.f_IsEmpty())
+		return Result;
+
+	bool bMatches = true;
+	umint iData = 0;
+	umint const nCompare = fg_Min(_Data.f_GetLen(), _UpgradeMessage.f_GetLen());
+	_Data.f_ReadFront
+		(
+			nCompare
+			, [&](umint _iStart, uint8 const *_pData, umint _nBytes) -> bool
+			{
+				if (NMemory::fg_MemCmp((uint8 const *)_UpgradeMessage.f_GetStr() + iData, _pData, _nBytes) == 0)
+				{
+					iData += _nBytes;
+					return _iStart + _nBytes < nCompare;
+				}
+
+				bMatches = false;
+				return false;
+			}
+		)
+	;
+
+	if (!bMatches)
 	{
-		{
-			DMibTestPath("Connection");
-			CActorRunLoopTestHelper RunLoopHelper;
-
-			auto Factories = _fGetFactories();
-			auto fServerFactory = fg_Get<0>(Factories);
-			auto fClientFactory = fg_Get<1>(Factories);
-
-			CNetAddress ListenAddress;
-			if (_Address == "localhost")
-			{
-				CNetAddressTCPv4 Address;
-				Address.f_SetLocalhost();
-				Address.m_Port = 10502;
-				ListenAddress = Address;
-			}
-			else
-				ListenAddress = CSocket::fs_ResolveAddress(_Address);
-			{
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
-				auto Cleanup = g_OnScopeExit / [&]
-					{
-						pState->f_Clear();
-					}
-				;
-
-				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-				pState->f_StartListen(ListenAddress, fServerFactory);
-
-				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-				pState->f_Connect(_Address, fClientFactory);
-
-				auto fTextBuffer = [&](CStr const &_Text)
-					{
-						CIOByteVector Buffer;
-						Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-						Buffer.f_Insert('\n');
-						return CSharedByteVector(fg_Move(Buffer));
-					}
-				;
-
-				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
-					return;
-				{
-					DMibTestPath("Messages");
-
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
-
-					bool bTimedOut = false;
-					while (!bTimedOut)
-					{
-						{
-							DMibLock(pState->m_Lock);
-							if (pState->m_Messages.f_GetLen() >= 2)
-								break;
-						}
-						bTimedOut = pState->f_Wait();
-					}
-
-					DMibExpectFalse(bTimedOut);
-					DMibExpect(pState->m_Messages.f_GetLen(), ==, 2)(NTest::ETest_FailAndStop);
-					DMibExpect(pState->m_Messages[0], ==, "TestText");
-					DMibExpect(pState->m_Messages[1], ==, "TestBuff");
-				}
-
-				{
-					DMibTestPath("Disconnect");
-
-					pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0).f_DiscardResult();
-
-					bool bTimedOut = false;
-					while (!bTimedOut)
-					{
-						{
-							DMibLock(pState->m_Lock);
-							if (!pState->m_ClientConnectionCloseMessage.f_IsEmpty() && pState->m_ServerConnections.f_IsEmpty())
-								break; // Successfully disconnected from the server
-						}
-						bTimedOut = pState->f_Wait();
-					}
-
-					DMibTest(!DMibExpr(bTimedOut));
-					DMibExpect(pState->m_ClientConnectionCloseMessage, !=, "");
-					DMibExpect(pState->m_ServerConnectionCloseMessage, !=, "");
-				}
-			}
-
-			if (_bTestTimeout)
-			{
-				DMibTestPath("Timeout");
-				TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
-				auto Cleanup = g_OnScopeExit / [&]
-					{
-						pState->f_Clear();
-					}
-				;
-
-				pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-				pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->f_StartListen(ListenAddress, fServerFactory);
-
-				pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-				pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->f_Connect(_Address, fClientFactory);
-
-				if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
-					return;
-				{
-					DMibTestPath("Timeout");
-					pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-					bool bTimedOut = fp_WaitForCondition
-						(
-							[&]
-							{
-								DMibLock(pState->m_Lock);
-								return pState->m_ServerConnectionCloseStatus == EAsyncSocketStatus_Timeout || pState->m_ClientConnectionCloseStatus == EAsyncSocketStatus_Timeout;
-							}
-						)
-					;
-
-					DMibExpectFalse(bTimedOut);
-					DMibLock(pState->m_Lock);
-					DMibTest
-						(
-							DMibExpr(pState->m_ServerConnectionCloseStatus) == DMibExpr(EAsyncSocketStatus_Timeout)
-							|| DMibExpr(pState->m_ClientConnectionCloseStatus) == DMibExpr(EAsyncSocketStatus_Timeout)
-						)
-					;
-				}
-			}
-		};
+		Result.m_nBytesConsumed = 1;
+		return Result;
 	}
 
-public:
-	// Keep TCP open after corrupting a record so only protocol termination can finish the receive stream.
-	static constexpr umint mc_RetainedDeliveriesMessageBytes = 4 * 1024 * 1024;
-
-private:
-	// A consumer that keeps every delivery until a message is whole must still get the whole message
-	void fp_TestRetainedDeliveries()
+	if (_Data.f_GetLen() >= _UpgradeMessage.f_GetLen())
 	{
-		DMibTestPath("Retained Deliveries");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-
-		struct CState
-		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
-			TCVector<CSharedByteVector> m_Chunks;
-			umint m_nReceived = 0;
-		};
-
-		TCSharedPointerSupportWeak<CState> pState = fg_Construct();
-		TCWeakPointer<CState> pStateWeak = pState;
-
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		auto fWaitForCondition = [&](auto const &_fCondition)
-			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
-
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-		auto Cleanup = g_OnScopeExit / [&]
-			{
-				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-					{
-						if (auto pState = pStateWeak.f_Lock())
-						{
-							DMibLock(pState->m_Lock);
-							pState->m_nReceived += _Data.f_GetLen();
-							pState->m_Chunks.f_Insert(fg_Move(_Data));
-							if (pState->m_nReceived >= mc_RetainedDeliveriesMessageBytes)
-								pState->m_Chunks.f_Clear();
-						}
-						co_return {};
-					}
-				;
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-				}
-				co_return {};
-			}
-		;
-		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
-			{
-				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-
-		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, CStr("localhost")
-				, CStr()
-				, ENetAddressType_TCPv4
-				, ListenResult.m_ListenPorts[0]
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		pState->m_ClientSocket = NewClientConnection.f_Accept(CAsyncSocketCallbacks()).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CIOByteVector Message;
-		Message.f_SetLen(mc_RetainedDeliveriesMessageBytes);
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, CSharedByteVector(fg_Move(Message)), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		bool bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_nReceived >= mc_RetainedDeliveriesMessageBytes;
-				}
-			)
-		;
-		DMibExpectFalse(bTimedOut);
-		{
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_nReceived, ==, mc_RetainedDeliveriesMessageBytes);
-		}
+		Result.m_Result = EAsyncSocketUpgradeCheckResult_Upgrade;
+		Result.m_nBytesConsumed = _UpgradeMessage.f_GetLen();
 	}
 
-	void fp_TestCorruptRecordEndsStream()
+	return Result;
+}
+
+void CAsyncSocket_Tests::f_DoTests()
+{
+	DMibTestSuite("Tests")
 	{
-		DMibTestPath("Corrupt Record Ends Stream");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-
-		CSSLSettings ServerSettings;
-		CCertificateOptions Options;
-		Options.m_CommonName = "Malterlib test Corrupt Record";
-		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-		Options.m_KeySetting = g_TestTestKeySetting;
-		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-		TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-		CSSLSettings ClientSettings;
-		ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-		struct CState
+		bool bTestTimeout = false;
 		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			CStr m_ServerCloseReason;
-			EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
-			bool m_bServerReceived = false;
-			bool m_bServerClosed = false;
-		};
-
-		TCSharedPointerSupportWeak<CState> pState = fg_Construct();
-		TCWeakPointer<CState> pStateWeak = pState;
-
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		auto fWaitForCondition = [&](auto const &_fCondition)
-			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
-
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-		auto CleanupServer = g_OnScopeExit / [&]
-			{
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+			DMibTestPath("TCP");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
 					{
-						if (auto pState = pStateWeak.f_Lock())
-						{
-							DMibLock(pState->m_Lock);
-							pState->m_ServerCloseStatus = _Status;
-							pState->m_ServerCloseReason = fg_Move(_Message);
-							pState->m_bServerClosed = true;
-						}
-						co_return {};
+						return {nullptr, nullptr};
 					}
-				;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
-					{
-						if (auto pState = pStateWeak.f_Lock())
-						{
-							DMibLock(pState->m_Lock);
-							pState->m_bServerReceived = true;
-						}
-						co_return {};
-					}
-				;
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-				}
-				co_return {};
-			}
-		;
-		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
-			{
-				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_SSL::fs_GetFactory(pServerContext)
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-
-		CNetAddressTCPv4 ConnectAddress;
-		ConnectAddress.f_SetLocalhost();
-		ConnectAddress.m_Port = ListenResult.m_ListenPorts[0];
-		TCUniquePointer<ICSocket> pClient = CSocket_SSL::fs_GetFactory(pClientContext)("");
-		pClient->f_Connect
-			(
-				CNetAddress(ConnectAddress)
-				, [](ENetTCPState _StateAdded)
-				{
-				}
-				, CNetAddress()
-			)
-		;
-		DMibExpectTrue(pClient->f_IsValid())(NTest::ETest_FailAndStop);
-
-		{
-			NTime::CTimeout Timeout(g_Timeout);
-			uint8 const Hello[] = "hello";
-			umint nSent = 0;
-			while (nSent < sizeof(Hello) && !Timeout.f_TimedOut())
-			{
-				nSent += pClient->f_Send(Hello + nSent, sizeof(Hello) - nSent).m_nBytes;
-				if (nSent < sizeof(Hello))
-					NSys::fg_Thread_Sleep(0.002f);
-			}
-			DMibExpect(nSent, ==, umint(sizeof(Hello)));
-		}
-		bool bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerReceived;
-				}
-			)
-		;
-		DMibExpectFalse(bTimedOut)(NTest::ETest_FailAndStop);
-
-		{
-			uint8 Garbage[64];
-			for (umint iByte = 0; iByte < sizeof(Garbage); ++iByte)
-				Garbage[iByte] = uint8(0xA5 ^ iByte);
-			fg_SendBeneathRecordLayer(pClient->f_GetOSSocket(), Garbage, sizeof(Garbage));
-		}
-
-		bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerClosed;
-				}
-			)
-		;
-		{
-			DMibTestPath("Server closes on the corrupt record");
-			DMibExpectFalse(bTimedOut);
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_AbnormalClosure);
-		}
-
-		pClient->f_Close();
-	}
-
-	void fp_TestUpgradeToSSL(bool _bHandshakeWithData = false)
-	{
-		DMibTestPath(_bHandshakeWithData ? "Upgrade To SSL With Handshake Data" : "Upgrade To SSL");
-
-		CActorRunLoopTestHelper RunLoopHelper;
-
-		CSSLSettings ServerSettings;
-		CCertificateOptions Options;
-		Options.m_CommonName = "Malterlib test Upgrade";
-		Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-		Options.m_KeySetting = g_TestTestKeySetting;
-		CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-		TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-		CSSLSettings ClientSettings;
-		ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-		ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-		TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-		FVirtualSocketFactory fServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
-		FVirtualSocketFactory fClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
-		if (_bHandshakeWithData)
-		{
-			fServerSSLFactory = [fFactory = fg_Move(fServerSSLFactory)](CStr const &_Hostname) -> TCUniquePointer<ICSocket>
-				{
-					return fg_Construct<CHandshakeWithDataSocket>(fFactory(_Hostname));
-				}
+					, ""
+					, ""
+					, bTestTimeout
+				)
 			;
 		}
-
-		struct CUpgradeState
 		{
-			CMutual m_Lock;
-			TCActorInterface<CAsyncSocketActor> m_ServerSocket;
-			TCActorInterface<CAsyncSocketActor> m_ClientSocket;
-			CStr m_ServerBuffer;
-			CStr m_ClientBuffer;
-			CStr m_Response;
-			CStr m_ServerCloseReason;
-			CStr m_ClientCloseReason;
-			EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
-			EAsyncSocketStatus m_ClientCloseStatus = EAsyncSocketStatus_None;
-			bool m_bServerReceivedPlain = false;
-			bool m_bClientReceivedPlainResponse = false;
-			bool m_bServerReceivedStartTLS = false;
-			bool m_bClientReadyForUpgrade = false;
-			bool m_bServerReceivedEncrypted = false;
-			bool m_bServerUpgraded = false;
-			bool m_bClientUpgraded = false;
+			DMibTestPath("SSL");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions Options;
+						Options.m_CommonName = "Malterlib test Self Signed";
+						Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						Options.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, ""
+					, bTestTimeout
+				)
+			;
+		}
+		fp_TestUpgradeCheckDeferredBytes();
+		fp_TestUpgradeCheckRemoteCloseFlush();
+		fp_TestDeferredBytesBeforeAcceptClose();
+		fp_TestUpgradeToSSL();
+		fp_TestUpgradeToSSL(true);
+		fp_TestCorruptRecordEndsStream();
+		fp_TestRetainedDeliveries();
+		{
+			DMibTestPath("SSL Client Certificate");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						CByteVector CertificateRequestData;
+
+						CCertificateOptions ClientOptions;
+						ClientOptions.m_CommonName = "Test Client";
+						ClientOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate
+							(
+								ServerSettings.m_PublicCertificateData
+								, ServerSettings.m_PrivateKeyData
+								, CertificateRequestData
+								, ClientSettings.m_PublicCertificateData
+							)
+						;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Client Certificate Chain Without Intermediate CA");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+
+						CCertificateOptions ClientOptions;
+						ClientOptions.m_CommonName = "Test Client";
+						ClientOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CByteVector CertificateRequestData;
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate
+							(
+								ServerSettings.m_PublicCertificateData
+								, ServerSettings.m_PrivateKeyData
+								, CertificateRequestData
+								, ClientSettings.m_PublicCertificateData
+							)
+						;
+
+						CSSLSettings ClientSettings2;
+						ClientSettings2.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings2.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						CCertificateOptions ClientOptions2;
+						ClientOptions2.m_CommonName = "Test Client";
+						ClientOptions2.m_KeySetting = g_TestTestKeySetting;
+
+						CByteVector CertificateRequestData2;
+						CCertificate::fs_GenerateClientCertificateRequest(ClientOptions2, CertificateRequestData2, ClientSettings2.m_PrivateKeyData);
+						CCertificate::fs_SignClientCertificate
+							(
+								ClientSettings.m_PublicCertificateData
+								, ClientSettings.m_PrivateKeyData
+								, CertificateRequestData2
+								, ClientSettings2.m_PublicCertificateData
+							)
+						;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings2);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Client Certificate Incorrect");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						CCertificateOptions ClientOptions;
+						ClientOptions.m_CommonName = "Test Client";
+						ClientOptions.m_KeySetting = g_TestTestKeySetting;
+						ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Client Certificate Missing");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, "Socket closed: PEER_DID_NOT_RETURN_A_CERTIFICATE"
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Client Certificate Allow Missing");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+						ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Client Certificate Incorrect Allow Missing");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+						ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+						ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+
+						CCertificateOptions ClientOptions;
+						ClientOptions.m_CommonName = "Test Client";
+						ClientOptions.m_KeySetting = g_TestTestKeySetting;
+						ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Server Certificate Incorrect");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+
+						CSSLSettings ServerSettings2;
+						CCertificateOptions ServerOptions2;
+						ServerOptions2.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions2.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions2.m_KeySetting = g_TestTestKeySetting;
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions2, ServerSettings2.m_PublicCertificateData, ServerSettings2.m_PrivateKeyData);
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_CACertificateData = ServerSettings2.m_PublicCertificateData;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Server Certificate Self Signed");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified;
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Server Certificate Child Cert");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+						CByteVector RootCertData;
+						CSecureByteVector RootKeyData;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
+
+						CByteVector ChildCertData;
+						CSecureByteVector ChildKeyData;
+						CByteVector RequestData;
+
+						CCertificateOptions RequestOptions;
+						RequestOptions.m_CommonName = "Malterlib test request";
+						RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						RequestOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
+
+						CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
+
+						ServerSettings.m_PublicCertificateData = ChildCertData;
+						ServerSettings.m_PrivateKeyData = ChildKeyData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_CACertificateData = RootCertData;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, ""
+				)
+			;
+		}
+		{
+			DMibTestPath("SSL Server Certificate Incorrect Specific");
+			fp_Test
+				(
+					[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
+					{
+						CSSLSettings ServerSettings;
+						CByteVector RootCertData;
+						CSecureByteVector RootKeyData;
+
+						CCertificateOptions ServerOptions;
+						ServerOptions.m_CommonName = "Malterlib test Self Signed";
+						ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						ServerOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
+
+						CByteVector ChildCertData;
+						CSecureByteVector ChildKeyData;
+						CByteVector RequestData;
+
+						CCertificateOptions RequestOptions;
+						RequestOptions.m_CommonName = "Malterlib test request";
+						RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
+						RequestOptions.m_KeySetting = g_TestTestKeySetting;
+
+						CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
+
+						CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
+
+						ServerSettings.m_PublicCertificateData = ChildCertData;
+						ServerSettings.m_PrivateKeyData = ChildKeyData;
+
+						TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+						CSSLSettings ClientSettings;
+						ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+						ClientSettings.m_CACertificateData = RootCertData;
+
+						TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+						return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
+					}
+					, ""
+					, "Socket closed: Mismatching specific certificate"
+				)
+			;
 		};
+	};
+}
 
-		TCSharedPointerSupportWeak<CUpgradeState> pState = fg_Construct();
-		TCWeakPointer<CUpgradeState> pStateWeak = pState;
-		auto fTextBuffer = [](CStr const &_Text)
+CAsyncSocket_Tests::CState::CState(TCSharedPointer<CDefaultRunLoop> const &_pRunLoop)
+	: m_pRunLoop(_pRunLoop)
+{
+}
+
+CAsyncSocket_Tests::CState::~CState()
+{
+	DMibLock(m_Lock);
+	m_ServerActor.f_Clear();
+	m_ListenCallbackReference.f_Clear();
+	m_ServerConnections.f_Clear();
+	m_ClientActor.f_Clear();
+	m_ClientSocket.f_Clear();
+	m_Messages.f_Clear();
+}
+
+bool CAsyncSocket_Tests::CState::f_AllServerConnectionsFinished()
+{
+	DMibLock(m_Lock);
+	for (auto &Connection : m_ServerConnections)
+	{
+		if (!Connection.m_bFinished)
+			return false;
+	}
+	return true;
+}
+
+void CAsyncSocket_Tests::CState::f_Signal()
+{
+	DMibLock(m_Lock);
+	m_bSignalCompletion = true;
+	m_pRunLoop->f_Wake();
+}
+
+bool CAsyncSocket_Tests::CState::f_Wait()
+{
+	while (true)
+	{
+		{
+			DMibLock(m_Lock);
+			if (m_bSignalCompletion)
 			{
-				CIOByteVector Buffer;
-				Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
-				return CSharedByteVector(fg_Move(Buffer));
+				m_bSignalCompletion = false;
+				break;
 			}
-		;
-		auto fUpgradeCheckMessage = [](CPagedByteVector const &_Data, CStr const &_UpgradeMessage) -> CAsyncSocketUpgradeCheckResult
+		}
+		if (m_pRunLoop->f_WaitOnceTimeout(g_Timeout))
+			return true;
+	}
+	return false;
+}
+
+void CAsyncSocket_Tests::CState::f_Clear()
+{
+	TCFutureVector<void> Destroys;
+	{
+		DMibLock(m_Lock);
+		m_bCleared = true;
+
+		m_ClientSocket.f_Destroy() > Destroys;
+
+		if (m_ClientSocket)
+			fg_Move(m_ClientSocket).f_Destroy() > Destroys;
+
+		if (m_ClientActor)
+			fg_Move(m_ClientActor).f_Destroy() > Destroys;
+
+		if (m_ListenCallbackReference)
+		{
+			m_ListenCallbackReference->f_Destroy() > Destroys;
+			m_ListenCallbackReference.f_Clear();
+		}
+
+		for (auto &Connection : m_ServerConnections)
+		{
+			if (Connection.m_Actor)
+				fg_Move(Connection.m_Actor).f_Destroy() > Destroys;
+		}
+
+		m_ServerConnections.f_Clear();
+	}
+
+	fg_AllDoneWrapped(Destroys).f_CallSync(m_pRunLoop);
+
+	{
+		DMibLock(m_Lock);
+		if (m_ServerActor)
+		{
+			auto ServerActor = m_ServerActor;
 			{
-				return fs_CheckUpgradeMessage(_Data, _UpgradeMessage);
+				DMibUnlock(m_Lock);
+				ServerActor->f_BlockDestroy(m_pRunLoop->f_ActorDestroyLoop()); // Make sure to release listen socket
 			}
-		;
+			m_ServerActor.f_Clear();
+		}
+	}
+}
 
-		TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
-		auto fWaitForCondition = [&](auto const &_fCondition)
+void CAsyncSocket_Tests::CState::f_StartListen(CNetAddress const &_ListenAddress, FVirtualSocketFactory const &_fServerFactory)
+{
+	TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
+	CAsyncSocketServerCallbacks ListenCallbacks;
+
+	ListenCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _ConnectionInfo) -> TCFuture<void>
+		{
+			CAsyncSocketCallbacks Callbacks;
+			CAsyncSocketNewServerConnection ConnectionInfo = fg_Move(_ConnectionInfo);
+			CStr ServerConnectionID;
 			{
-				NTime::CStopwatch Stopwatch;
-				Stopwatch.f_Start();
-				while (true)
-				{
-					if (_fCondition())
-						return false;
+				auto pState = pStateWeak.f_Lock();
+				if (!pState)
+					co_return {};
+				DMibLock(pState->m_Lock);
 
-					RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
-					if (Stopwatch.f_GetTime() > g_Timeout)
-						return true;
-				}
-			}
-		;
-		auto CleanupServer = g_OnScopeExit / [&]
-			{
-				pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-				fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
+				ServerConnectionID = fg_RandomID(pState->m_ServerConnections);
 
-		FAsyncSocketUpgradeCheckFactory fServerCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
-			{
-				return [fUpgradeCheckMessage, UpgradeMessage = CStr("STARTTLS")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
-					{
-						return fUpgradeCheckMessage(_Data, UpgradeMessage);
-					}
-				;
-			}
-		;
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fServerCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				auto &ServerConnection = pState->m_ServerConnections[ServerConnectionID];
 
-		// The default socket timeout (60s) is shorter than g_Timeout under sanitizers, so a heavily loaded CI machine can silently close the connection while the test is still waiting
-		ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
-			{
-				CAsyncSocketCallbacks SocketCallbacks;
-				SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-					{
-						if (auto pState = pStateWeak.f_Lock())
-						{
-							DMibLock(pState->m_Lock);
-							pState->m_ServerCloseStatus = _Status;
-							pState->m_ServerCloseReason = fg_Move(_Message);
-						}
-						co_return {};
-					}
-				;
-				SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+				Callbacks.m_fOnReceiveData = g_ActorFunctor / [=](CSharedByteVector _Data) -> TCFuture<void>
 					{
 						auto pState = pStateWeak.f_Lock();
 						if (!pState)
 							co_return {};
 
-						bool bStartTLS = false;
-						bool bPlainMessage = false;
-						bool bEncryptedMessage = false;
+						DMibLock(pState->m_Lock);
+						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+						if (!pServerConnection || pState->m_bCleared)
+							co_return {};
+
+						for (auto &Connection : pState->m_ServerConnections)
 						{
-							DMibLock(pState->m_Lock);
-							pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-							bStartTLS = pState->m_ServerBuffer == "STARTTLS";
-							bPlainMessage = pState->m_ServerBuffer == "Plain";
-							bEncryptedMessage = pState->m_ServerBuffer == "Encrypted";
-							if (bStartTLS)
-							{
-								pState->m_bServerReceivedStartTLS = true;
-								pState->m_ServerBuffer.f_Clear();
-							}
-							else if (bPlainMessage)
-							{
-								pState->m_bServerReceivedPlain = true;
-								pState->m_ServerBuffer.f_Clear();
-							}
-							else if (bEncryptedMessage)
-							{
-								pState->m_bServerReceivedEncrypted = true;
-								pState->m_ServerBuffer.f_Clear();
-							}
+							if (Connection.m_Actor)
+								Connection.m_Actor(&CAsyncSocketActor::f_SendData, CSharedByteVector(_Data), 0).f_DiscardResult();
 						}
 
-						if (bStartTLS)
+						pServerConnection->m_MessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+
+						while (pServerConnection->m_MessageBuffer.f_FindChar('\n') >= 0)
 						{
-							(
-								NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fServerSSLFactory, fTextBuffer]() -> TCFuture<void>
-								{
-									TCActor<CAsyncSocketActor> ServerSocket;
-									NTime::CStopwatch Timeout;
-									Timeout.f_Start();
-									while (!ServerSocket)
-									{
-										{
-											DMibLock(pState->m_Lock);
-											ServerSocket = pState->m_ServerSocket.f_GetActor();
-										}
-
-										if (Timeout.f_GetTime() > g_Timeout)
-											co_return DMibErrorInstance("Timed out waiting for server socket accept");
-
-										if (!ServerSocket)
-											co_await NConcurrency::fg_Timeout(0.001);
-									}
-
-									co_await NConcurrency::fg_Timeout(0.001);
-									co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("S"), 0);
-									co_await ServerSocket(&CAsyncSocketActor::f_UpgradeSocket, fServerSSLFactory, CStr());
-
-									DMibLock(pState->m_Lock);
-									pState->m_bServerUpgraded = true;
-									co_return {};
-								}
-							)
-							.f_DiscardResult();
-						}
-						else if (bPlainMessage || bEncryptedMessage)
-						{
-							TCActor<CAsyncSocketActor> ServerSocket;
-							NTime::CStopwatch Timeout;
-							Timeout.f_Start();
-							while (!ServerSocket)
+							CStr Command = fg_GetStrLineSep(pServerConnection->m_MessageBuffer);
+							if (Command == "Disconnect")
 							{
-								{
-									DMibLock(pState->m_Lock);
-									ServerSocket = pState->m_ServerSocket.f_GetActor();
-								}
-
-								if (Timeout.f_GetTime() > g_Timeout)
-									co_return DMibErrorInstance("Timed out waiting for server socket accept");
-
-								if (!ServerSocket)
-									co_await NConcurrency::fg_Timeout(0.001);
+								DMibLock(pState->m_Lock);
+								for (auto &Connection : pState->m_ServerConnections)
+									Connection.m_Actor(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, g_pCloseMessage).f_DiscardResult();
 							}
-
-							if (bPlainMessage)
-								co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("PlainResponse"), 0);
-							else
-								co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("EncryptedResponse"), 0);
 						}
 
 						co_return {};
 					}
 				;
 
-				auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
-				if (auto pState = pStateWeak.f_Lock())
-				{
-					DMibLock(pState->m_Lock);
-					pState->m_ServerSocket = fg_Move(Socket);
-				}
-				co_return {};
-			}
-		;
-		ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
-			{
-				co_return DMibErrorInstance(_ConnectionInfo.m_Error);
-			}
-		;
-
-		CNetAddressTCPv4 ListenAddress;
-		ListenAddress.f_SetLocalhost();
-		ListenAddress.m_Port = 0;
-		auto ListenResult = ServerActor
-			(
-				&CAsyncSocketServerActor::f_StartListenAddress
-				, fg_CreateVector<CNetAddress>(ListenAddress)
-				, ENetFlag_None
-				, fg_Move(ServerCallbacks)
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-		DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
-		uint16 ListenPort = ListenResult.m_ListenPorts[0];
-		auto CleanupListen = g_OnScopeExit / [&]
-			{
-				ListenResult.m_Subscription.f_Clear();
-			}
-		;
-
-		TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
-		auto CleanupClient = g_OnScopeExit / [&]
-			{
-				fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-			}
-		;
-
-		ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		FAsyncSocketUpgradeCheckFactory fClientCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
-			{
-				return [fUpgradeCheckMessage, UpgradeMessage = CStr("S")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
+				Callbacks.m_fOnClose = g_ActorFunctor / [=](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
 					{
-						return fUpgradeCheckMessage(_Data, UpgradeMessage);
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+							co_return {};
+						DMibLock(pState->m_Lock);
+						auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+						if (!pServerConnection || pState->m_bCleared)
+							co_return {};
+
+						pState->m_ServerConnectionCloseMessage = _Message;
+						pState->m_ServerConnectionCloseStatus = _Status;
+						pState->m_ServerConnectionCloseOrigin = _Origin;
+						pState->m_ServerConnections.f_Remove(pServerConnection);
+						pState->f_Signal();
+
+						co_return {};
 					}
 				;
 			}
-		;
-		ClientActor(&CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory, fClientCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 
-		CAsyncSocketNewClientConnection NewClientConnection = ClientActor
-			(
-				&CAsyncSocketClientActor::f_Connect
-				, CStr("localhost")
-				, CStr()
-				, ENetAddressType_TCPv4
-				, ListenPort
-				, CSocket_TCP::fs_GetFactory()
-			)
-			.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
-		;
-
-		CAsyncSocketCallbacks ClientCallbacks;
-		ClientCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
-			{
-				if (auto pState = pStateWeak.f_Lock())
+			auto Cleanup = g_OnScopeExit / [=]
 				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						return;
+
 					DMibLock(pState->m_Lock);
-					pState->m_ClientCloseStatus = _Status;
-					pState->m_ClientCloseReason = fg_Move(_Message);
+					auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+					if (!pServerConnection || pState->m_bCleared)
+						return;
+
+					pServerConnection->m_bFinished = true;
+					pState->f_Signal();
 				}
+			;
+
+			auto Actor = co_await ConnectionInfo.f_Accept(fg_Move(Callbacks));
+			auto Cleanup2 = co_await fg_AsyncDestroy(Actor);
+
+			auto pState = pStateWeak.f_Lock();
+			if (!pState)
 				co_return {};
-			}
-		;
-		ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fClientSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+
 			{
-				auto pState = pStateWeak.f_Lock();
-				if (!pState)
+				DMibLock(pState->m_Lock);
+				auto *pServerConnection = pState->m_ServerConnections.f_FindEqual(ServerConnectionID);
+				if (!pServerConnection || pState->m_bCleared)
 					co_return {};
 
-				bool bUpgrade = false;
-				bool bPlainResponse = false;
-				bool bEncryptedResponse = false;
+				pServerConnection->m_Actor = fg_Move(Actor);
+				Cleanup2.f_Clear();
+			}
+
+			co_return {};
+		}
+	;
+
+	ListenCallbacks.m_fFailedConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+		{
+			auto pState = pStateWeak.f_Lock();
+			if (!pState)
+				co_return {};
+
+			DMibLock(pState->m_Lock);
+			pState->m_bAcceptError = true;
+			pState->m_AcceptError = _ConnectionInfo.m_Error;
+			pState->f_Signal();
+
+			co_return {};
+		}
+	;
+
+	m_ServerActor(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector(_ListenAddress), ENetFlag_None, fg_Move(ListenCallbacks), fg_TempCopy(_fServerFactory)) > [pStateWeak]
+		(TCAsyncResult<CAsyncSocketServerActor::CListenResult> &&_Result)
+		{
+			auto pState = pStateWeak.f_Lock();
+			if (!pState)
+				return;
+
+			DMibLock(pState->m_Lock);
+			if (_Result)
+				pState->m_ListenCallbackReference = fg_Move(_Result->m_Subscription);
+			else
+				pState->m_ListenError = _Result.f_GetExceptionStr();
+			pState->f_Signal();
+		}
+	;
+	bool bTimedOutListenStart = f_Wait();
+	DMibAssert(m_ListenError, ==, "");
+	DMibAssertFalse(bTimedOutListenStart);
+	DMibAssertTrue(m_ListenCallbackReference);
+}
+
+void CAsyncSocket_Tests::CState::f_Connect(CStr const &_Address, FVirtualSocketFactory const &_fClientFactory)
+{
+	TCWeakPointer<CState> pStateWeak = fg_Explicit(this);
+	m_ClientActor(&CAsyncSocketClientActor::f_Connect, _Address, "", ENetAddressType_None, 10502, fg_TempCopy(_fClientFactory)) > [pStateWeak]
+		(TCAsyncResult<CAsyncSocketNewClientConnection> &&_Result)
+		{
+			auto pState = pStateWeak.f_Lock();
+			if (!pState)
+				return;
+			DMibLock(pState->m_Lock);
+			if (_Result)
+			{
+				auto &Result = *_Result;
+
+				CAsyncSocketCallbacks Callbacks;
+
+				Callbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+					{
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+							co_return {};
+
+						DMibLock(pState->m_Lock);
+						pState->m_ClientConnectionCloseMessage = _Message;
+						pState->m_ClientConnectionCloseStatus = _Status;
+						pState->m_ClientConnectionCloseOrigin = _Origin;
+						pState->f_Signal();
+
+						co_return {};
+					}
+				;
+
+				Callbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+					{
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+							co_return {};
+						DMibLock(pState->m_Lock);
+						pState->m_ClientMessageBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+
+						while (pState->m_ClientMessageBuffer.f_FindChar('\n') >= 0)
+							pState->m_Messages.f_Insert(fg_GetStrLineSep(pState->m_ClientMessageBuffer));
+
+						pState->f_Signal();
+
+						co_return {};
+					}
+				;
+
+				auto Cleanup = g_OnScopeExitActor / [pStateWeak]
+					{
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+							return;
+
+						DMibLock(pState->m_Lock);
+						pState->m_bClientConnectionResult = true;
+						pState->f_Signal();
+					}
+				;
+
+				Result.f_Accept(fg_Move(Callbacks)) > [pStateWeak, Cleanup](TCAsyncResult<TCActorInterface<CAsyncSocketActor>> &&_Socket)
+					{
+						if (!_Socket)
+							return;
+
+						auto pState = pStateWeak.f_Lock();
+						if (!pState)
+						{
+							fg_Move(*_Socket).f_Destroy().f_DiscardResult();
+							return;
+						}
+
+						DMibLock(pState->m_Lock);
+
+						if (pState->m_bCleared)
+						{
+							fg_Move(*_Socket).f_Destroy().f_DiscardResult();
+							return;
+						}
+
+						pState->m_ClientSocket = fg_Move(*_Socket);
+					}
+				;
+			}
+			else
+			{
+				pState->m_bClientConnectionResult = true;
+				pState->m_ClientConnectionError = _Result.f_GetExceptionStr();
+			}
+
+			pState->f_Signal();
+		}
+	;
+}
+
+void CAsyncSocket_Tests::fp_Test
+	(
+		TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories
+		, CStr const &_AcceptError
+		, CStr const &_ConnectError
+		, bool _bTestTimeout
+	)
+{
+	{
+		DMibTestPath("IP");
+		fp_TestImp(_fGetFactories, _AcceptError, _ConnectError, "localhost", _bTestTimeout);
+	}
+	{
+		DMibTestPath("Unix");
+		fp_TestImp(_fGetFactories, _AcceptError, _ConnectError, "UNIX:" + fg_GetSafeUnixSocketPath("{}/AsyncSocket.socket"_f << NFile::CFile::fs_GetProgramDirectory()), false);
+	}
+}
+
+bool CAsyncSocket_Tests::fp_TestConnect(TCSharedPointerSupportWeak<CState> const &_pState, CStr const &_AcceptError, CStr const &_ConnectError)
+{
+	auto pState = _pState;
+	DMibTestPath("Connect");
+
+	bool bTimedOut = false;
+
+	while (!bTimedOut)
+	{
+		{
+			DMibLock(pState->m_Lock);
+			if (pState->m_bAcceptError && pState->m_bClientConnectionResult)
+				break; // Server accept failed
+			if (pState->m_bClientConnectionResult)
+			{
+				if
+				(
+					!pState->m_ClientSocket
+					&& (pState->m_bAcceptError || !pState->m_ServerConnections.f_IsEmpty() || (!pState->m_ClientConnectionError.f_IsEmpty() && _AcceptError.f_IsEmpty()))
+				)
 				{
-					DMibLock(pState->m_Lock);
-					pState->m_ClientBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
-					bUpgrade = pState->m_ClientBuffer == "S";
-					bPlainResponse = pState->m_ClientBuffer == "PlainResponse";
-					bEncryptedResponse = pState->m_ClientBuffer == "EncryptedResponse";
-					if (bUpgrade)
-					{
-						pState->m_bClientReadyForUpgrade = true;
-						pState->m_ClientBuffer.f_Clear();
-					}
-					else if (bPlainResponse)
-					{
-						pState->m_bClientReceivedPlainResponse = true;
-						pState->m_ClientBuffer.f_Clear();
-					}
-					else if (bEncryptedResponse)
-					{
-						pState->m_Response = pState->m_ClientBuffer;
-						pState->m_ClientBuffer.f_Clear();
-					}
+					break; // Client connection failed
 				}
 
-				if (bUpgrade)
+				if (pState->m_ClientSocket && !pState->m_ServerConnections.f_IsEmpty() && pState->f_AllServerConnectionsFinished())
+					break; // Successfully done
+			}
+		}
+		bTimedOut = pState->f_Wait();
+	}
+
+	DMibTest(!DMibExpr(bTimedOut));
+
+	if (!_ConnectError.f_IsEmpty())
+	{
+		DMibExpect(pState->m_ClientConnectionError, ==, _ConnectError);
+		return false;
+	}
+
+	if (!_AcceptError.f_IsEmpty())
+	{
+		DMibTest(DMibExpr(pState->m_bAcceptError));
+		DMibExpect(pState->m_AcceptError, ==, _AcceptError);
+		return false;
+	}
+
+	DMibTest(!DMibExpr(pState->m_bAcceptError));
+	DMibTest(DMibExpr(pState->m_AcceptError) == DMibExpr(""));
+
+	DMibTest(DMibExpr(pState->m_ClientConnectionError) == DMibExpr(""));
+
+	DMibAssertFalse(pState->m_ServerConnections.f_IsEmpty());
+	DMibAssertTrue(pState->m_ClientSocket);
+	return true;
+}
+
+bool CAsyncSocket_Tests::fp_WaitForCondition(TCFunction<bool ()> const &_fPredicate)
+{
+	bool bTimedOut = false;
+
+	NTime::CStopwatch Stopwatch;
+	Stopwatch.f_Start();
+
+	while (!_fPredicate())
+	{
+		NSys::fg_Thread_Sleep(0.01f);
+		if (Stopwatch.f_GetTime() > 30.0)
+		{
+			bTimedOut = true;
+			break;
+		}
+	}
+
+	return bTimedOut;
+}
+
+void CAsyncSocket_Tests::fp_TestUpgradeCheckDeferredBytes()
+{
+	DMibTestPath("Upgrade Check Deferred Bytes");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+	struct CUpgradeCheckDeferredState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+		CStr m_ServerBuffer;
+		bool m_bCheckUpgradeCalled = false;
+		bool m_bServerAccepted = false;
+		bool m_bServerReceivedPlain = false;
+		bool m_bServerReceived = false;
+	};
+
+	TCSharedPointerSupportWeak<CUpgradeCheckDeferredState> pState = fg_Construct();
+	TCWeakPointer<CUpgradeCheckDeferredState> pStateWeak = pState;
+	auto fTextBuffer = [](CStr const &_Text)
+		{
+			CIOByteVector Buffer;
+			Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+			return CSharedByteVector(fg_Move(Buffer));
+		}
+	;
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+	auto Cleanup = g_OnScopeExit / [&]
+		{
+			pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [pStateWeak]() -> FAsyncSocketUpgradeCheck
+		{
+			return [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
 				{
-					(
-						NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fClientSSLFactory, fTextBuffer]() -> TCFuture<void>
+					CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
+					if (Result.m_Result == EAsyncSocketUpgradeCheckResult_Upgrade)
+					{
+						if (auto pState = pStateWeak.f_Lock())
 						{
-							co_await NConcurrency::fg_Timeout(0.001);
-							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost"));
+							DMibLock(pState->m_Lock);
+							pState->m_bCheckUpgradeCalled = true;
+						}
+					}
+
+					return Result;
+				}
+			;
+		}
+	;
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			co_await NConcurrency::fg_Timeout(0.1);
+
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					DMibLock(pState->m_Lock);
+					pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+					if (pState->m_ServerBuffer == "Plain")
+					{
+						pState->m_bServerReceivedPlain = true;
+						pState->m_ServerBuffer.f_Clear();
+					}
+					else if (pState->m_ServerBuffer == "STARTTLS")
+					{
+						pState->m_bServerReceived = true;
+						pState->m_ServerBuffer.f_Clear();
+					}
+
+					co_return {};
+				}
+			;
+
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+				pState->m_bServerAccepted = true;
+			}
+
+			co_return {};
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+
+	CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+		(
+			&CAsyncSocketClientActor::f_Connect
+			, CStr("localhost")
+			, CStr()
+			, ENetAddressType_TCPv4
+			, ListenResult.m_ListenPorts[0]
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	CAsyncSocketCallbacks ClientCallbacks;
+	pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("PlainSTARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	bool bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerAccepted && pState->m_bServerReceivedPlain && pState->m_bCheckUpgradeCalled && pState->m_bServerReceived;
+			}
+		)
+	;
+	DMibExpectFalse(bTimedOut);
+}
+
+void CAsyncSocket_Tests::fp_TestUpgradeCheckRemoteCloseFlush()
+{
+	DMibTestPath("Upgrade Check Remote Close Flush");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+	struct CUpgradeCheckCloseState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+		CStr m_ServerBuffer;
+		bool m_bServerCheckWaiting = false;
+		bool m_bServerClosed = false;
+		bool m_bServerReceivedPartial = false;
+	};
+
+	TCSharedPointerSupportWeak<CUpgradeCheckCloseState> pState = fg_Construct();
+	TCWeakPointer<CUpgradeCheckCloseState> pStateWeak = pState;
+	auto fTextBuffer = [](CStr const &_Text)
+		{
+			CIOByteVector Buffer;
+			Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+			return CSharedByteVector(fg_Move(Buffer));
+		}
+	;
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+	auto fCheckUpgradePrefix = [pStateWeak](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
+		{
+			CAsyncSocketUpgradeCheckResult Result = fs_CheckUpgradeMessage(_Data, "STARTTLS");
+
+			if (Result.m_Result == EAsyncSocketUpgradeCheckResult_MoreDataNeeded && !Result.m_nBytesConsumed && _Data.f_GetLen() == CStr("STAR").f_GetLen())
+			{
+				if (auto pState = pStateWeak.f_Lock())
+				{
+					DMibLock(pState->m_Lock);
+					pState->m_bServerCheckWaiting = true;
+				}
+			}
+
+			return Result;
+		}
+	;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+	auto Cleanup = g_OnScopeExit / [&]
+		{
+			pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = [fCheckUpgradePrefix]() -> FAsyncSocketUpgradeCheck
+		{
+			return fCheckUpgradePrefix;
+		}
+	;
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					DMibLock(pState->m_Lock);
+					pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+					if (pState->m_ServerBuffer == "STAR")
+						pState->m_bServerReceivedPartial = true;
+
+					co_return {};
+				}
+			;
+			SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					DMibLock(pState->m_Lock);
+					pState->m_bServerClosed = true;
+
+					co_return {};
+				}
+			;
+
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+			}
+
+			co_return {};
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+
+	CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+		(
+			&CAsyncSocketClientActor::f_Connect
+			, CStr("localhost")
+			, CStr()
+			, ENetAddressType_TCPv4
+			, ListenResult.m_ListenPorts[0]
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	CAsyncSocketCallbacks ClientCallbacks;
+	pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STAR"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	bool bCheckTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerCheckWaiting;
+			}
+		)
+	;
+	DMibExpectFalse(bCheckTimedOut);
+
+	pState->m_ClientSocket(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, CStr("Done")).f_DiscardResult();
+
+	bool bCloseTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerReceivedPartial && pState->m_bServerClosed;
+			}
+		)
+	;
+	DMibExpectFalse(bCloseTimedOut);
+	{
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_bServerReceivedPartial, ==, true);
+		DMibExpect(pState->m_bServerClosed, ==, true);
+		DMibExpect(pState->m_ServerBuffer, ==, CStr("STAR"));
+	}
+}
+
+void CAsyncSocket_Tests::fp_TestDeferredBytesBeforeAcceptClose()
+{
+	DMibTestPath("Deferred Bytes Before Accept Close");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+	struct CDeferredCloseState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+		CStr m_ServerBuffer;
+		bool m_bServerAccepted = false;
+		bool m_bServerReceived = false;
+		bool m_bServerClosed = false;
+	};
+
+	TCSharedPointerSupportWeak<CDeferredCloseState> pState = fg_Construct();
+	TCWeakPointer<CDeferredCloseState> pStateWeak = pState;
+	auto fTextBuffer = [](CStr const &_Text)
+		{
+			CIOByteVector Buffer;
+			Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+			return CSharedByteVector(fg_Move(Buffer));
+		}
+	;
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+	auto Cleanup = g_OnScopeExit / [&]
+		{
+			pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			co_await NConcurrency::fg_Timeout(0.1);
+
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					DMibLock(pState->m_Lock);
+					pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+					if (pState->m_ServerBuffer == "BeforeClose")
+						pState->m_bServerReceived = true;
+
+					co_return {};
+				}
+			;
+			SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					DMibLock(pState->m_Lock);
+					pState->m_bServerClosed = true;
+
+					co_return {};
+				}
+			;
+
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+				pState->m_bServerAccepted = true;
+			}
+
+			co_return {};
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+
+	CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+		(
+			&CAsyncSocketClientActor::f_Connect
+			, CStr("localhost")
+			, CStr()
+			, ENetAddressType_TCPv4
+			, ListenResult.m_ListenPorts[0]
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	CAsyncSocketCallbacks ClientCallbacks;
+	pState->m_ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("BeforeClose"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	pState->m_ClientSocket(&CAsyncSocketActor::f_Close, EAsyncSocketStatus_NormalClosure, CStr("Done")).f_DiscardResult();
+
+	bool bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerAccepted && pState->m_bServerReceived && pState->m_bServerClosed;
+			}
+		)
+	;
+	DMibExpectFalse(bTimedOut);
+	{
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_ServerBuffer, ==, CStr("BeforeClose"));
+	}
+}
+
+void CAsyncSocket_Tests::fp_TestImp
+	(
+		TCFunction<TCTuple<FVirtualSocketFactory, FVirtualSocketFactory> ()> const &_fGetFactories
+		, CStr const &_AcceptError
+		, CStr const &_ConnectError
+		, CStr const &_Address
+		, bool _bTestTimeout
+	)
+{
+	{
+		DMibTestPath("Connection");
+		CActorRunLoopTestHelper RunLoopHelper;
+
+		auto Factories = _fGetFactories();
+		auto fServerFactory = fg_Get<0>(Factories);
+		auto fClientFactory = fg_Get<1>(Factories);
+
+		CNetAddress ListenAddress;
+		if (_Address == "localhost")
+		{
+			CNetAddressTCPv4 Address;
+			Address.f_SetLocalhost();
+			Address.m_Port = 10502;
+			ListenAddress = Address;
+		}
+		else
+			ListenAddress = CSocket::fs_ResolveAddress(_Address);
+		{
+			TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
+			auto Cleanup = g_OnScopeExit / [&]
+				{
+					pState->f_Clear();
+				}
+			;
+
+			pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+			pState->f_StartListen(ListenAddress, fServerFactory);
+
+			pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+			pState->f_Connect(_Address, fClientFactory);
+
+			auto fTextBuffer = [&](CStr const &_Text)
+				{
+					CIOByteVector Buffer;
+					Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+					Buffer.f_Insert('\n');
+					return CSharedByteVector(fg_Move(Buffer));
+				}
+			;
+
+			if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
+				return;
+			{
+				DMibTestPath("Messages");
+
+				pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestText"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
+				pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("TestBuff"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout / 3);
+
+				bool bTimedOut = false;
+				while (!bTimedOut)
+				{
+					{
+						DMibLock(pState->m_Lock);
+						if (pState->m_Messages.f_GetLen() >= 2)
+							break;
+					}
+					bTimedOut = pState->f_Wait();
+				}
+
+				DMibExpectFalse(bTimedOut);
+				DMibExpect(pState->m_Messages.f_GetLen(), ==, 2)(NTest::ETest_FailAndStop);
+				DMibExpect(pState->m_Messages[0], ==, "TestText");
+				DMibExpect(pState->m_Messages[1], ==, "TestBuff");
+			}
+
+			{
+				DMibTestPath("Disconnect");
+
+				pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Disconnect"), 0).f_DiscardResult();
+
+				bool bTimedOut = false;
+				while (!bTimedOut)
+				{
+					{
+						DMibLock(pState->m_Lock);
+						if (!pState->m_ClientConnectionCloseMessage.f_IsEmpty() && pState->m_ServerConnections.f_IsEmpty())
+							break; // Successfully disconnected from the server
+					}
+					bTimedOut = pState->f_Wait();
+				}
+
+				DMibTest(!DMibExpr(bTimedOut));
+				DMibExpect(pState->m_ClientConnectionCloseMessage, !=, "");
+				DMibExpect(pState->m_ServerConnectionCloseMessage, !=, "");
+			}
+		}
+
+		if (_bTestTimeout)
+		{
+			DMibTestPath("Timeout");
+			TCSharedPointerSupportWeak<CState> pState = fg_Construct(RunLoopHelper.m_pRunLoop);
+			auto Cleanup = g_OnScopeExit / [&]
+				{
+					pState->f_Clear();
+				}
+			;
+
+			pState->m_ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+			pState->m_ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->f_StartListen(ListenAddress, fServerFactory);
+
+			pState->m_ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+			pState->m_ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->f_Connect(_Address, fClientFactory);
+
+			if (!fp_TestConnect(pState, _AcceptError, _ConnectError))
+				return;
+			{
+				DMibTestPath("Timeout");
+				pState->m_ClientSocket(&CAsyncSocketActor::f_DebugStopProcessing, 1.0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+				bool bTimedOut = fp_WaitForCondition
+					(
+						[&]
+						{
+							DMibLock(pState->m_Lock);
+							return pState->m_ServerConnectionCloseStatus == EAsyncSocketStatus_Timeout || pState->m_ClientConnectionCloseStatus == EAsyncSocketStatus_Timeout;
+						}
+					)
+				;
+
+				DMibExpectFalse(bTimedOut);
+				DMibLock(pState->m_Lock);
+				DMibTest
+					(
+						DMibExpr(pState->m_ServerConnectionCloseStatus) == DMibExpr(EAsyncSocketStatus_Timeout)
+						|| DMibExpr(pState->m_ClientConnectionCloseStatus) == DMibExpr(EAsyncSocketStatus_Timeout)
+					)
+				;
+			}
+		}
+	};
+}
+
+// A consumer that keeps every delivery until a message is whole must still get the whole message.
+void CAsyncSocket_Tests::fp_TestRetainedDeliveries()
+{
+	DMibTestPath("Retained Deliveries");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+
+	struct CState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+		TCVector<CSharedByteVector> m_Chunks;
+		umint m_nReceived = 0;
+	};
+
+	TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+	TCWeakPointer<CState> pStateWeak = pState;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+	auto Cleanup = g_OnScopeExit / [&]
+		{
+			pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					if (auto pState = pStateWeak.f_Lock())
+					{
+						DMibLock(pState->m_Lock);
+						pState->m_nReceived += _Data.f_GetLen();
+						pState->m_Chunks.f_Insert(fg_Move(_Data));
+						if (pState->m_nReceived >= mc_RetainedDeliveriesMessageBytes)
+							pState->m_Chunks.f_Clear();
+					}
+					co_return {};
+				}
+			;
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+			}
+			co_return {};
+		}
+	;
+	ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+		{
+			co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+
+	CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+		(
+			&CAsyncSocketClientActor::f_Connect
+			, CStr("localhost")
+			, CStr()
+			, ENetAddressType_TCPv4
+			, ListenResult.m_ListenPorts[0]
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	pState->m_ClientSocket = NewClientConnection.f_Accept(CAsyncSocketCallbacks()).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CIOByteVector Message;
+	Message.f_SetLen(mc_RetainedDeliveriesMessageBytes);
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, CSharedByteVector(fg_Move(Message)), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	bool bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_nReceived >= mc_RetainedDeliveriesMessageBytes;
+			}
+		)
+	;
+	DMibExpectFalse(bTimedOut);
+	{
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_nReceived, ==, mc_RetainedDeliveriesMessageBytes);
+	}
+}
+
+void CAsyncSocket_Tests::fp_TestCorruptRecordEndsStream()
+{
+	DMibTestPath("Corrupt Record Ends Stream");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+
+	CSSLSettings ServerSettings;
+	CCertificateOptions Options;
+	Options.m_CommonName = "Malterlib test Corrupt Record";
+	Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+	Options.m_KeySetting = g_TestTestKeySetting;
+	CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+	TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+	CSSLSettings ClientSettings;
+	ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+	ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+	TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+	struct CState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		CStr m_ServerCloseReason;
+		EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
+		bool m_bServerReceived = false;
+		bool m_bServerClosed = false;
+	};
+
+	TCSharedPointerSupportWeak<CState> pState = fg_Construct();
+	TCWeakPointer<CState> pStateWeak = pState;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+	auto CleanupServer = g_OnScopeExit / [&]
+		{
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+				{
+					if (auto pState = pStateWeak.f_Lock())
+					{
+						DMibLock(pState->m_Lock);
+						pState->m_ServerCloseStatus = _Status;
+						pState->m_ServerCloseReason = fg_Move(_Message);
+						pState->m_bServerClosed = true;
+					}
+					co_return {};
+				}
+			;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					if (auto pState = pStateWeak.f_Lock())
+					{
+						DMibLock(pState->m_Lock);
+						pState->m_bServerReceived = true;
+					}
+					co_return {};
+				}
+			;
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+			}
+			co_return {};
+		}
+	;
+	ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+		{
+			co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_SSL::fs_GetFactory(pServerContext)
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+
+	CNetAddressTCPv4 ConnectAddress;
+	ConnectAddress.f_SetLocalhost();
+	ConnectAddress.m_Port = ListenResult.m_ListenPorts[0];
+	TCUniquePointer<ICSocket> pClient = CSocket_SSL::fs_GetFactory(pClientContext)("");
+	pClient->f_Connect
+		(
+			CNetAddress(ConnectAddress)
+			, [](ENetTCPState _StateAdded)
+			{
+			}
+			, CNetAddress()
+		)
+	;
+	DMibExpectTrue(pClient->f_IsValid())(NTest::ETest_FailAndStop);
+
+	{
+		NTime::CTimeout Timeout(g_Timeout);
+		uint8 const Hello[] = "hello";
+		umint nSent = 0;
+		while (nSent < sizeof(Hello) && !Timeout.f_TimedOut())
+		{
+			nSent += pClient->f_Send(Hello + nSent, sizeof(Hello) - nSent).m_nBytes;
+			if (nSent < sizeof(Hello))
+				NSys::fg_Thread_Sleep(0.002f);
+		}
+		DMibExpect(nSent, ==, umint(sizeof(Hello)));
+	}
+	bool bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerReceived;
+			}
+		)
+	;
+	DMibExpectFalse(bTimedOut)(NTest::ETest_FailAndStop);
+
+	{
+		uint8 Garbage[64];
+		for (umint iByte = 0; iByte < sizeof(Garbage); ++iByte)
+			Garbage[iByte] = uint8(0xA5 ^ iByte);
+		fg_SendBeneathRecordLayer(pClient->f_GetOSSocket(), Garbage, sizeof(Garbage));
+	}
+
+	bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerClosed;
+			}
+		)
+	;
+	{
+		DMibTestPath("Server closes on the corrupt record");
+		DMibExpectFalse(bTimedOut);
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_AbnormalClosure);
+	}
+
+	pClient->f_Close();
+}
+
+void CAsyncSocket_Tests::fp_TestUpgradeToSSL(bool _bHandshakeWithData)
+{
+	DMibTestPath(_bHandshakeWithData ? "Upgrade To SSL With Handshake Data" : "Upgrade To SSL");
+
+	CActorRunLoopTestHelper RunLoopHelper;
+
+	CSSLSettings ServerSettings;
+	CCertificateOptions Options;
+	Options.m_CommonName = "Malterlib test Upgrade";
+	Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
+	Options.m_KeySetting = g_TestTestKeySetting;
+	CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
+	TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
+
+	CSSLSettings ClientSettings;
+	ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
+	ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
+	TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
+
+	FVirtualSocketFactory fServerSSLFactory = CSocket_SSL::fs_GetFactory(pServerContext);
+	FVirtualSocketFactory fClientSSLFactory = CSocket_SSL::fs_GetFactory(pClientContext);
+	if (_bHandshakeWithData)
+	{
+		fServerSSLFactory = [fFactory = fg_Move(fServerSSLFactory)](CStr const &_Hostname) -> TCUniquePointer<ICSocket>
+			{
+				return fg_Construct<CHandshakeWithDataSocket>(fFactory(_Hostname));
+			}
+		;
+	}
+
+	struct CUpgradeState
+	{
+		CMutual m_Lock;
+		TCActorInterface<CAsyncSocketActor> m_ServerSocket;
+		TCActorInterface<CAsyncSocketActor> m_ClientSocket;
+		CStr m_ServerBuffer;
+		CStr m_ClientBuffer;
+		CStr m_Response;
+		CStr m_ServerCloseReason;
+		CStr m_ClientCloseReason;
+		EAsyncSocketStatus m_ServerCloseStatus = EAsyncSocketStatus_None;
+		EAsyncSocketStatus m_ClientCloseStatus = EAsyncSocketStatus_None;
+		bool m_bServerReceivedPlain = false;
+		bool m_bClientReceivedPlainResponse = false;
+		bool m_bServerReceivedStartTLS = false;
+		bool m_bClientReadyForUpgrade = false;
+		bool m_bServerReceivedEncrypted = false;
+		bool m_bServerUpgraded = false;
+		bool m_bClientUpgraded = false;
+	};
+
+	TCSharedPointerSupportWeak<CUpgradeState> pState = fg_Construct();
+	TCWeakPointer<CUpgradeState> pStateWeak = pState;
+	auto fTextBuffer = [](CStr const &_Text)
+		{
+			CIOByteVector Buffer;
+			Buffer.f_Insert((uint8 const *)_Text.f_GetStr(), _Text.f_GetLen());
+			return CSharedByteVector(fg_Move(Buffer));
+		}
+	;
+	auto fUpgradeCheckMessage = [](CPagedByteVector const &_Data, CStr const &_UpgradeMessage) -> CAsyncSocketUpgradeCheckResult
+		{
+			return fs_CheckUpgradeMessage(_Data, _UpgradeMessage);
+		}
+	;
+
+	TCActor<CAsyncSocketServerActor> ServerActor = fg_ConstructActor<CAsyncSocketServerActor>();
+	auto fWaitForCondition = [&](auto const &_fCondition)
+		{
+			NTime::CStopwatch Stopwatch;
+			Stopwatch.f_Start();
+			while (true)
+			{
+				if (_fCondition())
+					return false;
+
+				RunLoopHelper.m_pRunLoop->f_WaitOnceTimeout(0.05);
+				if (Stopwatch.f_GetTime() > g_Timeout)
+					return true;
+			}
+		}
+	;
+	auto CleanupServer = g_OnScopeExit / [&]
+		{
+			pState->m_ClientSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			pState->m_ServerSocket.f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+			fg_Move(ServerActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	FAsyncSocketUpgradeCheckFactory fServerCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
+		{
+			return [fUpgradeCheckMessage, UpgradeMessage = CStr("STARTTLS")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
+				{
+					return fUpgradeCheckMessage(_Data, UpgradeMessage);
+				}
+			;
+		}
+	;
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory, fServerCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	// The default socket timeout (60s) is shorter than g_Timeout under sanitizers, so a heavily loaded CI machine can silently close the connection while the test is still waiting
+	ServerActor(&CAsyncSocketServerActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketServerCallbacks ServerCallbacks;
+	ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		{
+			CAsyncSocketCallbacks SocketCallbacks;
+			SocketCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+				{
+					if (auto pState = pStateWeak.f_Lock())
+					{
+						DMibLock(pState->m_Lock);
+						pState->m_ServerCloseStatus = _Status;
+						pState->m_ServerCloseReason = fg_Move(_Message);
+					}
+					co_return {};
+				}
+			;
+			SocketCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fServerSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+				{
+					auto pState = pStateWeak.f_Lock();
+					if (!pState)
+						co_return {};
+
+					bool bStartTLS = false;
+					bool bPlainMessage = false;
+					bool bEncryptedMessage = false;
+					{
+						DMibLock(pState->m_Lock);
+						pState->m_ServerBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+						bStartTLS = pState->m_ServerBuffer == "STARTTLS";
+						bPlainMessage = pState->m_ServerBuffer == "Plain";
+						bEncryptedMessage = pState->m_ServerBuffer == "Encrypted";
+						if (bStartTLS)
+						{
+							pState->m_bServerReceivedStartTLS = true;
+							pState->m_ServerBuffer.f_Clear();
+						}
+						else if (bPlainMessage)
+						{
+							pState->m_bServerReceivedPlain = true;
+							pState->m_ServerBuffer.f_Clear();
+						}
+						else if (bEncryptedMessage)
+						{
+							pState->m_bServerReceivedEncrypted = true;
+							pState->m_ServerBuffer.f_Clear();
+						}
+					}
+
+					if (bStartTLS)
+					{
+						(
+							NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fServerSSLFactory, fTextBuffer]() -> TCFuture<void>
+							{
+								TCActor<CAsyncSocketActor> ServerSocket;
+								NTime::CStopwatch Timeout;
+								Timeout.f_Start();
+								while (!ServerSocket)
+								{
+									{
+										DMibLock(pState->m_Lock);
+										ServerSocket = pState->m_ServerSocket.f_GetActor();
+									}
+
+									if (Timeout.f_GetTime() > g_Timeout)
+										co_return DMibErrorInstance("Timed out waiting for server socket accept");
+
+									if (!ServerSocket)
+										co_await NConcurrency::fg_Timeout(0.001);
+								}
+
+								co_await NConcurrency::fg_Timeout(0.001);
+								co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("S"), 0);
+								co_await ServerSocket(&CAsyncSocketActor::f_UpgradeSocket, fServerSSLFactory, CStr());
+
+								DMibLock(pState->m_Lock);
+								pState->m_bServerUpgraded = true;
+								co_return {};
+							}
+						)
+						.f_DiscardResult();
+					}
+					else if (bPlainMessage || bEncryptedMessage)
+					{
+						TCActor<CAsyncSocketActor> ServerSocket;
+						NTime::CStopwatch Timeout;
+						Timeout.f_Start();
+						while (!ServerSocket)
+						{
 							{
 								DMibLock(pState->m_Lock);
-								pState->m_bClientUpgraded = true;
+								ServerSocket = pState->m_ServerSocket.f_GetActor();
 							}
-							co_await pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Encrypted"), 0);
-							co_return {};
-						}
-					)
-					.f_DiscardResult();
-				}
 
+							if (Timeout.f_GetTime() > g_Timeout)
+								co_return DMibErrorInstance("Timed out waiting for server socket accept");
+
+							if (!ServerSocket)
+								co_await NConcurrency::fg_Timeout(0.001);
+						}
+
+						if (bPlainMessage)
+							co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("PlainResponse"), 0);
+						else
+							co_await ServerSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("EncryptedResponse"), 0);
+					}
+
+					co_return {};
+				}
+			;
+
+			auto Socket = co_await _Connection.f_Accept(fg_Move(SocketCallbacks));
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ServerSocket = fg_Move(Socket);
+			}
+			co_return {};
+		}
+	;
+	ServerCallbacks.m_fFailedConnection = g_ActorFunctor / [](CAsyncSocketActor::CConnectionInfo _ConnectionInfo) -> TCFuture<void>
+		{
+			co_return DMibErrorInstance(_ConnectionInfo.m_Error);
+		}
+	;
+
+	CNetAddressTCPv4 ListenAddress;
+	ListenAddress.f_SetLocalhost();
+	ListenAddress.m_Port = 0;
+	auto ListenResult = ServerActor
+		(
+			&CAsyncSocketServerActor::f_StartListenAddress
+			, fg_CreateVector<CNetAddress>(ListenAddress)
+			, ENetFlag_None
+			, fg_Move(ServerCallbacks)
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+	DMibExpect(ListenResult.m_ListenPorts.f_GetLen(), ==, 1)(NTest::ETest_FailAndStop);
+	uint16 ListenPort = ListenResult.m_ListenPorts[0];
+	auto CleanupListen = g_OnScopeExit / [&]
+		{
+			ListenResult.m_Subscription.f_Clear();
+		}
+	;
+
+	TCActor<CAsyncSocketClientActor> ClientActor = fg_ConstructActor<CAsyncSocketClientActor>();
+	auto CleanupClient = g_OnScopeExit / [&]
+		{
+			fg_Move(ClientActor).f_Destroy().f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+		}
+	;
+
+	ClientActor(&CAsyncSocketClientActor::f_SetDefaultTimeout, g_Timeout).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	FAsyncSocketUpgradeCheckFactory fClientCheckUpgradeFactory = [fUpgradeCheckMessage]() -> FAsyncSocketUpgradeCheck
+		{
+			return [fUpgradeCheckMessage, UpgradeMessage = CStr("S")](CPagedByteVector const &_Data) -> CAsyncSocketUpgradeCheckResult
+				{
+					return fUpgradeCheckMessage(_Data, UpgradeMessage);
+				}
+			;
+		}
+	;
+	ClientActor(&CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory, fClientCheckUpgradeFactory).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	CAsyncSocketNewClientConnection NewClientConnection = ClientActor
+		(
+			&CAsyncSocketClientActor::f_Connect
+			, CStr("localhost")
+			, CStr()
+			, ENetAddressType_TCPv4
+			, ListenPort
+			, CSocket_TCP::fs_GetFactory()
+		)
+		.f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout)
+	;
+
+	CAsyncSocketCallbacks ClientCallbacks;
+	ClientCallbacks.m_fOnClose = g_ActorFunctor / [pStateWeak](EAsyncSocketStatus _Status, CStr _Message, EAsyncSocketCloseOrigin _Origin) -> TCFuture<void>
+		{
+			if (auto pState = pStateWeak.f_Lock())
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ClientCloseStatus = _Status;
+				pState->m_ClientCloseReason = fg_Move(_Message);
+			}
+			co_return {};
+		}
+	;
+	ClientCallbacks.m_fOnReceiveData = g_ActorFunctor / [pStateWeak, fClientSSLFactory, fTextBuffer](CSharedByteVector _Data) -> TCFuture<void>
+		{
+			auto pState = pStateWeak.f_Lock();
+			if (!pState)
 				co_return {};
-			}
-		;
 
-		auto ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		pState->m_ClientSocket = fg_Move(ClientSocket);
-		CStr UpgradeWithoutCheckError;
-		try
-		{
-			pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost")).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		}
-		catch (NException::CExceptionBase const &_Exception)
-		{
-			UpgradeWithoutCheckError = _Exception.f_GetErrorStr();
-		}
-		DMibExpect
-			(
-				UpgradeWithoutCheckError
-				, ==
-				, CStr
+			bool bUpgrade = false;
+			bool bPlainResponse = false;
+			bool bEncryptedResponse = false;
+			{
+				DMibLock(pState->m_Lock);
+				pState->m_ClientBuffer.f_AddStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+				bUpgrade = pState->m_ClientBuffer == "S";
+				bPlainResponse = pState->m_ClientBuffer == "PlainResponse";
+				bEncryptedResponse = pState->m_ClientBuffer == "EncryptedResponse";
+				if (bUpgrade)
+				{
+					pState->m_bClientReadyForUpgrade = true;
+					pState->m_ClientBuffer.f_Clear();
+				}
+				else if (bPlainResponse)
+				{
+					pState->m_bClientReceivedPlainResponse = true;
+					pState->m_ClientBuffer.f_Clear();
+				}
+				else if (bEncryptedResponse)
+				{
+					pState->m_Response = pState->m_ClientBuffer;
+					pState->m_ClientBuffer.f_Clear();
+				}
+			}
+
+			if (bUpgrade)
+			{
 				(
-					"Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return "
-					"EAsyncSocketUpgradeCheckResult_Upgrade"
+					NConcurrency::g_Dispatch(NConcurrency::fg_ConcurrentActor()) / [pState, fClientSSLFactory, fTextBuffer]() -> TCFuture<void>
+					{
+						co_await NConcurrency::fg_Timeout(0.001);
+						co_await pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost"));
+						{
+							DMibLock(pState->m_Lock);
+							pState->m_bClientUpgraded = true;
+						}
+						co_await pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Encrypted"), 0);
+						co_return {};
+					}
 				)
-			)
-		;
+				.f_DiscardResult();
+			}
 
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Plain"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-		bool bPlainTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerReceivedPlain && pState->m_bClientReceivedPlainResponse;
-				}
-			)
-		;
-		if (bPlainTimedOut)
-		{
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_bServerReceivedPlain, ==, true);
-			DMibExpect(pState->m_bClientReceivedPlainResponse, ==, true);
-			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
-			DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
-			DMibExpect(pState->m_ServerCloseReason, ==, CStr());
-			DMibExpect(pState->m_ClientCloseReason, ==, CStr());
+			co_return {};
 		}
-		DMibAssertFalse(bPlainTimedOut);
+	;
 
-		pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
-
-		bool bTimedOut = fWaitForCondition
-			(
-				[&]
-				{
-					DMibLock(pState->m_Lock);
-					return pState->m_bServerUpgraded && pState->m_bClientUpgraded && pState->m_Response == "EncryptedResponse";
-				}
-			)
-		;
-		DMibExpectFalse(bTimedOut);
-		{
-			DMibLock(pState->m_Lock);
-			DMibExpect(pState->m_bServerReceivedPlain, ==, true);
-			DMibExpect(pState->m_bClientReceivedPlainResponse, ==, true);
-			DMibExpect(pState->m_bServerReceivedStartTLS, ==, true);
-			DMibExpect(pState->m_bClientReadyForUpgrade, ==, true);
-			DMibExpect(pState->m_bServerUpgraded, ==, true);
-			DMibExpect(pState->m_bClientUpgraded, ==, true);
-			DMibExpect(pState->m_bServerReceivedEncrypted, ==, true);
-			DMibExpect(pState->m_Response, ==, CStr("EncryptedResponse"));
-			DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
-			DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
-			DMibExpect(pState->m_ServerCloseReason, ==, CStr());
-			DMibExpect(pState->m_ClientCloseReason, ==, CStr());
-		}
-	}
-
-public:
-	void f_DoTests()
+	auto ClientSocket = NewClientConnection.f_Accept(fg_Move(ClientCallbacks)).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	pState->m_ClientSocket = fg_Move(ClientSocket);
+	CStr UpgradeWithoutCheckError;
+	try
 	{
-		DMibTestSuite("Tests")
-		{
-			bool bTestTimeout = false;
-			{
-				DMibTestPath("TCP");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							return {nullptr, nullptr};
-						}
-						, ""
-						, ""
-						, bTestTimeout
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions Options;
-							Options.m_CommonName = "Malterlib test Self Signed";
-							Options.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							Options.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(Options, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, ""
-						, bTestTimeout
-					)
-				;
-			}
-			fp_TestUpgradeCheckDeferredBytes();
-			fp_TestUpgradeCheckRemoteCloseFlush();
-			fp_TestDeferredBytesBeforeAcceptClose();
-			fp_TestUpgradeToSSL();
-			fp_TestUpgradeToSSL(true);
-			fp_TestCorruptRecordEndsStream();
-			fp_TestRetainedDeliveries();
-			{
-				DMibTestPath("SSL Client Certificate");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							CByteVector CertificateRequestData;
-
-							CCertificateOptions ClientOptions;
-							ClientOptions.m_CommonName = "Test Client";
-							ClientOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
-							CCertificate::fs_SignClientCertificate
-								(
-									ServerSettings.m_PublicCertificateData
-									, ServerSettings.m_PrivateKeyData
-									, CertificateRequestData
-									, ClientSettings.m_PublicCertificateData
-								)
-							;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Client Certificate Chain Without Intermediate CA");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-
-							CCertificateOptions ClientOptions;
-							ClientOptions.m_CommonName = "Test Client";
-							ClientOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CByteVector CertificateRequestData;
-							CCertificate::fs_GenerateClientCertificateRequest(ClientOptions, CertificateRequestData, ClientSettings.m_PrivateKeyData);
-							CCertificate::fs_SignClientCertificate
-								(
-									ServerSettings.m_PublicCertificateData
-									, ServerSettings.m_PrivateKeyData
-									, CertificateRequestData
-									, ClientSettings.m_PublicCertificateData
-								)
-							;
-
-							CSSLSettings ClientSettings2;
-							ClientSettings2.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings2.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							CCertificateOptions ClientOptions2;
-							ClientOptions2.m_CommonName = "Test Client";
-							ClientOptions2.m_KeySetting = g_TestTestKeySetting;
-
-							CByteVector CertificateRequestData2;
-							CCertificate::fs_GenerateClientCertificateRequest(ClientOptions2, CertificateRequestData2, ClientSettings2.m_PrivateKeyData);
-							CCertificate::fs_SignClientCertificate
-								(
-									ClientSettings.m_PublicCertificateData
-									, ClientSettings.m_PrivateKeyData
-									, CertificateRequestData2
-									, ClientSettings2.m_PublicCertificateData
-								)
-							;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings2);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Client Certificate Incorrect");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							CCertificateOptions ClientOptions;
-							ClientOptions.m_CommonName = "Test Client";
-							ClientOptions.m_KeySetting = g_TestTestKeySetting;
-							ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Client Certificate Missing");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, "Socket closed: PEER_DID_NOT_RETURN_A_CERTIFICATE"
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Client Certificate Allow Missing");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-							ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Client Certificate Incorrect Allow Missing");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-							ServerSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-							ServerSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = ServerSettings.m_PublicCertificateData;
-
-							CCertificateOptions ClientOptions;
-							ClientOptions.m_CommonName = "Test Client";
-							ClientOptions.m_KeySetting = g_TestTestKeySetting;
-							ClientOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ClientOptions, ClientSettings.m_PublicCertificateData, ClientSettings.m_PrivateKeyData);
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Server Certificate Incorrect");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-
-							CSSLSettings ServerSettings2;
-							CCertificateOptions ServerOptions2;
-							ServerOptions2.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions2.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions2.m_KeySetting = g_TestTestKeySetting;
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions2, ServerSettings2.m_PublicCertificateData, ServerSettings2.m_PrivateKeyData);
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_CACertificateData = ServerSettings2.m_PublicCertificateData;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Server Certificate Self Signed");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, ServerSettings.m_PublicCertificateData, ServerSettings.m_PrivateKeyData);
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseOSStoreIfNoCASpecified;
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, "Socket closed: The certificate is self signed and cannot be found in the list of trusted certificates"
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Server Certificate Child Cert");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-							CByteVector RootCertData;
-							CSecureByteVector RootKeyData;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
-
-							CByteVector ChildCertData;
-							CSecureByteVector ChildKeyData;
-							CByteVector RequestData;
-
-							CCertificateOptions RequestOptions;
-							RequestOptions.m_CommonName = "Malterlib test request";
-							RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							RequestOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
-
-							CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
-
-							ServerSettings.m_PublicCertificateData = ChildCertData;
-							ServerSettings.m_PrivateKeyData = ChildKeyData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_CACertificateData = RootCertData;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, ""
-					)
-				;
-			}
-			{
-				DMibTestPath("SSL Server Certificate Incorrect Specific");
-				fp_Test
-					(
-						[]() -> TCTuple<FVirtualSocketFactory, FVirtualSocketFactory>
-						{
-							CSSLSettings ServerSettings;
-							CByteVector RootCertData;
-							CSecureByteVector RootKeyData;
-
-							CCertificateOptions ServerOptions;
-							ServerOptions.m_CommonName = "Malterlib test Self Signed";
-							ServerOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							ServerOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateSelfSignedCertAndKey(ServerOptions, RootCertData, RootKeyData);
-
-							CByteVector ChildCertData;
-							CSecureByteVector ChildKeyData;
-							CByteVector RequestData;
-
-							CCertificateOptions RequestOptions;
-							RequestOptions.m_CommonName = "Malterlib test request";
-							RequestOptions.m_Hostnames = fg_CreateVector<CStr>("localhost");
-							RequestOptions.m_KeySetting = g_TestTestKeySetting;
-
-							CCertificate::fs_GenerateClientCertificateRequest(RequestOptions, RequestData, ChildKeyData);
-
-							CCertificate::fs_SignClientCertificate(RootCertData, RootKeyData, RequestData, ChildCertData);
-
-							ServerSettings.m_PublicCertificateData = ChildCertData;
-							ServerSettings.m_PrivateKeyData = ChildKeyData;
-
-							TCSharedPointer<CSSLContext> pServerContext = fg_Construct(CSSLContext::EType_Server, ServerSettings);
-
-							CSSLSettings ClientSettings;
-							ClientSettings.m_VerificationFlags |= CSSLSettings::EVerificationFlag_UseSpecificPeerCertificate;
-							ClientSettings.m_CACertificateData = RootCertData;
-
-							TCSharedPointer<CSSLContext> pClientContext = fg_Construct(CSSLContext::EType_Client, ClientSettings);
-
-							return {CSocket_SSL::fs_GetFactory(pServerContext), CSocket_SSL::fs_GetFactory(pClientContext)};
-						}
-						, ""
-						, "Socket closed: Mismatching specific certificate"
-					)
-				;
-			};
-		};
+		pState->m_ClientSocket(&CAsyncSocketActor::f_UpgradeSocket, fClientSSLFactory, CStr("localhost")).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
 	}
-};
+	catch (NException::CExceptionBase const &_Exception)
+	{
+		UpgradeWithoutCheckError = _Exception.f_GetErrorStr();
+	}
+	DMibExpect
+		(
+			UpgradeWithoutCheckError
+			, ==
+			, CStr
+			(
+				"Socket upgrade requires CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory or CAsyncSocketServerActor::f_SetDefaultUpgradeCheckFactory callback to return "
+				"EAsyncSocketUpgradeCheckResult_Upgrade"
+			)
+		)
+	;
+
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("Plain"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+	bool bPlainTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerReceivedPlain && pState->m_bClientReceivedPlainResponse;
+			}
+		)
+	;
+	if (bPlainTimedOut)
+	{
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_bServerReceivedPlain, ==, true);
+		DMibExpect(pState->m_bClientReceivedPlainResponse, ==, true);
+		DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
+		DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
+		DMibExpect(pState->m_ServerCloseReason, ==, CStr());
+		DMibExpect(pState->m_ClientCloseReason, ==, CStr());
+	}
+	DMibAssertFalse(bPlainTimedOut);
+
+	pState->m_ClientSocket(&CAsyncSocketActor::f_SendData, fTextBuffer("STARTTLS"), 0).f_CallSync(RunLoopHelper.m_pRunLoop, g_Timeout);
+
+	bool bTimedOut = fWaitForCondition
+		(
+			[&]
+			{
+				DMibLock(pState->m_Lock);
+				return pState->m_bServerUpgraded && pState->m_bClientUpgraded && pState->m_Response == "EncryptedResponse";
+			}
+		)
+	;
+	DMibExpectFalse(bTimedOut);
+	{
+		DMibLock(pState->m_Lock);
+		DMibExpect(pState->m_bServerReceivedPlain, ==, true);
+		DMibExpect(pState->m_bClientReceivedPlainResponse, ==, true);
+		DMibExpect(pState->m_bServerReceivedStartTLS, ==, true);
+		DMibExpect(pState->m_bClientReadyForUpgrade, ==, true);
+		DMibExpect(pState->m_bServerUpgraded, ==, true);
+		DMibExpect(pState->m_bClientUpgraded, ==, true);
+		DMibExpect(pState->m_bServerReceivedEncrypted, ==, true);
+		DMibExpect(pState->m_Response, ==, CStr("EncryptedResponse"));
+		DMibExpect(pState->m_ServerCloseStatus, ==, EAsyncSocketStatus_None);
+		DMibExpect(pState->m_ClientCloseStatus, ==, EAsyncSocketStatus_None);
+		DMibExpect(pState->m_ServerCloseReason, ==, CStr());
+		DMibExpect(pState->m_ClientCloseReason, ==, CStr());
+	}
+}
 
 DMibTestRegister(CAsyncSocket_Tests, Malterlib::Network);

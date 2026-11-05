@@ -79,9 +79,6 @@ namespace NMib::NNetwork
 			EAsyncSocketStatus m_ErrorStatus = EAsyncSocketStatus_None;
 		};
 
-	public:
-		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
-
 		struct CInternal;
 
 		CAsyncSocketActor(bool _bClient, umint _MaxMessageSize, umint _FragmentationSize, umint _SendWindowBytes, fp64 _Timeout, FAsyncSocketUpgradeCheck &&_fCheckUpgrade);
@@ -98,6 +95,9 @@ namespace NMib::NNetwork
 #if DMibConfig_Tests_Enable
 		NConcurrency::TCFuture<void> f_DebugStopProcessing(fp64 _Timeout);
 #endif
+
+		static constexpr NConcurrency::EPriority mc_Priority = NConcurrency::EPriority_NormalHighCPU;
+
 	private:
 		friend struct NAsyncSocket::CListenActor;
 		friend struct CAsyncSocketServerActor;
@@ -148,7 +148,6 @@ namespace NMib::NNetwork
 		void fp_RejectConnection(NStr::CStr const &_Error);
 		NConcurrency::TCFuture<CFinishConnectionResult> fp_FinishConnection();
 
-	private:
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 	};
 
@@ -164,11 +163,11 @@ namespace NMib::NNetwork
 	protected:
 		struct CRepliedHelper
 		{
-			NConcurrency::TCActor<CAsyncSocketActor> m_Connection;
-			NAtomic::TCAtomic<bool> m_bRepliedToConnection;
-
 			CRepliedHelper(NConcurrency::TCActor<CAsyncSocketActor> const &_Connection);
 			~CRepliedHelper();
+
+			NConcurrency::TCActor<CAsyncSocketActor> m_Connection;
+			NAtomic::TCAtomic<bool> m_bRepliedToConnection;
 		};
 
 		NConcurrency::TCActor<CAsyncSocketActor> mp_Connection;
@@ -177,9 +176,6 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketNewClientConnection : public CAsyncSocketNewConnection
 	{
-		NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo> m_pSocketInfo;
-		NMib::NNetwork::CNetAddress m_PeerAddress;
-
 		CAsyncSocketNewClientConnection
 			(
 				NConcurrency::TCActor<CAsyncSocketActor> const &_Connection
@@ -189,29 +185,32 @@ namespace NMib::NNetwork
 		;
 		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection &&_Other);
 
+		NStorage::TCUniquePointer<NNetwork::ICSocketConnectionInfo> m_pSocketInfo;
+		NMib::NNetwork::CNetAddress m_PeerAddress;
+
 	private:
+		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection const &_Other);
+
 		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection const &_Other);
 		CAsyncSocketNewClientConnection &operator = (CAsyncSocketNewClientConnection &&_Other);
-		CAsyncSocketNewClientConnection(CAsyncSocketNewClientConnection const &_Other);
 	};
 
 	struct CAsyncSocketNewServerConnection : public CAsyncSocketNewConnection
 	{
-		CAsyncSocketActor::CConnectionInfo m_Info;
-
 		CAsyncSocketNewServerConnection(CAsyncSocketActor::CConnectionInfo &&_ConnectionInfo, NConcurrency::TCActor<CAsyncSocketActor> const &_Connection);
 		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection &&_Other);
 
+		CAsyncSocketActor::CConnectionInfo m_Info;
+
 	private:
+		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection const &_Other);
+
 		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection const &_Other);
 		CAsyncSocketNewServerConnection &operator = (CAsyncSocketNewServerConnection &&_Other);
-		CAsyncSocketNewServerConnection(CAsyncSocketNewServerConnection const &_Other);
 	};
 
 	struct CAsyncSocketClientActor : public NConcurrency::CActor
 	{
-		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
-
 		CAsyncSocketClientActor();
 		~CAsyncSocketClientActor();
 
@@ -241,9 +240,9 @@ namespace NMib::NNetwork
 			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 		; // You will receive an exception if connection fails
 
-	private:
-		NConcurrency::TCFuture<void> fp_Destroy() override;
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
+	private:
 		struct CPendingConnection
 		{
 			~CPendingConnection();
@@ -252,6 +251,8 @@ namespace NMib::NNetwork
 			NConcurrency::CIoLoopBinding m_IoBinding;
 			NStorage::TCSharedPointer<NAtomic::TCAtomic<bool>> m_pDeleted = fg_Construct(false);
 		};
+
+		NConcurrency::TCFuture<void> fp_Destroy() override;
 
 		NContainer::TCLinkedList<CPendingConnection> mp_PendingConnects;
 		NConcurrency::TCActor<NNetwork::CResolveActor> mp_AddressResolver;
@@ -270,16 +271,16 @@ namespace NMib::NNetwork
 
 	struct CAsyncSocketServerActor : public NConcurrency::CActor
 	{
-		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
-
-		CAsyncSocketServerActor();
-		~CAsyncSocketServerActor();
-
 		struct CListenResult
 		{
 			NConcurrency::CActorSubscription m_Subscription;
 			NContainer::TCVector<uint16> m_ListenPorts;
 		};
+
+		struct CInternal;
+
+		CAsyncSocketServerActor();
+		~CAsyncSocketServerActor();
 
 		auto f_StartListen
 			(
@@ -308,16 +309,14 @@ namespace NMib::NNetwork
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
 
-	private:
-		NConcurrency::TCFuture<void> fp_Destroy() override;
-
-		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, umint _ListenID);
-
-	public:
-		struct CInternal;
+		static constexpr NConcurrency::EPriority mc_Priority = CAsyncSocketActor::mc_Priority; // Keep setup and connection callbacks on the socket actors' pool.
 
 	private:
 		friend struct NAsyncSocket::CListenActor;
+
+		NConcurrency::TCFuture<void> fp_Destroy() override;
+
+		void fp_AddConnection(NConcurrency::TCActor<CAsyncSocketActor> &&_Connection, umint _ListenID);
 
 		NStorage::TCUniquePointer<CInternal> mp_pInternal;
 	};

@@ -12,6 +12,18 @@ namespace
 {
 	struct CLoopbackServer
 	{
+		enum ELoopbackType
+		{
+			ELoopbackType_Normal
+			, ELoopbackType_Echo
+			, ELoopbackType_Mirror
+		};
+
+		CLoopbackServer();
+		~CLoopbackServer();
+
+		void f_Dispatch(NFunction::TCFunction<void ()> const &_fDispatch);
+
 		NNetwork::CSocket m_ListenSocketV4;
 		NNetwork::CSocket m_ListenSocketV6;
 		NNetwork::CSocket m_EchoListenSocketV4;
@@ -23,67 +35,124 @@ namespace
 
 		NContainer::TCThreadSafeQueue<NFunction::TCFunction<void ()>> m_DispatchQueue;
 		NContainer::TCLinkedList<NStorage::TCSharedPointer<NStorage::TCSharedPointer<CSocket>>> m_ConnectedSockets;
+	};
 
-		void f_Dispatch(NFunction::TCFunction<void ()> const &_fDispatch)
-		{
-			m_DispatchQueue.f_Push(_fDispatch);
-			m_pThread->m_EventWantQuit.f_Signal();
-		}
-
-		enum ELoopbackType
-		{
-			ELoopbackType_Normal
-			, ELoopbackType_Echo
-			, ELoopbackType_Mirror
-		};
-
-		CLoopbackServer()
-		{
-			m_pThread = NThread::CThreadObject::fs_StartThread
-				(
-					[this](NThread::CThreadObject *_pThread)
-					{
-						while (_pThread->f_GetState() != NThread::EThreadState_EventWantQuit)
-						{
-							while (auto Entry = m_DispatchQueue.f_Pop())
-								(*Entry)();
-							_pThread->m_EventWantQuit.f_WaitTimeout(0.001);
-						}
-						return 0;
-					}
-					, "LoopbackServerThread"
-				)
-			;
-
-			auto fHandlerFactory = [=, this](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
+	CLoopbackServer::CLoopbackServer()
+	{
+		m_pThread = NThread::CThreadObject::fs_StartThread
+			(
+				[this](NThread::CThreadObject *_pThread)
 				{
-					return [=, this](NNetwork::ENetTCPState _StateAdded)
-						{
-							f_Dispatch
-								(
-									[=, this]()
-									{
-										if (_StateAdded & NNetwork::ENetTCPState_Connection)
-										{
-											while (true)
-											{
-												auto pSocket = &m_ConnectedSockets.f_Insert();
-												*pSocket = fg_Construct(fg_Construct());
-												auto pSocketShared = *pSocket;
-												NStorage::TCSharedPointer<NContainer::CByteVector> pSendBuffer = fg_Construct();
+					while (_pThread->f_GetState() != NThread::EThreadState_EventWantQuit)
+					{
+						while (auto Entry = m_DispatchQueue.f_Pop())
+							(*Entry)();
+						_pThread->m_EventWantQuit.f_WaitTimeout(0.001);
+					}
+					return 0;
+				}
+				, "LoopbackServerThread"
+			)
+		;
 
-												try
+		auto fHandlerFactory = [=, this](CSocket *_pListenSocket, ELoopbackType _LoopbackType)
+			{
+				return [=, this](NNetwork::ENetTCPState _StateAdded)
+					{
+						f_Dispatch
+							(
+								[=, this]()
+								{
+									if (_StateAdded & NNetwork::ENetTCPState_Connection)
+									{
+										while (true)
+										{
+											auto pSocket = &m_ConnectedSockets.f_Insert();
+											*pSocket = fg_Construct(fg_Construct());
+											auto pSocketShared = *pSocket;
+											NStorage::TCSharedPointer<NContainer::CByteVector> pSendBuffer = fg_Construct();
+
+											try
+											{
+												(**pSocket)->f_Accept
+													(
+														_pListenSocket
+														, [=, this](NNetwork::ENetTCPState _StateAdded)
+														{
+															f_Dispatch
+																(
+																	[=, this]()
+																	{
+																		if (!(*pSocketShared))
+																			return;
+																		if (_StateAdded & NNetwork::ENetTCPState_Read)
+																		{
+																			try
+																			{
+																				uint8 Buffer[4096];
+																				bool bEndOfStream = false;
+																				while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096, bEndOfStream))
+																				{
+																					if (_LoopbackType == ELoopbackType_Echo)
+																						pSendBuffer->f_Insert(Buffer, nBytes);
+																				}
+																				while (!pSendBuffer->f_IsEmpty())
+																				{
+																					umint nSent = (*pSocketShared)->f_Send(pSendBuffer->f_GetArray(), pSendBuffer->f_GetLen());
+																					if (!nSent)
+																						break;
+																					pSendBuffer->f_Remove(0, nSent);
+																				}
+																			}
+																			catch (CExceptionNet const &)
+																			{
+																				m_ConnectedSockets.f_Remove(*pSocket);
+																				(*pSocketShared)->f_Close();
+																				(*pSocketShared).f_Clear();
+																			}
+																		}
+
+																		if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
+																			(*pSocketShared)->f_Shutdown();
+
+																		if (_StateAdded & NNetwork::ENetTCPState_Closed)
+																		{
+																			m_ConnectedSockets.f_Remove(*pSocket);
+																			(*pSocketShared)->f_Close();
+																			(*pSocketShared).f_Clear();
+																		}
+																	}
+																)
+															;
+														}
+													)
+												;
+												if (!(**pSocket)->f_IsValid())
 												{
-													(**pSocket)->f_Accept
+													m_ConnectedSockets.f_Remove(*pSocket);
+													break;
+												}
+												if (_LoopbackType == ELoopbackType_Mirror)
+												{
+													auto pSocketMirror = &m_ConnectedSockets.f_Insert();
+													*pSocketMirror = fg_Construct(fg_Construct());
+													auto pSocketSharedMirror = *pSocketMirror;
+													NStorage::TCSharedPointer<NContainer::CByteVector> pSendBufferMirror = fg_Construct();
+
+													auto Peer = (*pSocketShared)->f_GetPeerAddress();
+
+													Peer.f_SetPort(20680);
+
+													(*pSocketSharedMirror)->f_AsyncConnect
 														(
-															_pListenSocket
+															Peer
 															, [=, this](NNetwork::ENetTCPState _StateAdded)
 															{
 																f_Dispatch
 																	(
 																		[=, this]()
 																		{
-																			if (!(*pSocketShared))
+																			if (!(*pSocketSharedMirror))
 																				return;
 																			if (_StateAdded & NNetwork::ENetTCPState_Read)
 																			{
@@ -91,35 +160,42 @@ namespace
 																				{
 																					uint8 Buffer[4096];
 																					bool bEndOfStream = false;
-																					while (umint nBytes = (*pSocketShared)->f_Receive(Buffer, 4096, bEndOfStream))
+																					while (umint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096, bEndOfStream))
+																						pSendBufferMirror->f_Insert(Buffer, nBytes);
+																					if (*pSocketShared)
 																					{
-																						if (_LoopbackType == ELoopbackType_Echo)
-																							pSendBuffer->f_Insert(Buffer, nBytes);
-																					}
-																					while (!pSendBuffer->f_IsEmpty())
-																					{
-																						umint nSent = (*pSocketShared)->f_Send(pSendBuffer->f_GetArray(), pSendBuffer->f_GetLen());
-																						if (!nSent)
-																							break;
-																						pSendBuffer->f_Remove(0, nSent);
+																						while (!pSendBufferMirror->f_IsEmpty())
+																						{
+																							umint nSent = (*pSocketShared)->f_Send
+																								(
+																									pSendBufferMirror->f_GetArray()
+																									, pSendBufferMirror->f_GetLen()
+																								)
+																							;
+																							if (!nSent)
+																								break;
+																							pSendBufferMirror->f_Remove(0, nSent);
+																						}
 																					}
 																				}
-																				catch (CExceptionNet const &)
+																				catch (CExceptionNet const &_Exception)
 																				{
-																					m_ConnectedSockets.f_Remove(*pSocket);
-																					(*pSocketShared)->f_Close();
-																					(*pSocketShared).f_Clear();
+																					(void)_Exception;
+																					DMibTrace("Error: {}\n", _Exception.f_GetErrorStr());
+																					m_ConnectedSockets.f_Remove(*pSocketMirror);
+																					(*pSocketSharedMirror)->f_Close();
+																					(*pSocketSharedMirror).f_Clear();
 																				}
 																			}
 
 																			if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
-																				(*pSocketShared)->f_Shutdown();
+																				(*pSocketSharedMirror)->f_Shutdown();
 
 																			if (_StateAdded & NNetwork::ENetTCPState_Closed)
 																			{
-																				m_ConnectedSockets.f_Remove(*pSocket);
-																				(*pSocketShared)->f_Close();
-																				(*pSocketShared).f_Clear();
+																				m_ConnectedSockets.f_Remove(*pSocketMirror);
+																				(*pSocketSharedMirror)->f_Close();
+																				(*pSocketSharedMirror).f_Clear();
 																			}
 																		}
 																	)
@@ -127,164 +203,93 @@ namespace
 															}
 														)
 													;
-													if (!(**pSocket)->f_IsValid())
-													{
-														m_ConnectedSockets.f_Remove(*pSocket);
-														break;
-													}
-													if (_LoopbackType == ELoopbackType_Mirror)
-													{
-														auto pSocketMirror = &m_ConnectedSockets.f_Insert();
-														*pSocketMirror = fg_Construct(fg_Construct());
-														auto pSocketSharedMirror = *pSocketMirror;
-														NStorage::TCSharedPointer<NContainer::CByteVector> pSendBufferMirror = fg_Construct();
-
-														auto Peer = (*pSocketShared)->f_GetPeerAddress();
-
-														Peer.f_SetPort(20680);
-
-														(*pSocketSharedMirror)->f_AsyncConnect
-															(
-																Peer
-																, [=, this](NNetwork::ENetTCPState _StateAdded)
-																{
-																	f_Dispatch
-																		(
-																			[=, this]()
-																			{
-																				if (!(*pSocketSharedMirror))
-																					return;
-																				if (_StateAdded & NNetwork::ENetTCPState_Read)
-																				{
-																					try
-																					{
-																						uint8 Buffer[4096];
-																						bool bEndOfStream = false;
-																						while (umint nBytes = (*pSocketSharedMirror)->f_Receive(Buffer, 4096, bEndOfStream))
-																							pSendBufferMirror->f_Insert(Buffer, nBytes);
-																						if (*pSocketShared)
-																						{
-																							while (!pSendBufferMirror->f_IsEmpty())
-																							{
-																								umint nSent = (*pSocketShared)->f_Send
-																									(
-																										pSendBufferMirror->f_GetArray()
-																										, pSendBufferMirror->f_GetLen()
-																									)
-																								;
-																								if (!nSent)
-																									break;
-																								pSendBufferMirror->f_Remove(0, nSent);
-																							}
-																						}
-																					}
-																					catch (CExceptionNet const &_Exception)
-																					{
-																						(void)_Exception;
-																						DMibTrace("Error: {}\n", _Exception.f_GetErrorStr());
-																						m_ConnectedSockets.f_Remove(*pSocketMirror);
-																						(*pSocketSharedMirror)->f_Close();
-																						(*pSocketSharedMirror).f_Clear();
-																					}
-																				}
-
-																				if (_StateAdded & NNetwork::ENetTCPState_RemoteClosed)
-																					(*pSocketSharedMirror)->f_Shutdown();
-
-																				if (_StateAdded & NNetwork::ENetTCPState_Closed)
-																				{
-																					m_ConnectedSockets.f_Remove(*pSocketMirror);
-																					(*pSocketSharedMirror)->f_Close();
-																					(*pSocketSharedMirror).f_Clear();
-																				}
-																			}
-																		)
-																	;
-																}
-															)
-														;
-													}
 												}
-												catch (CExceptionNet const &)
-												{
-													(*pSocketShared)->f_Close();
-													m_ConnectedSockets.f_Remove(*pSocket);
-													break;
-												}
+											}
+											catch (CExceptionNet const &)
+											{
+												(*pSocketShared)->f_Close();
+												m_ConnectedSockets.f_Remove(*pSocket);
+												break;
 											}
 										}
 									}
-								)
-							;
-						}
-					;
-				}
-			;
-
-			{
-				CNetAddressTCPv4 ListenV4;
-				ListenV4.f_SetLocalhost();
-				ListenV4.m_Port = 20679;
-
-				CNetAddressTCPv6 ListenV6;
-				ListenV6.f_SetLocalhost();
-				ListenV6.m_Port = 20679;
-
-				m_ListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal), NNetwork::ENetFlag_None);
-				m_ListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal), NNetwork::ENetFlag_None);
+								}
+							)
+						;
+					}
+				;
 			}
+		;
 
-			{
-				CNetAddressTCPv4 ListenV4;
-				ListenV4.f_SetLocalhost();
-				ListenV4.m_Port = 20677;
-
-				CNetAddressTCPv6 ListenV6;
-				ListenV6.f_SetLocalhost();
-				ListenV6.m_Port = 20677;
-
-				m_EchoListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo), NNetwork::ENetFlag_None);
-				m_EchoListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo), NNetwork::ENetFlag_None);
-			}
-
-			{
-				CNetAddressTCPv4 ListenV4;
-				ListenV4.f_SetLocalhost();
-				ListenV4.m_Port = 20678;
-
-				CNetAddressTCPv6 ListenV6;
-				ListenV6.f_SetLocalhost();
-				ListenV6.m_Port = 20678;
-
-				m_MirrorListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
-				m_MirrorListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
-			}
-		}
-
-		~CLoopbackServer()
 		{
-			m_pThread->f_Stop();
+			CNetAddressTCPv4 ListenV4;
+			ListenV4.f_SetLocalhost();
+			ListenV4.m_Port = 20679;
 
-			for (auto &pSocket : m_ConnectedSockets)
-				(*pSocket)->f_Close();
+			CNetAddressTCPv6 ListenV6;
+			ListenV6.f_SetLocalhost();
+			ListenV6.m_Port = 20679;
 
-			m_ConnectedSockets.f_Clear();
-			m_DispatchQueue.f_Clear();
-
-			for (auto &pSocket : m_ConnectedSockets)
-				(*pSocket)->f_Close();
-
-			m_ConnectedSockets.f_Clear();
-			m_ListenSocketV4.f_Close();
-			m_ListenSocketV6.f_Close();
-			m_EchoListenSocketV4.f_Close();
-			m_EchoListenSocketV6.f_Close();
-			m_MirrorListenSocketV4.f_Close();
-			m_MirrorListenSocketV6.f_Close();
-
-			m_pThread = nullptr;
+			m_ListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_ListenSocketV4, ELoopbackType_Normal), NNetwork::ENetFlag_None);
+			m_ListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_ListenSocketV6, ELoopbackType_Normal), NNetwork::ENetFlag_None);
 		}
-	};
+
+		{
+			CNetAddressTCPv4 ListenV4;
+			ListenV4.f_SetLocalhost();
+			ListenV4.m_Port = 20677;
+
+			CNetAddressTCPv6 ListenV6;
+			ListenV6.f_SetLocalhost();
+			ListenV6.m_Port = 20677;
+
+			m_EchoListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_EchoListenSocketV4, ELoopbackType_Echo), NNetwork::ENetFlag_None);
+			m_EchoListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_EchoListenSocketV6, ELoopbackType_Echo), NNetwork::ENetFlag_None);
+		}
+
+		{
+			CNetAddressTCPv4 ListenV4;
+			ListenV4.f_SetLocalhost();
+			ListenV4.m_Port = 20678;
+
+			CNetAddressTCPv6 ListenV6;
+			ListenV6.f_SetLocalhost();
+			ListenV6.m_Port = 20678;
+
+			m_MirrorListenSocketV4.f_Listen(CNetAddress(ListenV4), fHandlerFactory(&m_MirrorListenSocketV4, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
+			m_MirrorListenSocketV6.f_Listen(CNetAddress(ListenV6), fHandlerFactory(&m_MirrorListenSocketV6, ELoopbackType_Mirror), NNetwork::ENetFlag_None);
+		}
+	}
+
+	CLoopbackServer::~CLoopbackServer()
+	{
+		m_pThread->f_Stop();
+
+		for (auto &pSocket : m_ConnectedSockets)
+			(*pSocket)->f_Close();
+
+		m_ConnectedSockets.f_Clear();
+		m_DispatchQueue.f_Clear();
+
+		for (auto &pSocket : m_ConnectedSockets)
+			(*pSocket)->f_Close();
+
+		m_ConnectedSockets.f_Clear();
+		m_ListenSocketV4.f_Close();
+		m_ListenSocketV6.f_Close();
+		m_EchoListenSocketV4.f_Close();
+		m_EchoListenSocketV6.f_Close();
+		m_MirrorListenSocketV4.f_Close();
+		m_MirrorListenSocketV6.f_Close();
+
+		m_pThread = nullptr;
+	}
+
+	void CLoopbackServer::f_Dispatch(NFunction::TCFunction<void ()> const &_fDispatch)
+	{
+		m_DispatchQueue.f_Push(_fDispatch);
+		m_pThread->m_EventWantQuit.f_Signal();
+	}
 
 	NStorage::TCUniquePointer<CLoopbackServer> g_pLoopbackServer;
 }

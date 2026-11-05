@@ -206,361 +206,142 @@ namespace
 
 struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 {
-	void f_DoTests()
+	void f_DoTests();
+};
+
+void CAuthenticatedUnix_Tests::f_DoTests()
+{
+	DMibTestSuite("Support")
 	{
-		DMibTestSuite("Support")
-		{
-			bool const bSupported = NNetwork::fg_IsAuthenticatedUnixSupported();
+		bool const bSupported = NNetwork::fg_IsAuthenticatedUnixSupported();
 
 #if defined(DPlatformFamily_macOS) || defined(DPlatformFamily_Linux)
-			DMibExpectTrue(bSupported);
+		DMibExpectTrue(bSupported);
 #elif !defined(DPlatformFamily_Windows)
-			DMibExpectFalse(bSupported);
+		DMibExpectFalse(bSupported);
 #endif
 
-			if (!bSupported)
-			{
-				DMibTestPath("Context rejected on unsupported platform");
-
-				CSSLSettings Settings;
-				fg_MakeSelfSigned(Settings.m_PublicCertificateData, Settings.m_PrivateKeyData);
-				Settings.m_CACertificateData = Settings.m_PublicCertificateData;
-
-				bool bThrew = false;
-				try
-				{
-					// An explicit pointer type executes fg_Construct; auto would retain only its lazy proxy.
-					TCSharedPointer<CAuthenticatedUnixContext> pContext = fg_Construct(CAuthenticatedUnixContext::EType::mc_Server, Settings);
-					(void)pContext;
-				}
-				catch (NException::CException const &)
-				{
-					bThrew = true;
-				}
-
-				DMibExpectTrue(bThrew);
-			}
-		};
-
-		DMibTestSuite("Process identity API")
+		if (!bSupported)
 		{
-			if (!NNetwork::fg_IsAuthenticatedUnixSupported())
-				return;
+			DMibTestPath("Context rejected on unsupported platform");
 
+			CSSLSettings Settings;
+			fg_MakeSelfSigned(Settings.m_PublicCertificateData, Settings.m_PrivateKeyData);
+			Settings.m_CACertificateData = Settings.m_PublicCertificateData;
+
+			bool bThrew = false;
+			try
 			{
-				DMibTestPath("Connected unix socket reports both pids");
-
-				CStr Path = fg_UniqueUnixPath("Identity");
-				CNetAddress ListenAddress = CSocket::fs_ResolveAddress("UNIX:" + Path);
-
-				CSocket Listen;
-				Listen.f_Listen(ListenAddress, nullptr, ENetFlag_None);
-
-				CSocket Client;
-				Client.f_Connect(ListenAddress);
-
-				CSocket Accepted;
-				CTimeout Timeout(gc_Timeout);
-				while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
-				{
-					Accepted.f_Accept(&Listen, (NMib::NThread::CSemaphoreAggregate *)nullptr);
-					if (!Accepted.f_IsValid())
-						NSys::fg_Thread_Sleep(0.005f);
-				}
-
-				DMibExpectTrue(Accepted.f_IsValid());
-				if (Accepted.f_IsValid())
-				{
-					NSys::NNetwork::CProcessIdentity LocalIdentity;
-					NSys::NNetwork::CProcessIdentity PeerIdentity;
-					DMibExpectTrue(Accepted.f_GetProcessIdentity(LocalIdentity, PeerIdentity));
-					DMibExpect(LocalIdentity.m_ProcessID, !=, uint64(0));
-					DMibExpect(PeerIdentity.m_ProcessID, ==, LocalIdentity.m_ProcessID);
-				}
+				// An explicit pointer type executes fg_Construct; auto would retain only its lazy proxy.
+				TCSharedPointer<CAuthenticatedUnixContext> pContext = fg_Construct(CAuthenticatedUnixContext::EType::mc_Server, Settings);
+				(void)pContext;
+			}
+			catch (NException::CException const &)
+			{
+				bThrew = true;
 			}
 
-			{
-				DMibTestPath("Non-unix socket fails closed");
+			DMibExpectTrue(bThrew);
+		}
+	};
 
-				CSocket Socket;
-				DMibExpectFalse(Socket.f_IsValid());
-			}
-		};
+	DMibTestSuite("Process identity API")
+	{
+		if (!NNetwork::fg_IsAuthenticatedUnixSupported())
+			return;
 
-		DMibTestSuite("Handshake")
 		{
-			if (!NNetwork::fg_IsAuthenticatedUnixSupported())
-				return;
+			DMibTestPath("Connected unix socket reports both pids");
 
-			CByteVector ServerCertificate;
+			CStr Path = fg_UniqueUnixPath("Identity");
+			CNetAddress ListenAddress = CSocket::fs_ResolveAddress("UNIX:" + Path);
+
+			CSocket Listen;
+			Listen.f_Listen(ListenAddress, nullptr, ENetFlag_None);
+
+			CSocket Client;
+			Client.f_Connect(ListenAddress);
+
+			CSocket Accepted;
+			CTimeout Timeout(gc_Timeout);
+			while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
 			{
-				auto pServerContext = fg_MakeServerContext();
-				ServerCertificate = pServerContext->m_Settings.m_PublicCertificateData;
+				Accepted.f_Accept(&Listen, (NMib::NThread::CSemaphoreAggregate *)nullptr);
+				if (!Accepted.f_IsValid())
+					NSys::fg_Thread_Sleep(0.005f);
 			}
 
+			DMibExpectTrue(Accepted.f_IsValid());
+			if (Accepted.f_IsValid())
 			{
-				DMibTestPath("Mismatched certificate and key rejected");
-
-				CSSLSettings Settings;
-				fg_MakeSelfSigned(Settings.m_PublicCertificateData, Settings.m_PrivateKeyData);
-
-				CByteVector OtherCertificate;
-				CSecureByteVector OtherKey;
-				fg_MakeSelfSigned(OtherCertificate, OtherKey);
-				Settings.m_PrivateKeyData = OtherKey;
-
-				DMibExpectTrue(CCertificate::fs_GetCertificatePublicKey(Settings.m_PublicCertificateData) != CCertificate::fs_GetCertificatePublicKey(OtherCertificate));
-
-				bool bThrew = false;
-				try
-				{
-					// An explicit pointer type executes fg_Construct; auto would retain only its lazy proxy.
-					TCSharedPointer<CAuthenticatedUnixContext> pContext = fg_Construct(CAuthenticatedUnixContext::EType::mc_Server, Settings);
-					(void)pContext;
-				}
-				catch (NException::CException const &)
-				{
-					bThrew = true;
-				}
-
-				DMibExpectTrue(bThrew);
+				NSys::NNetwork::CProcessIdentity LocalIdentity;
+				NSys::NNetwork::CProcessIdentity PeerIdentity;
+				DMibExpectTrue(Accepted.f_GetProcessIdentity(LocalIdentity, PeerIdentity));
+				DMibExpect(LocalIdentity.m_ProcessID, !=, uint64(0));
+				DMibExpect(PeerIdentity.m_ProcessID, ==, LocalIdentity.m_ProcessID);
 			}
+		}
 
-			{
-				DMibTestPath("Direct unix connection succeeds");
-
-				auto pServerContext = fg_MakeServerContext();
-				auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
-
-				CStr Path = fg_UniqueUnixPath("Direct");
-				CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
-
-				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen
-					(
-						Address
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, ENetFlag_None
-					)
-				;
-
-				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect
-					(
-						Address
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, CNetAddress()
-					)
-				;
-
-				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
-				DMibAssertTrue(pServer && pServer->f_IsValid());
-
-				CHandshakeOutcome Outcome;
-				fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
-
-				DMibExpectTrue(Outcome.m_bClientDone);
-				DMibExpectTrue(Outcome.m_bServerDone);
-				DMibExpect(Outcome.m_ClientCloseReason, ==, CStr());
-				DMibExpect(Outcome.m_ServerCloseReason, ==, CStr());
-			}
-
-			{
-				DMibTestPath("Half close drains in flight data");
-
-				auto pServerContext = fg_MakeServerContext();
-				auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
-
-				CStr Path = fg_UniqueUnixPath("HalfClose");
-				CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
-
-				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen
-					(
-						Address
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, ENetFlag_None
-					)
-				;
-
-				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect
-					(
-						Address
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, CNetAddress()
-					)
-				;
-
-				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
-				DMibAssertTrue(pServer && pServer->f_IsValid());
-
-				CHandshakeOutcome Outcome;
-				fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
-				DMibAssertTrue(Outcome.m_bClientDone && Outcome.m_bServerDone);
-
-				uint8 const Payload[] = {'d', 'r', 'a', 'i', 'n', 'e', 'd'};
-				DMibExpect(pServer->f_Send(Payload, sizeof(Payload)).m_nBytes, ==, umint(sizeof(Payload)));
-				pServer->f_Shutdown();
-
-				uint8 Buffer[64];
-				umint nRead = 0;
-				CTimeout Timeout(gc_Timeout);
-				while (nRead < sizeof(Payload) && !Timeout.f_TimedOut())
-				{
-					auto Result = pClient->f_Receive(Buffer + nRead, sizeof(Buffer) - nRead);
-					nRead += Result.m_nBytes;
-					if (!Result.m_nBytes)
-						NSys::fg_Thread_Sleep(0.005f);
-				}
-
-				DMibExpect(nRead, ==, umint(sizeof(Payload)));
-
-				DMibExpect(pServer->f_Send(Payload, sizeof(Payload)).m_nBytes, ==, umint(0));
-			}
-
-			{
-				DMibTestPath("TCP connection fails closed");
-
-				auto pServerContext = fg_MakeServerContext();
-				auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
-
-				CNetAddressTCPv4 Loopback;
-				Loopback.f_SetLocalhost();
-				Loopback.m_Port = 0;
-				CNetAddress ListenAddress;
-				ListenAddress.f_Set(Loopback);
-
-				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen
-					(
-						ListenAddress
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, ENetFlag_None
-					)
-				;
-				uint32 Port = pListen->f_GetListenPort();
-				DMibAssert(Port, !=, 0u);
-
-				CNetAddressTCPv4 ConnectTo;
-				ConnectTo.f_SetLocalhost();
-				ConnectTo.m_Port = uint16(Port);
-				CNetAddress ConnectAddress;
-				ConnectAddress.f_Set(ConnectTo);
-
-				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect
-					(
-						ConnectAddress
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, CNetAddress()
-					)
-				;
-
-				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
-				DMibAssertTrue(pServer && pServer->f_IsValid());
-
-				CHandshakeOutcome Outcome;
-				fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
-
-				DMibExpectFalse(Outcome.m_bClientDone);
-				DMibExpectFalse(Outcome.m_bServerDone);
-				DMibExpectTrue(Outcome.m_ClientCloseReason.f_Find("kernel peer process identity") >= 0);
-				DMibExpectTrue(Outcome.m_ServerCloseReason.f_Find("kernel peer process identity") >= 0);
-			}
-
-			{
-				DMibTestPath("Verification-ignore flags do not bypass the binding");
-
-				auto pServerContext = fg_MakeServerContext(true);
-				auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData, true);
-
-				CNetAddressTCPv4 Loopback;
-				Loopback.f_SetLocalhost();
-				Loopback.m_Port = 0;
-				CNetAddress ListenAddress;
-				ListenAddress.f_Set(Loopback);
-
-				auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
-				pListen->f_Listen
-					(
-						ListenAddress
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, ENetFlag_None
-					)
-				;
-				uint32 Port = pListen->f_GetListenPort();
-
-				CNetAddressTCPv4 ConnectTo;
-				ConnectTo.f_SetLocalhost();
-				ConnectTo.m_Port = uint16(Port);
-				CNetAddress ConnectAddress;
-				ConnectAddress.f_Set(ConnectTo);
-
-				auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-				pClient->f_Connect
-					(
-						ConnectAddress
-						, [](ENetTCPState _StateAdded)
-						{
-						}
-						, CNetAddress()
-					)
-				;
-
-				auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
-				DMibAssertTrue(pServer && pServer->f_IsValid());
-
-				CHandshakeOutcome Outcome;
-				fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
-
-				DMibExpectFalse(Outcome.m_bClientDone);
-				DMibExpectFalse(Outcome.m_bServerDone);
-			}
-		};
-
-		DMibTestSuite("Relay")
 		{
-			if (!NNetwork::fg_IsAuthenticatedUnixSupported())
-				return;
+			DMibTestPath("Non-unix socket fails closed");
 
-			if (fg_TestReportFlags() & ETestReportFlag_ProcessRecursive)
+			CSocket Socket;
+			DMibExpectFalse(Socket.f_IsValid());
+		}
+	};
+
+	DMibTestSuite("Handshake")
+	{
+		if (!NNetwork::fg_IsAuthenticatedUnixSupported())
+			return;
+
+		CByteVector ServerCertificate;
+		{
+			auto pServerContext = fg_MakeServerContext();
+			ServerCertificate = pServerContext->m_Settings.m_PublicCertificateData;
+		}
+
+		{
+			DMibTestPath("Mismatched certificate and key rejected");
+
+			CSSLSettings Settings;
+			fg_MakeSelfSigned(Settings.m_PublicCertificateData, Settings.m_PrivateKeyData);
+
+			CByteVector OtherCertificate;
+			CSecureByteVector OtherKey;
+			fg_MakeSelfSigned(OtherCertificate, OtherKey);
+			Settings.m_PrivateKeyData = OtherKey;
+
+			DMibExpectTrue(CCertificate::fs_GetCertificatePublicKey(Settings.m_PublicCertificateData) != CCertificate::fs_GetCertificatePublicKey(OtherCertificate));
+
+			bool bThrew = false;
+			try
 			{
-				fg_RunRelay(fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayClientPath"), fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayServerPath"));
-				return;
+				// An explicit pointer type executes fg_Construct; auto would retain only its lazy proxy.
+				TCSharedPointer<CAuthenticatedUnixContext> pContext = fg_Construct(CAuthenticatedUnixContext::EType::mc_Server, Settings);
+				(void)pContext;
+			}
+			catch (NException::CException const &)
+			{
+				bThrew = true;
 			}
 
-			// Capture the suite path so recursive launch enters the relay branch.
-			CStr RecursiveTestPath = fg_TestGetCurrentPath();
+			DMibExpectTrue(bThrew);
+		}
 
-			DMibTestPath("Separate-process relay cannot complete");
+		{
+			DMibTestPath("Direct unix connection succeeds");
 
 			auto pServerContext = fg_MakeServerContext();
 			auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
 
-			CStr ServerPath = fg_UniqueUnixPath("RelayServer");
-			CStr ClientPath = fg_UniqueUnixPath("RelayClient");
-
-			CNetAddress ServerAddress = CSocket::fs_ResolveAddress("UNIX:" + ServerPath);
+			CStr Path = fg_UniqueUnixPath("Direct");
+			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
 
 			auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
 			pListen->f_Listen
 				(
-					ServerAddress
+					Address
 					, [](ENetTCPState _StateAdded)
 					{
 					}
@@ -568,66 +349,16 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 				)
 			;
 
-			NProcess::CProcessLaunchParams LaunchParams;
-			LaunchParams.m_Target = NFile::CFile::fs_GetProgramPath();
-			LaunchParams.m_Parameters = NProcess::CProcessLaunchParams::fs_GetParams
+			auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
+			pClient->f_Connect
 				(
-					{"--test", RecursiveTestPath, "--logger", "Null", "--filter-results", "[\"All\"]", "--process-recursive"}
+					Address
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, CNetAddress()
 				)
 			;
-			LaunchParams.m_Environment["MalterlibTest_RelayClientPath"] = ClientPath;
-			LaunchParams.m_Environment["MalterlibTest_RelayServerPath"] = ServerPath;
-
-			NProcess::CProcessLaunch Relay(LaunchParams, NProcess::EProcessLaunchCloseFlag_TerminateProcess);
-
-			// Wait after endpoint teardown so the relay can unlink its listener; retain forced termination for a hung relay.
-			auto WaitForRelay = g_OnScopeExit / [&]
-				{
-					CTimeout ExitTimeout(gc_Timeout);
-					while (Relay.f_IsRunning() && !ExitTimeout.f_TimedOut())
-						NSys::fg_Thread_Sleep(0.005f);
-				}
-			;
-
-			CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
-
-			// Connect retries cover the relay's asynchronous bind and missing-path failures.
-			TCUniquePointer<ICSocket> pClient;
-			{
-				CTimeout Timeout(gc_Timeout);
-				while (!Timeout.f_TimedOut())
-				{
-					auto pAttempt = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
-					try
-					{
-						NException::CDisableExceptionTraceScope DisableTrace;
-						pAttempt->f_Connect
-							(
-								ClientAddress
-								, [](ENetTCPState _StateAdded)
-								{
-								}
-								, CNetAddress()
-							)
-						;
-					}
-					catch (NException::CException const &)
-					{
-						NSys::fg_Thread_Sleep(0.01f);
-						continue;
-					}
-
-					if (pAttempt->f_IsValid())
-					{
-						pClient = fg_Move(pAttempt);
-						break;
-					}
-
-					NSys::fg_Thread_Sleep(0.01f);
-				}
-			}
-
-			DMibAssertTrue(pClient && pClient->f_IsValid());
 
 			auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
 			DMibAssertTrue(pServer && pServer->f_IsValid());
@@ -635,11 +366,278 @@ struct CAuthenticatedUnix_Tests : public NMib::NTest::CTest
 			CHandshakeOutcome Outcome;
 			fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
 
-			// Each peer sees the relay's kernel identity instead of the identity signed by the opposite endpoint.
+			DMibExpectTrue(Outcome.m_bClientDone);
+			DMibExpectTrue(Outcome.m_bServerDone);
+			DMibExpect(Outcome.m_ClientCloseReason, ==, CStr());
+			DMibExpect(Outcome.m_ServerCloseReason, ==, CStr());
+		}
+
+		{
+			DMibTestPath("Half close drains in flight data");
+
+			auto pServerContext = fg_MakeServerContext();
+			auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
+
+			CStr Path = fg_UniqueUnixPath("HalfClose");
+			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
+
+			auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
+			pListen->f_Listen
+				(
+					Address
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, ENetFlag_None
+				)
+			;
+
+			auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
+			pClient->f_Connect
+				(
+					Address
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, CNetAddress()
+				)
+			;
+
+			auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
+			DMibAssertTrue(pServer && pServer->f_IsValid());
+
+			CHandshakeOutcome Outcome;
+			fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
+			DMibAssertTrue(Outcome.m_bClientDone && Outcome.m_bServerDone);
+
+			uint8 const Payload[] = {'d', 'r', 'a', 'i', 'n', 'e', 'd'};
+			DMibExpect(pServer->f_Send(Payload, sizeof(Payload)).m_nBytes, ==, umint(sizeof(Payload)));
+			pServer->f_Shutdown();
+
+			uint8 Buffer[64];
+			umint nRead = 0;
+			CTimeout Timeout(gc_Timeout);
+			while (nRead < sizeof(Payload) && !Timeout.f_TimedOut())
+			{
+				auto Result = pClient->f_Receive(Buffer + nRead, sizeof(Buffer) - nRead);
+				nRead += Result.m_nBytes;
+				if (!Result.m_nBytes)
+					NSys::fg_Thread_Sleep(0.005f);
+			}
+
+			DMibExpect(nRead, ==, umint(sizeof(Payload)));
+
+			DMibExpect(pServer->f_Send(Payload, sizeof(Payload)).m_nBytes, ==, umint(0));
+		}
+
+		{
+			DMibTestPath("TCP connection fails closed");
+
+			auto pServerContext = fg_MakeServerContext();
+			auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
+
+			CNetAddressTCPv4 Loopback;
+			Loopback.f_SetLocalhost();
+			Loopback.m_Port = 0;
+			CNetAddress ListenAddress;
+			ListenAddress.f_Set(Loopback);
+
+			auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
+			pListen->f_Listen
+				(
+					ListenAddress
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, ENetFlag_None
+				)
+			;
+			uint32 Port = pListen->f_GetListenPort();
+			DMibAssert(Port, !=, 0u);
+
+			CNetAddressTCPv4 ConnectTo;
+			ConnectTo.f_SetLocalhost();
+			ConnectTo.m_Port = uint16(Port);
+			CNetAddress ConnectAddress;
+			ConnectAddress.f_Set(ConnectTo);
+
+			auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
+			pClient->f_Connect
+				(
+					ConnectAddress
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, CNetAddress()
+				)
+			;
+
+			auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
+			DMibAssertTrue(pServer && pServer->f_IsValid());
+
+			CHandshakeOutcome Outcome;
+			fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
+
 			DMibExpectFalse(Outcome.m_bClientDone);
 			DMibExpectFalse(Outcome.m_bServerDone);
-		};
-	}
-};
+			DMibExpectTrue(Outcome.m_ClientCloseReason.f_Find("kernel peer process identity") >= 0);
+			DMibExpectTrue(Outcome.m_ServerCloseReason.f_Find("kernel peer process identity") >= 0);
+		}
+
+		{
+			DMibTestPath("Verification-ignore flags do not bypass the binding");
+
+			auto pServerContext = fg_MakeServerContext(true);
+			auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData, true);
+
+			CNetAddressTCPv4 Loopback;
+			Loopback.f_SetLocalhost();
+			Loopback.m_Port = 0;
+			CNetAddress ListenAddress;
+			ListenAddress.f_Set(Loopback);
+
+			auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
+			pListen->f_Listen
+				(
+					ListenAddress
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, ENetFlag_None
+				)
+			;
+			uint32 Port = pListen->f_GetListenPort();
+
+			CNetAddressTCPv4 ConnectTo;
+			ConnectTo.f_SetLocalhost();
+			ConnectTo.m_Port = uint16(Port);
+			CNetAddress ConnectAddress;
+			ConnectAddress.f_Set(ConnectTo);
+
+			auto pClient = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
+			pClient->f_Connect
+				(
+					ConnectAddress
+					, [](ENetTCPState _StateAdded)
+					{
+					}
+					, CNetAddress()
+				)
+			;
+
+			auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
+			DMibAssertTrue(pServer && pServer->f_IsValid());
+
+			CHandshakeOutcome Outcome;
+			fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
+
+			DMibExpectFalse(Outcome.m_bClientDone);
+			DMibExpectFalse(Outcome.m_bServerDone);
+		}
+	};
+
+	DMibTestSuite("Relay")
+	{
+		if (!NNetwork::fg_IsAuthenticatedUnixSupported())
+			return;
+
+		if (fg_TestReportFlags() & ETestReportFlag_ProcessRecursive)
+		{
+			fg_RunRelay(fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayClientPath"), fg_GetSys()->f_GetEnvironmentVariable("MalterlibTest_RelayServerPath"));
+			return;
+		}
+
+		// Capture the suite path so recursive launch enters the relay branch.
+		CStr RecursiveTestPath = fg_TestGetCurrentPath();
+
+		DMibTestPath("Separate-process relay cannot complete");
+
+		auto pServerContext = fg_MakeServerContext();
+		auto pClientContext = fg_MakeClientContext(pServerContext->m_Settings.m_PublicCertificateData);
+
+		CStr ServerPath = fg_UniqueUnixPath("RelayServer");
+		CStr ClientPath = fg_UniqueUnixPath("RelayClient");
+
+		CNetAddress ServerAddress = CSocket::fs_ResolveAddress("UNIX:" + ServerPath);
+
+		auto pListen = CSocket_AuthenticatedUnix::fs_GetFactory(pServerContext)("");
+		pListen->f_Listen
+			(
+				ServerAddress
+				, [](ENetTCPState _StateAdded)
+				{
+				}
+				, ENetFlag_None
+			)
+		;
+
+		NProcess::CProcessLaunchParams LaunchParams;
+		LaunchParams.m_Target = NFile::CFile::fs_GetProgramPath();
+		LaunchParams.m_Parameters = NProcess::CProcessLaunchParams::fs_GetParams({"--test", RecursiveTestPath, "--logger", "Null", "--filter-results", "[\"All\"]", "--process-recursive"});
+		LaunchParams.m_Environment["MalterlibTest_RelayClientPath"] = ClientPath;
+		LaunchParams.m_Environment["MalterlibTest_RelayServerPath"] = ServerPath;
+
+		NProcess::CProcessLaunch Relay(LaunchParams, NProcess::EProcessLaunchCloseFlag_TerminateProcess);
+
+		// Wait after endpoint teardown so the relay can unlink its listener; retain forced termination for a hung relay.
+		auto WaitForRelay = g_OnScopeExit / [&]
+			{
+				CTimeout ExitTimeout(gc_Timeout);
+				while (Relay.f_IsRunning() && !ExitTimeout.f_TimedOut())
+					NSys::fg_Thread_Sleep(0.005f);
+			}
+		;
+
+		CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
+
+		// Connect retries cover the relay's asynchronous bind and missing-path failures.
+		TCUniquePointer<ICSocket> pClient;
+		{
+			CTimeout Timeout(gc_Timeout);
+			while (!Timeout.f_TimedOut())
+			{
+				auto pAttempt = CSocket_AuthenticatedUnix::fs_GetFactory(pClientContext)("");
+				try
+				{
+					NException::CDisableExceptionTraceScope DisableTrace;
+					pAttempt->f_Connect
+						(
+							ClientAddress
+							, [](ENetTCPState _StateAdded)
+							{
+							}
+							, CNetAddress()
+						)
+					;
+				}
+				catch (NException::CException const &)
+				{
+					NSys::fg_Thread_Sleep(0.01f);
+					continue;
+				}
+
+				if (pAttempt->f_IsValid())
+				{
+					pClient = fg_Move(pAttempt);
+					break;
+				}
+
+				NSys::fg_Thread_Sleep(0.01f);
+			}
+		}
+
+		DMibAssertTrue(pClient && pClient->f_IsValid());
+
+		auto pServer = fg_AcceptWithTimeout(pListen.f_Get());
+		DMibAssertTrue(pServer && pServer->f_IsValid());
+
+		CHandshakeOutcome Outcome;
+		fg_PumpHandshake(pClient.f_Get(), pServer.f_Get(), Outcome);
+
+		// Each peer sees the relay's kernel identity instead of the identity signed by the opposite endpoint.
+		DMibExpectFalse(Outcome.m_bClientDone);
+		DMibExpectFalse(Outcome.m_bServerDone);
+	};
+}
 
 DMibTestRegister(CAuthenticatedUnix_Tests, Malterlib::Network);

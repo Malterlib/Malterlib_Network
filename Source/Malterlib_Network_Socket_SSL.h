@@ -109,7 +109,6 @@ namespace NMib::NNetwork
 		virtual umint f_GetReceiveBufferBytes() const override;
 		virtual bool f_HasPendingOutput() const override;
 
-	public:
 		virtual umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen) override;
 		virtual umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen) override;
 		virtual NMib::NNetwork::CNetAddress f_GetPeerAddress() const override;
@@ -126,9 +125,6 @@ namespace NMib::NNetwork
 		;
 
 	private:
-		CSocket_SSL(CSocket_SSL const &_Other) = delete;
-		CSocket_SSL &operator = (CSocket_SSL const &_Other) = delete;
-
 		enum EState
 		{
 			EState_None
@@ -158,6 +154,10 @@ namespace NMib::NNetwork
 			bool m_bReleased:1 = false;
 			bool m_bLinked:1 = false;
 		};
+
+		CSocket_SSL(CSocket_SSL const &_Other) = delete;
+
+		CSocket_SSL &operator = (CSocket_SSL const &_Other) = delete;
 
 		bool fp_HandleHandshake();
 		void fp_HandleHandshakeDone();

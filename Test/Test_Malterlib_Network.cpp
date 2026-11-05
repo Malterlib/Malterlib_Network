@@ -56,272 +56,518 @@ static constexpr fp32 gc_Timeout = 60.0f;
 struct CSysNet_Tests : public NMib::NTest::CTest
 {
 	template <typename tf_CNetAddress, typename tf_CNotNetAddress>
-	void f_TestAddress(tf_CNetAddress const &_Localhost, tf_CNotNetAddress const &_Other)
-	{
-		CNetAddress Localhost(_Localhost);
-		DMibExpectFalse(Localhost.f_IsEmpty());
-		DMibExpect(Localhost.f_GetType(), ==, tf_CNetAddress::mc_Type);
-
-		tf_CNetAddress Return;
-		DMibExpectTrue(Localhost.f_Get(Return));
-		DMibExpect(fg_MemCmp((uint8 const *)&Return, (uint8 const *)&_Localhost, sizeof(Return)), ==, 0);
-
-		tf_CNotNetAddress NotReturn;
-		DMibExpectTrue(Localhost.f_Get(NotReturn));
-
-		CNetAddress Other(_Other);
-		DMibExpectFalse(Other.f_IsEmpty());
-
-		tf_CNetAddress Return2;
-		DMibExpectTrue(Other.f_Get(Return2));
-		DMibExpect(fg_MemCmp((uint8 const *)&Return2, (uint8 const *)&_Other, sizeof(Return2)), ==, 0);
-
-		DMibExpect(Localhost, ==, Localhost);
-		DMibExpect(Localhost, <, Other);
-	}
-
+	void f_TestAddress(tf_CNetAddress const &_Localhost, tf_CNotNetAddress const &_Other);
 	template <typename tf_CNetAddress>
-	void f_TestResolve(CStr const &_Address, tf_CNetAddress const &_Result)
-	{
-		CNetAddress Resolved = CSocket::fs_ResolveAddress("localhost", tf_CNetAddress::mc_Type);
-		DMibExpectFalse(Resolved.f_IsEmpty());
+	void f_TestResolve(CStr const &_Address, tf_CNetAddress const &_Result);
+	template <typename tf_CNetAddress>
+	void f_TestAsyncResolve(CStr const &_Address, tf_CNetAddress const &_Result);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestConnectRefused(uint16 _Port);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestConnect(CStr const &_Address, uint16 _Port);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestConnectListen(CStr const &_Address, uint16 _Port, uint16 _ListenPort);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestConnectReportTo(CStr const &_Address, uint16 _Port);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestConnectListenReportTo(CStr const &_Address, uint16 _Port, uint16 _ListenPort);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestInherit(CStr const &_Address, uint16 _Port, bool _bInheritable);
+	template <typename tf_CNetAddress, ENetAddressType tf_Type>
+	void f_TestAsyncConnectReportTo(CStr const &_Address, uint16 _Port);
+	void f_DoTests();
+};
 
+template <typename tf_CNetAddress, typename tf_CNotNetAddress>
+void CSysNet_Tests::f_TestAddress(tf_CNetAddress const &_Localhost, tf_CNotNetAddress const &_Other)
+{
+	CNetAddress Localhost(_Localhost);
+	DMibExpectFalse(Localhost.f_IsEmpty());
+	DMibExpect(Localhost.f_GetType(), ==, tf_CNetAddress::mc_Type);
+
+	tf_CNetAddress Return;
+	DMibExpectTrue(Localhost.f_Get(Return));
+	DMibExpect(fg_MemCmp((uint8 const *)&Return, (uint8 const *)&_Localhost, sizeof(Return)), ==, 0);
+
+	tf_CNotNetAddress NotReturn;
+	DMibExpectTrue(Localhost.f_Get(NotReturn));
+
+	CNetAddress Other(_Other);
+	DMibExpectFalse(Other.f_IsEmpty());
+
+	tf_CNetAddress Return2;
+	DMibExpectTrue(Other.f_Get(Return2));
+	DMibExpect(fg_MemCmp((uint8 const *)&Return2, (uint8 const *)&_Other, sizeof(Return2)), ==, 0);
+
+	DMibExpect(Localhost, ==, Localhost);
+	DMibExpect(Localhost, <, Other);
+}
+
+template <typename tf_CNetAddress>
+void CSysNet_Tests::f_TestResolve(CStr const &_Address, tf_CNetAddress const &_Result)
+{
+	CNetAddress Resolved = CSocket::fs_ResolveAddress("localhost", tf_CNetAddress::mc_Type);
+	DMibExpectFalse(Resolved.f_IsEmpty());
+
+	tf_CNetAddress Return;
+	DMibExpectTrue(Resolved.f_Get(Return));
+	DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
+}
+
+template <typename tf_CNetAddress>
+void CSysNet_Tests::f_TestAsyncResolve(CStr const &_Address, tf_CNetAddress const &_Result)
+{
+	NStorage::TCSharedPointer<CEventAutoReset> pResolveEvent = fg_Construct();
+
+	CAsyncResolver Resolver;
+	Resolver.f_Open
+		(
+			_Address
+			, tf_CNetAddress::mc_Type
+			, [pResolveEvent]
+			{
+				pResolveEvent->f_Signal();
+			}
+		)
+	;
+
+	if (pResolveEvent->f_WaitTimeout(gc_Timeout))
+		DMibTest(!DMibExpr("Timed out async resolving address"))(ETest_FailAndStop);
+
+	CNetAddress Resolved;
+	CStr ErrorString;
+
+	DMibExpectTrue(Resolver.f_GetResult(Resolved, ErrorString));
+	DMibExpectFalse(Resolved.f_IsEmpty());
+
+	if (!Resolved.f_IsEmpty())
+	{
 		tf_CNetAddress Return;
 		DMibExpectTrue(Resolved.f_Get(Return));
 		DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
 	}
+}
 
-	template <typename tf_CNetAddress>
-	void f_TestAsyncResolve(CStr const &_Address, tf_CNetAddress const &_Result)
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestConnectRefused(uint16 _Port)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress("localhost", tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
+
+	if (Address.f_IsEmpty())
+		return;
+
 	{
-		NStorage::TCSharedPointer<CEventAutoReset> pResolveEvent = fg_Construct();
-
-		CAsyncResolver Resolver;
-		Resolver.f_Open
-			(
-				_Address
-				, tf_CNetAddress::mc_Type
-				, [pResolveEvent]
-				{
-					pResolveEvent->f_Signal();
-				}
-			)
-		;
-
-		if (pResolveEvent->f_WaitTimeout(gc_Timeout))
-			DMibTest(!DMibExpr("Timed out async resolving address"))(ETest_FailAndStop);
-
-		CNetAddress Resolved;
-		CStr ErrorString;
-
-		DMibExpectTrue(Resolver.f_GetResult(Resolved, ErrorString));
-		DMibExpectFalse(Resolved.f_IsEmpty());
-
-		if (!Resolved.f_IsEmpty())
-		{
-			tf_CNetAddress Return;
-			DMibExpectTrue(Resolved.f_Get(Return));
-			DMibExpect(fg_MemCmp((uint8 const *)&Return.f_GetIP(), (uint8 const *)&_Result.f_GetIP(), sizeof(Return.f_GetIP())), ==, 0);
-		}
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestConnectRefused(uint16 _Port)
+	CSocket Socket;
+	DMibExpectException
+		(
+			Socket.f_Connect(Address)
+#if defined(DPlatformFamily_Linux)
+			, DMibImpExceptionInstance(CExceptionNet, "Connection refused (111)")
+#elif defined(DPlatformFamily_macOS)
+			, DMibImpExceptionInstance(CExceptionNet, "Connection refused (61)")
+#elif defined(DPlatformFamily_Windows)
+			, DMibImpExceptionInstance(CExceptionNet, "10061 No connection could be made because the target machine actively refused it.")
+#else
+			, DMibImpExceptionInstance(CExceptionNet, "Implement this")
+#endif
+		)
+	;
+	DMibExpectFalse(Socket.f_IsValid());
+}
+
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestConnect(CStr const &_Address, uint16 _Port)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress("localhost", tf_Type);
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
 		DMibExpectFalse(Address.f_IsEmpty());
 
 		if (Address.f_IsEmpty())
 			return;
-
-		{
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
-		}
-
-		CSocket Socket;
-		DMibExpectException
-			(
-				Socket.f_Connect(Address)
-#if defined(DPlatformFamily_Linux)
-				, DMibImpExceptionInstance(CExceptionNet, "Connection refused (111)")
-#elif defined(DPlatformFamily_macOS)
-				, DMibImpExceptionInstance(CExceptionNet, "Connection refused (61)")
-#elif defined(DPlatformFamily_Windows)
-				, DMibImpExceptionInstance(CExceptionNet, "10061 No connection could be made because the target machine actively refused it.")
-#else
-				, DMibImpExceptionInstance(CExceptionNet, "Implement this")
-#endif
-			)
-		;
-		DMibExpectFalse(Socket.f_IsValid());
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestConnect(CStr const &_Address, uint16 _Port)
+	CSocket Socket;
+	Socket.f_Connect(Address);
+
+	if (Socket.f_IsValid())
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+		CNetAddress PeerAddress = Socket.f_GetPeerAddress();
+
+		DMibExpectFalse(PeerAddress.f_IsEmpty());
+		DMibExpect(PeerAddress, ==, Address);
+	}
+
+	DMibExpectTrue(Socket.f_IsValid());
+	if (!Socket.f_IsValid())
+		return;
+
+	static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+	static constexpr umint c_nMessageBytes = sizeof(c_Message);
+
+	{
+		umint nSent = Socket.f_Send(c_Message, c_nMessageBytes);
+		DMibExpect(nSent, ==, c_nMessageBytes);
+	}
+
+	{
+		umint nReceived = 0;
+		umint nBytes = -1;
+		uint8 Incoming[c_nMessageBytes];
+		fg_MemClear(Incoming, c_nMessageBytes);
+		CTimeout Timeout(gc_Timeout);
+		bool bEndOfStream = false;
+		while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
+		{
+			nBytes = Socket.f_Receive(Incoming + nReceived, c_nMessageBytes - nReceived, bEndOfStream);
+
+			if (nBytes == -1)
+				break;
+
+			nReceived += nBytes;
+		}
+
+		DMibExpect(nBytes, !=, -1);
+		DMibExpect(nReceived, ==, c_nMessageBytes);
+		DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
+	}
+}
+
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestConnectListen(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
+	{
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
 		DMibExpectFalse(Address.f_IsEmpty());
-		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
 
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
-
-			DMibExpectFalse(Address.f_IsEmpty());
-
-			if (Address.f_IsEmpty())
-				return;
-		}
-
-		CSocket Socket;
-		Socket.f_Connect(Address);
-
-		if (Socket.f_IsValid())
-		{
-			CNetAddress PeerAddress = Socket.f_GetPeerAddress();
-
-			DMibExpectFalse(PeerAddress.f_IsEmpty());
-			DMibExpect(PeerAddress, ==, Address);
-		}
-
-		DMibExpectTrue(Socket.f_IsValid());
-		if (!Socket.f_IsValid())
+		if (Address.f_IsEmpty())
 			return;
-
-		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static constexpr umint c_nMessageBytes = sizeof(c_Message);
-
-		{
-			umint nSent = Socket.f_Send(c_Message, c_nMessageBytes);
-			DMibExpect(nSent, ==, c_nMessageBytes);
-		}
-
-		{
-			umint nReceived = 0;
-			umint nBytes = -1;
-			uint8 Incoming[c_nMessageBytes];
-			fg_MemClear(Incoming, c_nMessageBytes);
-			CTimeout Timeout(gc_Timeout);
-			bool bEndOfStream = false;
-			while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
-			{
-				nBytes = Socket.f_Receive(Incoming + nReceived, c_nMessageBytes - nReceived, bEndOfStream);
-
-				if (nBytes == -1)
-					break;
-
-				nReceived += nBytes;
-			}
-
-			DMibExpect(nBytes, !=, -1);
-			DMibExpect(nReceived, ==, c_nMessageBytes);
-			DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
-		}
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestConnectListen(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
+	static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+	static constexpr umint c_nMessageBytes = sizeof(c_Message);
+
+	CEventAutoReset ServerReady;
+
+	auto ServerThread = CThreadObject::fs_StartThread
+		(
+			[&](CThreadObject *_pThread) -> aint
+			{
+				DMibTestPath("Server");
+				try
+				{
+					tf_CNetAddress AnyAddr;
+					AnyAddr.f_SetLocalhost();
+					AnyAddr.m_Port = _ListenPort;
+
+					CNetAddress BindAddress(AnyAddr);
+					DMibExpectFalse(BindAddress.f_IsEmpty());
+
+					CSocket Server;
+					Server.f_Listen(BindAddress, nullptr, ENetFlag_None);
+
+					DMibExpectTrue(Server.f_IsValid());
+
+					if (!Server.f_IsValid())
+						return -1;
+
+					ServerReady.f_Signal();
+
+					CSocket Client;
+
+					CTimeout Timeout(gc_Timeout);
+
+					while (!Client.f_IsValid() && !Timeout.f_TimedOut())
+					{
+						Client.f_Accept(&Server, nullptr);
+						if (!Client.f_IsValid())
+							NSys::fg_Thread_Yield();
+					}
+
+					DMibExpectTrue(Client.f_IsValid());
+
+					if (!Client.f_IsValid())
+						return -1;
+
+					umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
+					DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
+				}
+				catch (CExceptionNet const &_Exception)
+				{
+					(void)_Exception;
+					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+				}
+
+				return 0;
+			}
+			, "TestConnectListen_Server"
+		)
+	;
+
+	if (ServerReady.f_WaitTimeout(gc_Timeout))
+		DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
+
+	NMib::NSys::fg_Thread_Sleep(1.0f);
+
+	auto ClientThread = CThreadObject::fs_StartThread
+		(
+			[&](CThreadObject *_pThread) -> aint
+			{
+				DMibTestPath("Client");
+				try
+				{
+					CSocket Client;
+					Client.f_Connect(Address);
+
+					DMibExpectTrue(Client.f_IsValid());
+					if (!Client.f_IsValid())
+						return -1;
+
+					umint nReceived = 0, nBytes;
+					uint8 Incoming[c_nMessageBytes];
+					fg_MemClear(Incoming, c_nMessageBytes);
+					CTimeout Timeout(gc_Timeout);
+					bool bEndOfStream = false;
+
+					while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
+					{
+						nBytes = Client.f_Receive(&Incoming[nReceived], c_nMessageBytes - nReceived, bEndOfStream);
+
+						if (nBytes == -1)
+							break;
+
+						nReceived += nBytes;
+					}
+
+					DMibExpect(nBytes, !=, -1);
+					DMibExpect(nReceived, ==, c_nMessageBytes);
+					DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
+				}
+				catch (CExceptionNet const &_Exception)
+				{
+					(void)_Exception;
+					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+				}
+
+				return 0;
+			}
+			, "TestConnectListen_Client"
+		)
+	;
+
+	ClientThread->f_Stop();
+	ServerThread->f_Stop();
+}
+
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestConnectReportTo(CStr const &_Address, uint16 _Port)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
 		DMibExpectFalse(Address.f_IsEmpty());
+
+		if (Address.f_IsEmpty())
+			return;
+	}
+
+	CEventAutoReset SocketEvent;
+
+	CSocket Socket;
+	Socket.f_Connect
+		(
+			Address
+			, [&SocketEvent](ENetTCPState _StateAdded)
+			{
+				SocketEvent.f_Signal();
+			}
+		)
+	;
+
+	DMibExpectTrue(Socket.f_IsValid());
+	if (!Socket.f_IsValid())
+		return;
+
+	static constexpr umint c_nBufferBytes = 1024 * 1024 * 16;
+	NContainer::CByteVector Buffer;
+	Buffer.f_SetLen(c_nBufferBytes);
+	fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
+
+	{
+		umint nTotalSent = 0;
+		umint nSent = -1;
+
+		while (nTotalSent < c_nBufferBytes)
 		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
+			nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
+			if (nSent == -1)
+				break;
 
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
+			bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
 
-			DMibExpectFalse(Address.f_IsEmpty());
+			nTotalSent += nSent;
 
-			if (Address.f_IsEmpty())
-				return;
+			if (bStuffed)
+			{
+				do
+				{
+					CStopwatch WaitTime;
+					WaitTime.f_Start();
+					if (SocketEvent.f_WaitTimeout(gc_Timeout))
+					{
+						DMibTest(DMibExpr(WaitTime.f_GetTime()) > DMibExpr(gc_Timeout));
+						DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
+					}
+				}
+				while (!(Socket.f_GetState() & ENetTCPState_Write))
+					;
+			}
 		}
 
-		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static constexpr umint c_nMessageBytes = sizeof(c_Message);
+		DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
+		DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
+	}
+}
 
-		CEventAutoReset ServerReady;
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestConnectListenReportTo(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
+	{
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
 
-		auto ServerThread = CThreadObject::fs_StartThread
-			(
-				[&](CThreadObject *_pThread) -> aint
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
+		DMibExpectFalse(Address.f_IsEmpty());
+
+		if (Address.f_IsEmpty())
+			return;
+	}
+
+	static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
+	static constexpr umint c_nMessageBytes = sizeof(c_Message);
+
+	CEventAutoReset ServerReady;
+
+	auto ServerThread = CThreadObject::fs_StartThread
+		(
+			[&](CThreadObject *_pThread) -> aint
+			{
+				DMibTestPath("Server");
+				try
 				{
-					DMibTestPath("Server");
-					try
-					{
-						tf_CNetAddress AnyAddr;
-						AnyAddr.f_SetLocalhost();
-						AnyAddr.m_Port = _ListenPort;
+					tf_CNetAddress AnyAddr; // = _Localhost;
+					AnyAddr.f_SetLocalhost();
+					AnyAddr.m_Port = _ListenPort;
 
-						CNetAddress BindAddress(AnyAddr);
-						DMibExpectFalse(BindAddress.f_IsEmpty());
+					CNetAddress BindAddress(AnyAddr);
+					DMibExpectFalse(BindAddress.f_IsEmpty());
 
-						CSocket Server;
-						Server.f_Listen(BindAddress, nullptr, ENetFlag_None);
+					TCSharedPointer<CEventAutoReset> pListenEvent = fg_Construct();
 
-						DMibExpectTrue(Server.f_IsValid());
+					CSocket Server;
+					Server.f_Listen
+						(
+							BindAddress
+							, [pListenEvent](ENetTCPState _StateAdded)
+							{
+								if (_StateAdded & ENetTCPState_Connection)
+									pListenEvent->f_Signal();
+							}
+							, ENetFlag_None
+						)
+					;
 
-						if (!Server.f_IsValid())
-							return -1;
+					DMibExpectTrue(Server.f_IsValid());
 
-						ServerReady.f_Signal();
+					if (!Server.f_IsValid())
+						return -1;
 
-						CSocket Client;
+					ServerReady.f_Signal();
 
-						CTimeout Timeout(gc_Timeout);
+					bool bTimedOut = pListenEvent->f_WaitTimeout(gc_Timeout);
+					DMibExpectFalse(bTimedOut);
 
-						while (!Client.f_IsValid() && !Timeout.f_TimedOut())
-						{
-							Client.f_Accept(&Server, nullptr);
-							if (!Client.f_IsValid())
-								NSys::fg_Thread_Yield();
-						}
+					if (bTimedOut)
+						return -1;
 
-						DMibExpectTrue(Client.f_IsValid());
+					DMibExpect(Server.f_GetState(), &, ENetTCPState_Connection);
 
-						if (!Client.f_IsValid())
-							return -1;
+					CSocket Client;
+					Client.f_Accept(&Server, nullptr);
 
-						umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
-						DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
-					}
-					catch (CExceptionNet const &_Exception)
-					{
-						(void)_Exception;
-						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-					}
+					DMibExpectTrue(Client.f_IsValid());
 
-					return 0;
+					if (!Client.f_IsValid())
+						return -1;
+
+					umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
+					DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
 				}
-				, "TestConnectListen_Server"
-			)
-		;
-
-		if (ServerReady.f_WaitTimeout(gc_Timeout))
-			DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
-
-		NMib::NSys::fg_Thread_Sleep(1.0f);
-
-		auto ClientThread = CThreadObject::fs_StartThread
-			(
-				[&](CThreadObject *_pThread) -> aint
+				catch (CExceptionNet const &_Exception)
 				{
-					DMibTestPath("Client");
-					try
+					(void)_Exception;
+					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+				}
+
+				return 0;
+			}
+			, "TestConnectListen_Server"
+		)
+	;
+
+	if (ServerReady.f_WaitTimeout(gc_Timeout))
+		DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
+	NSys::fg_Thread_Sleep(1.0f);
+
+	auto ClientThread = CThreadObject::fs_StartThread
+		(
+			[&](CThreadObject *_pThread) -> aint
+			{
+				DMibTestPath("Client");
+				try
+				{
+					CSocket Client;
+					Client.f_Connect(Address);
+
+					DMibExpectTrue(Client.f_IsValid());
+					if (!Client.f_IsValid())
+						return -1;
+
 					{
-						CSocket Client;
-						Client.f_Connect(Address);
-
-						DMibExpectTrue(Client.f_IsValid());
-						if (!Client.f_IsValid())
-							return -1;
-
 						umint nReceived = 0, nBytes;
 						uint8 Incoming[c_nMessageBytes];
 						fg_MemClear(Incoming, c_nMessageBytes);
@@ -342,650 +588,401 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 						DMibExpect(nReceived, ==, c_nMessageBytes);
 						DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
 					}
-					catch (CExceptionNet const &_Exception)
-					{
-						(void)_Exception;
-						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-					}
-
-					return 0;
 				}
-				, "TestConnectListen_Client"
-			)
-		;
+				catch (CExceptionNet const &_Exception)
+				{
+					(void)_Exception;
+					DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
+				}
 
-		ClientThread->f_Stop();
-		ServerThread->f_Stop();
+				return 0;
+			}
+			, "TestConnectListen_Client"
+		)
+	;
+
+	ClientThread->f_Stop();
+	ServerThread->f_Stop();
+}
+
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestInherit(CStr const &_Address, uint16 _Port, bool _bInheritable)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
+	{
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
+		DMibExpectFalse(Address.f_IsEmpty());
+
+		if (Address.f_IsEmpty())
+			return;
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestConnectReportTo(CStr const &_Address, uint16 _Port)
+	CEventAutoReset SocketEvent;
+
+	CSocket Socket;
+	if (_bInheritable)
+		Socket.f_SetInheritable();
+	Socket.f_Connect(Address);
+
+	DMibExpectTrue(Socket.f_IsValid());
+	if (!Socket.f_IsValid())
+		return;
+
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
-		DMibExpectFalse(Address.f_IsEmpty());
-		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
+		CSocket OldSocket = fg_Move(Socket);
 
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
+		void *pOSSocket = OldSocket.f_GiveUpForInherit();
+		OldSocket.f_Close();
 
-			DMibExpectFalse(Address.f_IsEmpty());
-
-			if (Address.f_IsEmpty())
-				return;
-		}
-
-		CEventAutoReset SocketEvent;
-
-		CSocket Socket;
-		Socket.f_Connect
+		DMibMovedFromValid(Socket);
+		Socket.f_InheritHandle2
 			(
-				Address
+				pOSSocket
 				, [&SocketEvent](ENetTCPState _StateAdded)
 				{
 					SocketEvent.f_Signal();
 				}
 			)
 		;
-
-		DMibExpectTrue(Socket.f_IsValid());
-		if (!Socket.f_IsValid())
-			return;
-
-		static constexpr umint c_nBufferBytes = 1024 * 1024 * 16;
-		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(c_nBufferBytes);
-		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
-
-		{
-			umint nTotalSent = 0;
-			umint nSent = -1;
-
-			while (nTotalSent < c_nBufferBytes)
-			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
-				if (nSent == -1)
-					break;
-
-				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
-
-				nTotalSent += nSent;
-
-				if (bStuffed)
-				{
-					do
-					{
-						CStopwatch WaitTime;
-						WaitTime.f_Start();
-						if (SocketEvent.f_WaitTimeout(gc_Timeout))
-						{
-							DMibTest(DMibExpr(WaitTime.f_GetTime()) > DMibExpr(gc_Timeout));
-							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
-						}
-					}
-					while (!(Socket.f_GetState() & ENetTCPState_Write))
-						;
-				}
-			}
-
-			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
-		}
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestConnectListenReportTo(CStr const &_Address, uint16 _Port, uint16 _ListenPort)
+	static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
+	NContainer::CByteVector Buffer;
+	Buffer.f_SetLen(c_nBufferBytes);
+	fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
+
 	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+		umint nTotalSent = 0;
+		umint nSent = -1;
+
+		while (nTotalSent < c_nBufferBytes)
+		{
+			nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
+			if (nSent == -1)
+				break;
+
+			bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
+
+			nTotalSent += nSent;
+
+			if (bStuffed)
+			{
+				do
+				{
+					if (SocketEvent.f_WaitTimeout(gc_Timeout))
+						DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
+				}
+				while (!(Socket.f_GetState() & ENetTCPState_Write))
+					;
+			}
+		}
+
+		DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
+		DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
+	}
+}
+
+template <typename tf_CNetAddress, ENetAddressType tf_Type>
+void CSysNet_Tests::f_TestAsyncConnectReportTo(CStr const &_Address, uint16 _Port)
+{
+	CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
+	DMibExpectFalse(Address.f_IsEmpty());
+	{
+		DMibTestPath("SetPort");
+		tf_CNetAddress Return;
+		DMibExpectTrue(Address.f_Get(Return));
+
+		Return.m_Port = _Port;
+		Address.f_Set(Return);
+
 		DMibExpectFalse(Address.f_IsEmpty());
-		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
 
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
-
-			DMibExpectFalse(Address.f_IsEmpty());
-
-			if (Address.f_IsEmpty())
-				return;
-		}
-
-		static constexpr uint8 c_Message[] = {'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\n'};
-		static constexpr umint c_nMessageBytes = sizeof(c_Message);
-
-		CEventAutoReset ServerReady;
-
-		auto ServerThread = CThreadObject::fs_StartThread
-			(
-				[&](CThreadObject *_pThread) -> aint
-				{
-					DMibTestPath("Server");
-					try
-					{
-						tf_CNetAddress AnyAddr; // = _Localhost;
-						AnyAddr.f_SetLocalhost();
-						AnyAddr.m_Port = _ListenPort;
-
-						CNetAddress BindAddress(AnyAddr);
-						DMibExpectFalse(BindAddress.f_IsEmpty());
-
-						TCSharedPointer<CEventAutoReset> pListenEvent = fg_Construct();
-
-						CSocket Server;
-						Server.f_Listen
-							(
-								BindAddress
-								, [pListenEvent](ENetTCPState _StateAdded)
-								{
-									if (_StateAdded & ENetTCPState_Connection)
-										pListenEvent->f_Signal();
-								}
-								, ENetFlag_None
-							)
-						;
-
-						DMibExpectTrue(Server.f_IsValid());
-
-						if (!Server.f_IsValid())
-							return -1;
-
-						ServerReady.f_Signal();
-
-						bool bTimedOut = pListenEvent->f_WaitTimeout(gc_Timeout);
-						DMibExpectFalse(bTimedOut);
-
-						if (bTimedOut)
-							return -1;
-
-						DMibExpect(Server.f_GetState(), &, ENetTCPState_Connection);
-
-						CSocket Client;
-						Client.f_Accept(&Server, nullptr);
-
-						DMibExpectTrue(Client.f_IsValid());
-
-						if (!Client.f_IsValid())
-							return -1;
-
-						umint nSent = Client.f_Send(c_Message, c_nMessageBytes);
-						DMibTest(DMibExpr(nSent) == DMibExpr(c_nMessageBytes));
-					}
-					catch (CExceptionNet const &_Exception)
-					{
-						(void)_Exception;
-						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-					}
-
-					return 0;
-				}
-				, "TestConnectListen_Server"
-			)
-		;
-
-		if (ServerReady.f_WaitTimeout(gc_Timeout))
-			DMibTest(!DMibExpr("Timed out waiting for server ready"))(ETest_FailAndStop);
-		NSys::fg_Thread_Sleep(1.0f);
-
-		auto ClientThread = CThreadObject::fs_StartThread
-			(
-				[&](CThreadObject *_pThread) -> aint
-				{
-					DMibTestPath("Client");
-					try
-					{
-						CSocket Client;
-						Client.f_Connect(Address);
-
-						DMibExpectTrue(Client.f_IsValid());
-						if (!Client.f_IsValid())
-							return -1;
-
-						{
-							umint nReceived = 0, nBytes;
-							uint8 Incoming[c_nMessageBytes];
-							fg_MemClear(Incoming, c_nMessageBytes);
-							CTimeout Timeout(gc_Timeout);
-							bool bEndOfStream = false;
-
-							while (nReceived < c_nMessageBytes && !Timeout.f_TimedOut())
-							{
-								nBytes = Client.f_Receive(&Incoming[nReceived], c_nMessageBytes - nReceived, bEndOfStream);
-
-								if (nBytes == -1)
-									break;
-
-								nReceived += nBytes;
-							}
-
-							DMibExpect(nBytes, !=, -1);
-							DMibExpect(nReceived, ==, c_nMessageBytes);
-							DMibExpect(fg_MemCmp(Incoming, c_Message, c_nMessageBytes), ==, 0);
-						}
-					}
-					catch (CExceptionNet const &_Exception)
-					{
-						(void)_Exception;
-						DMibTest(DMibExpr(_Exception.f_GetErrorStr()) && DMibExpr(false));
-					}
-
-					return 0;
-				}
-				, "TestConnectListen_Client"
-			)
-		;
-
-		ClientThread->f_Stop();
-		ServerThread->f_Stop();
-	}
-
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestInherit(CStr const &_Address, uint16 _Port, bool _bInheritable)
-	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
-		DMibExpectFalse(Address.f_IsEmpty());
-		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
-
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
-
-			DMibExpectFalse(Address.f_IsEmpty());
-
-			if (Address.f_IsEmpty())
-				return;
-		}
-
-		CEventAutoReset SocketEvent;
-
-		CSocket Socket;
-		if (_bInheritable)
-			Socket.f_SetInheritable();
-		Socket.f_Connect(Address);
-
-		DMibExpectTrue(Socket.f_IsValid());
-		if (!Socket.f_IsValid())
+		if (Address.f_IsEmpty())
 			return;
-
-		{
-			CSocket OldSocket = fg_Move(Socket);
-
-			void *pOSSocket = OldSocket.f_GiveUpForInherit();
-			OldSocket.f_Close();
-
-			DMibMovedFromValid(Socket);
-			Socket.f_InheritHandle2
-				(
-					pOSSocket
-					, [&SocketEvent](ENetTCPState _StateAdded)
-					{
-						SocketEvent.f_Signal();
-					}
-				)
-			;
-		}
-
-		static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
-		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(c_nBufferBytes);
-		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
-
-		{
-			umint nTotalSent = 0;
-			umint nSent = -1;
-
-			while (nTotalSent < c_nBufferBytes)
-			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
-				if (nSent == -1)
-					break;
-
-				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
-
-				nTotalSent += nSent;
-
-				if (bStuffed)
-				{
-					do
-					{
-						if (SocketEvent.f_WaitTimeout(gc_Timeout))
-							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
-					}
-					while (!(Socket.f_GetState() & ENetTCPState_Write))
-						;
-				}
-			}
-
-			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
-		}
 	}
 
-	template <typename tf_CNetAddress, ENetAddressType tf_Type>
-	void f_TestAsyncConnectReportTo(CStr const &_Address, uint16 _Port)
-	{
-		CNetAddress Address = CSocket::fs_ResolveAddress(_Address, tf_Type);
-		DMibExpectFalse(Address.f_IsEmpty());
-		{
-			DMibTestPath("SetPort");
-			tf_CNetAddress Return;
-			DMibExpectTrue(Address.f_Get(Return));
+	TCSharedPointer<CEventAutoReset> pSocketEvent = fg_Construct();
 
-			Return.m_Port = _Port;
-			Address.f_Set(Return);
+	CSocket Socket;
 
-			DMibExpectFalse(Address.f_IsEmpty());
-
-			if (Address.f_IsEmpty())
-				return;
-		}
-
-		TCSharedPointer<CEventAutoReset> pSocketEvent = fg_Construct();
-
-		CSocket Socket;
-
-		Socket.f_AsyncConnect
-			(
-				Address
-				, [pSocketEvent](ENetTCPState _StateAdded)
-				{
-					pSocketEvent->f_Signal();
-				}
-			)
-		;
-
-		DMibExpectTrue(Socket.f_IsValid());
-		if (!Socket.f_IsValid())
-			return;
-
-		CTimeout Timeout(gc_Timeout);
-
-		while (!(Socket.f_GetState() & ENetTCPState_Connected) && !Timeout.f_TimedOut())
-			pSocketEvent->f_WaitTimeout(gc_Timeout);
-
-		DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
-
-		static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
-		NContainer::CByteVector Buffer;
-		Buffer.f_SetLen(c_nBufferBytes);
-		fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
-
-		{
-			umint nTotalSent = 0;
-			umint nSent = -1;
-
-			while (nTotalSent < c_nBufferBytes)
+	Socket.f_AsyncConnect
+		(
+			Address
+			, [pSocketEvent](ENetTCPState _StateAdded)
 			{
-				nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
-				if (nSent == -1)
-					break;
-
-				bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
-
-				nTotalSent += nSent;
-
-				if (bStuffed)
-				{
-					do
-					{
-						if (pSocketEvent->f_WaitTimeout(gc_Timeout))
-							DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
-					}
-					while (!(Socket.f_GetState() & ENetTCPState_Write))
-						;
-				}
+				pSocketEvent->f_Signal();
 			}
+		)
+	;
 
-			DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
-			DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
+	DMibExpectTrue(Socket.f_IsValid());
+	if (!Socket.f_IsValid())
+		return;
+
+	CTimeout Timeout(gc_Timeout);
+
+	while (!(Socket.f_GetState() & ENetTCPState_Connected) && !Timeout.f_TimedOut())
+		pSocketEvent->f_WaitTimeout(gc_Timeout);
+
+	DMibExpectFalse(Timeout.f_TimedOut())(ETest_FailAndStop);
+
+	static constexpr umint c_nBufferBytes = 1024 * 1024 * 4;
+	NContainer::CByteVector Buffer;
+	Buffer.f_SetLen(c_nBufferBytes);
+	fg_MemClear(Buffer.f_GetArray(), Buffer.f_GetLen());
+
+	{
+		umint nTotalSent = 0;
+		umint nSent = -1;
+
+		while (nTotalSent < c_nBufferBytes)
+		{
+			nSent = Socket.f_Send(Buffer.f_GetArray() + nTotalSent, c_nBufferBytes - nTotalSent);
+			if (nSent == -1)
+				break;
+
+			bool bStuffed = nSent < (c_nBufferBytes - nTotalSent);
+
+			nTotalSent += nSent;
+
+			if (bStuffed)
+			{
+				do
+				{
+					if (pSocketEvent->f_WaitTimeout(gc_Timeout))
+						DMibTest(!DMibExpr("Timed out sending data"))(ETest_FailAndStop);
+				}
+				while (!(Socket.f_GetState() & ENetTCPState_Write))
+					;
+			}
 		}
+
+		DMibTest(DMibExpr(nSent) != DMibExpr(-1)); // Error
+		DMibTest(DMibExpr(nTotalSent) == DMibExpr(c_nBufferBytes));
 	}
+}
 
-	void f_DoTests()
+void CSysNet_Tests::f_DoTests()
+{
+	static constexpr uint16 c_Port = 20677;
+
+	CNetAddressTCPv4 const Localhost_TCPv4(CNetAddressIPv4(127, 0, 0, 1), c_Port);
+	CNetAddressTCPv4 const Other_TCPv4(CNetAddressIPv4(127, 0, 0, 2), c_Port);
+	CNetAddressTCPv6 const Localhost_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), c_Port);
+	CNetAddressTCPv6 const Other_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2), c_Port);
+
+	CStr RemoteMachine;
+	auto fRemoteMachine = [&]() -> CStr const &
+		{
+			if (!RemoteMachine)
+				RemoteMachine = fg_GetLoopbackMachine();
+
+			return RemoteMachine;
+		}
+	;
+	DMibTestSuite("Tests")
 	{
-		static constexpr uint16 c_Port = 20677;
-
-		CNetAddressTCPv4 const Localhost_TCPv4(CNetAddressIPv4(127, 0, 0, 1), c_Port);
-		CNetAddressTCPv4 const Other_TCPv4(CNetAddressIPv4(127, 0, 0, 2), c_Port);
-		CNetAddressTCPv6 const Localhost_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), c_Port);
-		CNetAddressTCPv6 const Other_TCPv6(CNetAddressIPv6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2), c_Port);
-
-		CStr RemoteMachine;
-		auto fRemoteMachine = [&]() -> CStr const &
-			{
-				if (!RemoteMachine)
-					RemoteMachine = fg_GetLoopbackMachine();
-
-				return RemoteMachine;
-			}
-		;
-		DMibTestSuite("Tests")
 		{
-			{
-				DMibTestPath("Addresses_TCPv4");
-				f_TestAddress(Localhost_TCPv4, Other_TCPv4);
-			}
-			{
-				DMibTestPath("Addresses_TCPv6");
-				f_TestAddress(Localhost_TCPv6, Other_TCPv6);
-			}
-			{
-				DMibTestPath("Resolve_TCPv4");
-				f_TestResolve("localhost", Localhost_TCPv4);
-			}
-			{
-				DMibTestPath("Resolve_TCPv6");
-				f_TestResolve("localhost", Localhost_TCPv6);
-			}
-			{
-				DMibTestPath("AsyncResolve_TCPv4");
-				f_TestAsyncResolve("localhost", Localhost_TCPv4);
-			}
-			{
-				DMibTestPath("AsyncResolve_TCPv6");
-				f_TestAsyncResolve("localhost", Localhost_TCPv6);
-			}
-			{
-				DMibTestPath("ConnectRefused_TCPv4");
-				f_TestConnectRefused<CNetAddressTCPv4, ENetAddressType_TCPv4>(20681);
-			}
-			{
-				DMibTestPath("ConnectRefused_TCPv6");
-				f_TestConnectRefused<CNetAddressTCPv6, ENetAddressType_TCPv6>(20681);
-			}
-			{
-				DMibTestPath("Connect_TCPv4");
-				f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20677);
-			}
-			{
-				DMibTestPath("Connect_TCPv6");
-				f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20677);
-			}
-			{
-				DMibTestPath("ConnectListen_TCPv4");
-				f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
-			}
-			{
-				DMibTestPath("ConnectListen_TCPv6");
-				f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
-			}
-			{
-				DMibTestPath("ConnectReportTo_TCPv4");
-				f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
-			}
-			{
-				DMibTestPath("ConnectReportTo_TCPv6");
-				f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
-			}
-			{
-				DMibTestPath("ConnectListenReportTo_TCPv4");
-				f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
-			}
-			{
-				DMibTestPath("ConnectListenReportTo_TCPv6");
-				f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
-			}
-			{
-				DMibTestPath("Inherit");
-				{
-					DMibTestPath("Bound");
-					f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, false);
-				}
-				{
-					DMibTestPath("Inheritable");
-					f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, true);
-				}
-			}
-			{
-				DMibTestPath("AsyncConnectReportTo_TCPv4");
-				f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
-			}
-			{
-				DMibTestPath("AsyncConnectReportTo_TCPv6");
-				f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
-			}
-		};
-
-		DMibTestSuite("Unix socket paths")
+			DMibTestPath("Addresses_TCPv4");
+			f_TestAddress(Localhost_TCPv4, Other_TCPv4);
+		}
 		{
-			using NFile::CFile;
+			DMibTestPath("Addresses_TCPv6");
+			f_TestAddress(Localhost_TCPv6, Other_TCPv6);
+		}
+		{
+			DMibTestPath("Resolve_TCPv4");
+			f_TestResolve("localhost", Localhost_TCPv4);
+		}
+		{
+			DMibTestPath("Resolve_TCPv6");
+			f_TestResolve("localhost", Localhost_TCPv6);
+		}
+		{
+			DMibTestPath("AsyncResolve_TCPv4");
+			f_TestAsyncResolve("localhost", Localhost_TCPv4);
+		}
+		{
+			DMibTestPath("AsyncResolve_TCPv6");
+			f_TestAsyncResolve("localhost", Localhost_TCPv6);
+		}
+		{
+			DMibTestPath("ConnectRefused_TCPv4");
+			f_TestConnectRefused<CNetAddressTCPv4, ENetAddressType_TCPv4>(20681);
+		}
+		{
+			DMibTestPath("ConnectRefused_TCPv6");
+			f_TestConnectRefused<CNetAddressTCPv6, ENetAddressType_TCPv6>(20681);
+		}
+		{
+			DMibTestPath("Connect_TCPv4");
+			f_TestConnect<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20677);
+		}
+		{
+			DMibTestPath("Connect_TCPv6");
+			f_TestConnect<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20677);
+		}
+		{
+			DMibTestPath("ConnectListen_TCPv4");
+			f_TestConnectListen<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
+		}
+		{
+			DMibTestPath("ConnectListen_TCPv6");
+			f_TestConnectListen<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
+		}
+		{
+			DMibTestPath("ConnectReportTo_TCPv4");
+			f_TestConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+		}
+		{
+			DMibTestPath("ConnectReportTo_TCPv6");
+			f_TestConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+		}
+		{
+			DMibTestPath("ConnectListenReportTo_TCPv4");
+			f_TestConnectListenReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20678, 20680);
+		}
+		{
+			DMibTestPath("ConnectListenReportTo_TCPv6");
+			f_TestConnectListenReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20678, 20680);
+		}
+		{
+			DMibTestPath("Inherit");
+			{
+				DMibTestPath("Bound");
+				f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, false);
+			}
+			{
+				DMibTestPath("Inheritable");
+				f_TestInherit<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679, true);
+			}
+		}
+		{
+			DMibTestPath("AsyncConnectReportTo_TCPv4");
+			f_TestAsyncConnectReportTo<CNetAddressTCPv4, ENetAddressType_TCPv4>(fRemoteMachine(), 20679);
+		}
+		{
+			DMibTestPath("AsyncConnectReportTo_TCPv6");
+			f_TestAsyncConnectReportTo<CNetAddressTCPv6, ENetAddressType_TCPv6>(fRemoteMachine(), 20679);
+		}
+	};
 
-			CStr WantedPath = CFile::fs_GetProgramDirectory();
-			while (WantedPath.f_GetLen() < 200)
-				WantedPath /= "LongDeploymentDirectory";
-			WantedPath /= "Listener.socket";
+	DMibTestSuite("Unix socket paths")
+	{
+		using NFile::CFile;
 
-			CStr Path = fg_GetSafeUnixSocketPath(WantedPath);
-			DMibExpect(Path.f_GetLen(), <=, aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()));
-			DMibExpect(fg_GetSafeUnixSocketPath(WantedPath + "Other"), !=, Path);
+		CStr WantedPath = CFile::fs_GetProgramDirectory();
+		while (WantedPath.f_GetLen() < 200)
+			WantedPath /= "LongDeploymentDirectory";
+		WantedPath /= "Listener.socket";
+
+		CStr Path = fg_GetSafeUnixSocketPath(WantedPath);
+		DMibExpect(Path.f_GetLen(), <=, aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()));
+		DMibExpect(fg_GetSafeUnixSocketPath(WantedPath + "Other"), !=, Path);
 #ifdef DPlatformFamily_Windows
-			DMibExpectFalse(CFile::fs_GetDrive(Path).f_IsEmpty());
-			DMibExpect(Path, ==, CFile::fs_GetExpandedPath(Path));
-			DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, CFile::fs_GetExpandedPath(CStr("/socket.sock")));
+		DMibExpectFalse(CFile::fs_GetDrive(Path).f_IsEmpty());
+		DMibExpect(Path, ==, CFile::fs_GetExpandedPath(Path));
+		DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, CFile::fs_GetExpandedPath(CStr("/socket.sock")));
 #else
-			DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, "/socket.sock");
+		DMibExpect(fg_GetSafeUnixSocketPath("/socket.sock"), ==, "/socket.sock");
 #endif
-		};
+	};
 
-		DMibTestSuite("Unix Listener Staging")
+	DMibTestSuite("Unix Listener Staging")
+	{
+		using NFile::CFile;
+
+		// Emulated unix sockets listen on TCP and publish a port file instead
+		if (!NSys::NNetwork::fg_HasNativeUnixSockets())
+			return;
+
+		CStr Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStaging.socket");
+		CStr StagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path);
 		{
-			using NFile::CFile;
+			DMibTestPath("Staged path");
+			DMibExpect(StagedPath.f_GetLen(), ==, Path.f_GetLen());
+			DMibExpect(CFile::fs_GetPath(StagedPath), ==, CFile::fs_GetPath(Path));
+			DMibExpect(StagedPath, !=, Path);
+			DMibExpectTrue(NSys::NNetwork::fg_IsStagedUnixSocketPath(StagedPath));
+			DMibExpectFalse(NSys::NNetwork::fg_IsStagedUnixSocketPath(Path));
 
-			// Emulated unix sockets listen on TCP and publish a port file instead
-			if (!NSys::NNetwork::fg_HasNativeUnixSockets())
-				return;
+			// Paths that only differ at the end stage apart, so listeners don't remove each other's staged files
+			CStr OtherStagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path.f_Extract(0, Path.f_GetLen() - 1) + "x");
+			DMibExpect(OtherStagedPath, !=, StagedPath);
+		}
+		{
+			DMibTestPath("Whole code points");
 
-			CStr Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStaging.socket");
-			CStr StagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path);
+			// The last 8 bytes of the name start inside é
+			CStr Utf8StagedName = NSys::NNetwork::fg_GetStagedUnixSocketPath("/Sockets/caf\xC3\xA9.socket");
+			DMibExpect(Utf8StagedName.f_GetLen(), ==, aint(fg_StrLen("/Sockets/caf\xC3\xA9.socket")));
+			DMibExpectTrue(Utf8StagedName.f_StartsWith("/Sockets/caf~"));
+
+			CStr Utf8Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "caf\xC3\xA9.socket");
+			CNetAddress Utf8Address = CSocket::fs_ResolveAddress("UNIX:" + Utf8Path);
+			CSocket Utf8Listener;
+			Utf8Listener.f_Listen(Utf8Address, nullptr, ENetFlag_None);
+			CSocket Utf8Client;
+			Utf8Client.f_Connect(Utf8Address);
+			DMibExpectTrue(Utf8Client.f_IsValid());
+			Utf8Client.f_Close();
+			Utf8Listener.f_Close();
+		}
+
+		// A listener that failed between bind and rename left its staged file
+		CFile::fs_WriteStringToFile(StagedPath, "Leftover", false);
+
+		CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
+		CSocket Listener;
+		Listener.f_Listen(Address, nullptr, ENetFlag_None);
+		{
+			DMibTestPath("Renamed once listening");
+			DMibExpectTrue(CFile::fs_FileExists(Path));
+			DMibExpectFalse(CFile::fs_FileExists(StagedPath));
+
+			CSocket Client;
+			Client.f_Connect(Address);
+			DMibExpectTrue(Client.f_IsValid());
+
+			// The kernel names the listener by the path it bound, but connections report the path it listens on
+			DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", Address));
+
+			CSocket Accepted;
+			CTimeout Timeout(gc_Timeout);
+			while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
 			{
-				DMibTestPath("Staged path");
-				DMibExpect(StagedPath.f_GetLen(), ==, Path.f_GetLen());
-				DMibExpect(CFile::fs_GetPath(StagedPath), ==, CFile::fs_GetPath(Path));
-				DMibExpect(StagedPath, !=, Path);
-				DMibExpectTrue(NSys::NNetwork::fg_IsStagedUnixSocketPath(StagedPath));
-				DMibExpectFalse(NSys::NNetwork::fg_IsStagedUnixSocketPath(Path));
-
-				// Paths that only differ at the end stage apart, so listeners don't remove each other's staged files
-				CStr OtherStagedPath = NSys::NNetwork::fg_GetStagedUnixSocketPath(Path.f_Extract(0, Path.f_GetLen() - 1) + "x");
-				DMibExpect(OtherStagedPath, !=, StagedPath);
+				Accepted.f_Accept(&Listener, nullptr);
+				if (!Accepted.f_IsValid())
+					NSys::fg_Thread_Yield();
 			}
-			{
-				DMibTestPath("Whole code points");
+			DMibAssertTrue(Accepted.f_IsValid());
+			DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", Address));
 
-				// The last 8 bytes of the name start inside é
-				CStr Utf8StagedName = NSys::NNetwork::fg_GetStagedUnixSocketPath("/Sockets/caf\xC3\xA9.socket");
-				DMibExpect(Utf8StagedName.f_GetLen(), ==, aint(fg_StrLen("/Sockets/caf\xC3\xA9.socket")));
-				DMibExpectTrue(Utf8StagedName.f_StartsWith("/Sockets/caf~"));
-
-				CStr Utf8Path = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "caf\xC3\xA9.socket");
-				CNetAddress Utf8Address = CSocket::fs_ResolveAddress("UNIX:" + Utf8Path);
-				CSocket Utf8Listener;
-				Utf8Listener.f_Listen(Utf8Address, nullptr, ENetFlag_None);
-				CSocket Utf8Client;
-				Utf8Client.f_Connect(Utf8Address);
-				DMibExpectTrue(Utf8Client.f_IsValid());
-				Utf8Client.f_Close();
-				Utf8Listener.f_Close();
-			}
-
-			// A listener that failed between bind and rename left its staged file
-			CFile::fs_WriteStringToFile(StagedPath, "Leftover", false);
-
-			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
-			CSocket Listener;
-			Listener.f_Listen(Address, nullptr, ENetFlag_None);
-			{
-				DMibTestPath("Renamed once listening");
-				DMibExpectTrue(CFile::fs_FileExists(Path));
-				DMibExpectFalse(CFile::fs_FileExists(StagedPath));
-
-				CSocket Client;
-				Client.f_Connect(Address);
-				DMibExpectTrue(Client.f_IsValid());
-
-				// The kernel names the listener by the path it bound, but connections report the path it listens on
-				DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", Address));
-
-				CSocket Accepted;
-				CTimeout Timeout(gc_Timeout);
-				while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
-				{
-					Accepted.f_Accept(&Listener, nullptr);
-					if (!Accepted.f_IsValid())
-						NSys::fg_Thread_Yield();
-				}
-				DMibAssertTrue(Accepted.f_IsValid());
-				DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", Address));
-
-				Accepted.f_Close();
-				Client.f_Close();
-			}
-			{
-				DMibTestPath("Other spelling");
-				CStr AliasDirectory = CFile::fs_GetProgramDirectory() / "ListenerStagingAlias";
-				if (CFile::fs_FileExists(AliasDirectory, NFile::EFileAttrib_Link))
-					CFile::fs_DeleteFile(AliasDirectory);
-				CFile::fs_CreateSymbolicLink(CFile::fs_GetPath(Path), AliasDirectory, NFile::EFileAttrib_Directory, NFile::ESymbolicLinkFlag_None);
-
-				CStr AliasPath = AliasDirectory / CFile::fs_GetFile(Path);
-				if (AliasPath.f_GetLen() <= aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()))
-				{
-					CNetAddress AliasAddress = CSocket::fs_ResolveAddress("UNIX:" + AliasPath);
-					CSocket Client;
-					Client.f_Connect(AliasAddress);
-					DMibExpectTrue(Client.f_IsValid());
-					DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", AliasAddress));
-
-					CSocket Accepted;
-					CTimeout Timeout(gc_Timeout);
-					while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
-					{
-						Accepted.f_Accept(&Listener, nullptr);
-						if (!Accepted.f_IsValid())
-							NSys::fg_Thread_Yield();
-					}
-					Accepted.f_Close();
-					Client.f_Close();
-				}
-
+			Accepted.f_Close();
+			Client.f_Close();
+		}
+		{
+			DMibTestPath("Other spelling");
+			CStr AliasDirectory = CFile::fs_GetProgramDirectory() / "ListenerStagingAlias";
+			if (CFile::fs_FileExists(AliasDirectory, NFile::EFileAttrib_Link))
 				CFile::fs_DeleteFile(AliasDirectory);
-			}
-			{
-				DMibTestPath("Bound client");
-				// A name with the form of a staged path is still the client's own
-				CStr ClientPath = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStagingClient~abc");
-				if (CFile::fs_FileExists(ClientPath))
-					CFile::fs_DeleteFile(ClientPath);
-				CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
+			CFile::fs_CreateSymbolicLink(CFile::fs_GetPath(Path), AliasDirectory, NFile::EFileAttrib_Directory, NFile::ESymbolicLinkFlag_None);
 
+			CStr AliasPath = AliasDirectory / CFile::fs_GetFile(Path);
+			if (AliasPath.f_GetLen() <= aint(NSys::NNetwork::fg_GetMaxUnixSocketNameLength()))
+			{
+				CNetAddress AliasAddress = CSocket::fs_ResolveAddress("UNIX:" + AliasPath);
 				CSocket Client;
-				Client.f_Connect(Address, {}, ClientAddress);
+				Client.f_Connect(AliasAddress);
 				DMibExpectTrue(Client.f_IsValid());
+				DMibExpect(fg_Format("{}", Client.f_GetPeerAddress()), ==, fg_Format("{}", AliasAddress));
 
 				CSocket Accepted;
 				CTimeout Timeout(gc_Timeout);
@@ -995,60 +992,85 @@ struct CSysNet_Tests : public NMib::NTest::CTest
 					if (!Accepted.f_IsValid())
 						NSys::fg_Thread_Yield();
 				}
-				DMibAssertTrue(Accepted.f_IsValid());
-				DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", ClientAddress));
-
 				Accepted.f_Close();
 				Client.f_Close();
-				if (CFile::fs_FileExists(ClientPath))
-					CFile::fs_DeleteFile(ClientPath);
 			}
 
-			Listener.f_Close();
-			{
-				DMibTestPath("Closed");
-				DMibExpectFalse(CFile::fs_FileExists(Path));
-				DMibExpectFalse(CFile::fs_FileExists(StagedPath));
-			}
-		};
-
-		DMibTestSuite("Unix Listener Replacement")
+			CFile::fs_DeleteFile(AliasDirectory);
+		}
 		{
-			CStr Path = fg_GetSafeUnixSocketPath(NFile::CFile::fs_GetProgramDirectory() / "ListenerReplacement.socket");
-			CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
+			DMibTestPath("Bound client");
+			// A name with the form of a staged path is still the client's own
+			CStr ClientPath = fg_GetSafeUnixSocketPath(CFile::fs_GetProgramDirectory() / "ListenerStagingClient~abc");
+			if (CFile::fs_FileExists(ClientPath))
+				CFile::fs_DeleteFile(ClientPath);
+			CNetAddress ClientAddress = CSocket::fs_ResolveAddress("UNIX:" + ClientPath);
 
-			CSocket First;
-			First.f_Listen(Address, nullptr, ENetFlag_None);
+			CSocket Client;
+			Client.f_Connect(Address, {}, ClientAddress);
+			DMibExpectTrue(Client.f_IsValid());
+
+			CSocket Accepted;
+			CTimeout Timeout(gc_Timeout);
+			while (!Accepted.f_IsValid() && !Timeout.f_TimedOut())
 			{
-				DMibTestPath("Predecessor listens");
-				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+				Accepted.f_Accept(&Listener, nullptr);
+				if (!Accepted.f_IsValid())
+					NSys::fg_Thread_Yield();
 			}
+			DMibAssertTrue(Accepted.f_IsValid());
+			DMibExpect(fg_Format("{}", Accepted.f_GetPeerAddress()), ==, fg_Format("{}", ClientAddress));
 
-			CSocket Second;
-			Second.f_Listen(Address, nullptr, ENetFlag_None);
-			{
-				DMibTestPath("Successor listens");
-				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
-			}
+			Accepted.f_Close();
+			Client.f_Close();
+			if (CFile::fs_FileExists(ClientPath))
+				CFile::fs_DeleteFile(ClientPath);
+		}
 
-			First.f_Close();
-			{
-				DMibTestPath("Predecessor closed");
-				DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+		Listener.f_Close();
+		{
+			DMibTestPath("Closed");
+			DMibExpectFalse(CFile::fs_FileExists(Path));
+			DMibExpectFalse(CFile::fs_FileExists(StagedPath));
+		}
+	};
 
-				CSocket Client;
-				Client.f_Connect(Address);
-				DMibExpectTrue(Client.f_IsValid());
-				Client.f_Close();
-			}
+	DMibTestSuite("Unix Listener Replacement")
+	{
+		CStr Path = fg_GetSafeUnixSocketPath(NFile::CFile::fs_GetProgramDirectory() / "ListenerReplacement.socket");
+		CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + Path);
 
-			Second.f_Close();
-			{
-				DMibTestPath("Successor closed");
-				DMibExpectFalse(NFile::CFile::fs_FileExists(Path));
-			}
-		};
-	}
-};
+		CSocket First;
+		First.f_Listen(Address, nullptr, ENetFlag_None);
+		{
+			DMibTestPath("Predecessor listens");
+			DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+		}
+
+		CSocket Second;
+		Second.f_Listen(Address, nullptr, ENetFlag_None);
+		{
+			DMibTestPath("Successor listens");
+			DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+		}
+
+		First.f_Close();
+		{
+			DMibTestPath("Predecessor closed");
+			DMibExpectTrue(NFile::CFile::fs_FileExists(Path));
+
+			CSocket Client;
+			Client.f_Connect(Address);
+			DMibExpectTrue(Client.f_IsValid());
+			Client.f_Close();
+		}
+
+		Second.f_Close();
+		{
+			DMibTestPath("Successor closed");
+			DMibExpectFalse(NFile::CFile::fs_FileExists(Path));
+		}
+	};
+}
 
 DMibTestRegister(CSysNet_Tests, Malterlib::Network);
