@@ -94,25 +94,25 @@ namespace NMib::NNetwork
 	// Recognizes 127/8, ::1 and IPv4-mapped loopback; the host-string form also accepts localhost.
 	bool fg_IsLoopbackAddress(CNetAddress const &_Address)
 	{
-		CNetAddressTCPv4 TCPv4;
-		if (_Address.f_Get(TCPv4))
-			return TCPv4.m_IP[0] == 127;
+		CNetAddressTCPv4 AddressTCPv4;
+		if (_Address.f_Get(AddressTCPv4))
+			return AddressTCPv4.m_IP[0] == 127;
 
-		CNetAddressTCPv6 TCPv6;
-		if (_Address.f_Get(TCPv6))
+		CNetAddressTCPv6 AddressTCPv6;
+		if (_Address.f_Get(AddressTCPv6))
 		{
 			bool bMappedPrefix = true;
 			for (umint iByte = 0; iByte < 10; ++iByte)
 			{
-				if (TCPv6.m_IP[iByte] != 0)
+				if (AddressTCPv6.m_IP[iByte] != 0)
 					bMappedPrefix = false;
 			}
 
-			if (bMappedPrefix && TCPv6.m_IP[10] == 0xff && TCPv6.m_IP[11] == 0xff)
-				return TCPv6.m_IP[12] == 127;
+			if (bMappedPrefix && AddressTCPv6.m_IP[10] == 0xff && AddressTCPv6.m_IP[11] == 0xff)
+				return AddressTCPv6.m_IP[12] == 127;
 
-			if (bMappedPrefix && TCPv6.m_IP[10] == 0 && TCPv6.m_IP[11] == 0)
-				return TCPv6.m_IP[12] == 0 && TCPv6.m_IP[13] == 0 && TCPv6.m_IP[14] == 0 && TCPv6.m_IP[15] == 1;
+			if (bMappedPrefix && AddressTCPv6.m_IP[10] == 0 && AddressTCPv6.m_IP[11] == 0)
+				return AddressTCPv6.m_IP[12] == 0 && AddressTCPv6.m_IP[13] == 0 && AddressTCPv6.m_IP[14] == 0 && AddressTCPv6.m_IP[15] == 1;
 		}
 
 		return false;
@@ -313,24 +313,24 @@ namespace NMib::NNetwork
 		{
 		case ENetAddressType_TCPv4:
 			{
-				CNetAddressTCPv4 TCPv4;
-				if (!f_Get(TCPv4))
+				CNetAddressTCPv4 AddressTCPv4;
+				if (!f_Get(AddressTCPv4))
 					return false;
 
-				TCPv4.m_Port = _Port;
+				AddressTCPv4.m_Port = _Port;
 
-				return f_Set(TCPv4);
+				return f_Set(AddressTCPv4);
 			}
 
 		case ENetAddressType_TCPv6:
 			{
-				CNetAddressTCPv6 TCPv6;
-				if (!f_Get(TCPv6))
+				CNetAddressTCPv6 AddressTCPv6;
+				if (!f_Get(AddressTCPv6))
 					return false;
 
-				TCPv6.m_Port = _Port;
+				AddressTCPv6.m_Port = _Port;
 
-				return f_Set(TCPv6);
+				return f_Set(AddressTCPv6);
 			}
 		default: return false;
 		}
