@@ -861,16 +861,16 @@ namespace NMib::NNetwork
 				if (!NFile::CFile::fs_FileExists(mp_Settings.m_PathToCRLs, NFile::EFileAttrib_Directory))
 					DMibErrorCryptography(fg_Format("CRL path '{}' does not exist", mp_Settings.m_PathToCRLs));
 
-				NContainer::TCVector<NStr::CStr> CRLFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
+				NContainer::TCVector<NStr::CStr> RevocationListFiles = NFile::CFile::fs_FindFiles(mp_Settings.m_PathToCRLs + "/*", NFile::EFileAttrib_File, false);
 
 				bool bAdded = false;
-				for (auto iCRLFile = CRLFiles.f_GetIterator(); iCRLFile; ++iCRLFile)
+				for (auto iCRLFile = RevocationListFiles.f_GetIterator(); iCRLFile; ++iCRLFile)
 				{
-					NContainer::CByteVector CRLData = NFile::CFile::fs_ReadFile(*iCRLFile);
-					if (CRLData.f_IsEmpty())
+					NContainer::CByteVector RevocationListData = NFile::CFile::fs_ReadFile(*iCRLFile);
+					if (RevocationListData.f_IsEmpty())
 						continue;
 
-					X509_CRL *pCRL = fs_LoadCRL(CRLData);
+					X509_CRL *pCRL = fs_LoadCRL(RevocationListData);
 					auto Cleanup = g_OnScopeExit / [&]
 						{
 							X509_CRL_free(pCRL);

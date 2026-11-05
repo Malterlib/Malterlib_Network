@@ -218,20 +218,20 @@ namespace NMib::NNetwork
 		{
 		case ENetAddressType_TCPv4:
 			{
-				CNetAddressTCPv4 TCPv4;
-				if (!f_Get(TCPv4))
+				CNetAddressTCPv4 AddressTCPv4;
+				if (!f_Get(AddressTCPv4))
 					return 0;
 
-				return TCPv4.m_Port;
+				return AddressTCPv4.m_Port;
 			}
 
 		case ENetAddressType_TCPv6:
 			{
-				CNetAddressTCPv6 TCPv6;
-				if (!f_Get(TCPv6))
+				CNetAddressTCPv6 AddressTCPv6;
+				if (!f_Get(AddressTCPv6))
 					return 0;
 
-				return TCPv6.m_Port;
+				return AddressTCPv6.m_Port;
 			}
 		default: return 0;
 		}
