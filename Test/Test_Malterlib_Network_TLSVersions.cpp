@@ -1019,7 +1019,10 @@ namespace
 			DMibErrorCryptography(fg_GetExceptionStr("Could not prepare TLS client fixture"));
 		}
 
-		bssl::SSL_CTX_set_aes_hw_override_for_testing(pContext.get(), true);
+		// The default TLS 1.3 cipher order depends on AES hardware support, so offer the order of a host with it
+		static constexpr uint16 c_Ciphers[] = {SSL_CIPHER_AES_256_GCM_SHA384, SSL_CIPHER_AES_128_GCM_SHA256, SSL_CIPHER_CHACHA20_POLY1305_SHA256};
+		if (!SSL_CTX_set1_tls13_ciphers(pContext.get(), c_Ciphers, nullptr, fg_ArraySize(c_Ciphers)))
+			DMibErrorCryptography(fg_GetExceptionStr("Could not set TLS 1.3 ciphers of the client fixture"));
 
 		bssl::UniquePtr<SSL> pConnection(SSL_new(pContext.get()));
 		bssl::UniquePtr<BIO> pRead(BIO_new(BIO_s_mem()));
