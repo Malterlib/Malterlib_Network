@@ -45,6 +45,7 @@ namespace NMib::NNetwork
 			, EVerificationFlag_DisallowEllipticCurveDHKeyExchange = DMibBit(10) // Unsupported by this TLS backend; rejected when set.
 			, EVerificationFlag_AllowInsecureCipherSuites          = DMibBit(11)
 			, EVerificationFlag_AllowInsecureSSLVersions           = DMibBit(12)
+			, EVerificationFlag_AllowPinnedTrustAnchor             = DMibBit(13) // Trust a CA certificate without the CA bit as a pinned certificate.
 		};
 
 		enum EProtocol
