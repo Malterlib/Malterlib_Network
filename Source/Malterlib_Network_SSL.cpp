@@ -723,6 +723,9 @@ namespace NMib::NNetwork
 		{
 			SSL_CTX_set_verify_depth(mp_pContext, mp_Settings.m_VerificationDepth);
 
+			if (mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowPinnedTrustAnchor)
+				X509_STORE_set_flags(SSL_CTX_get_cert_store(mp_pContext), X509_V_FLAG_PINNED_TRUST_ANCHOR);
+
 			if (f_IsServerContext())
 			{
 				if (!(mp_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowMissingPeerCertificate))

@@ -74,6 +74,9 @@ namespace NMib::NNetwork
 		, m_VerifyOptions(_VerifyOptions)
 		, m_Type(_Type)
 	{
+		if (m_Settings.m_VerificationFlags & CSSLSettings::EVerificationFlag_AllowPinnedTrustAnchor)
+			m_VerifyOptions.m_bAllowPinnedTrustAnchor = true;
+
 		if (!fg_IsAuthenticatedUnixSupported())
 			DMibErrorNet("wsa requires kernel peer-process authentication (macOS/Linux/Windows); use the wss/TLS transport");
 
