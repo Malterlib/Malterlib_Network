@@ -11,7 +11,8 @@ Import.CMake_CacheExcludePatterns: [
 	*/CMakeCache.txt,
 	*/MalterlibFullRebuildVersion,
 	*/.NoDartCoverage,
-	*/compile_commands.json
+	*/compile_commands.json,
+	*/.ninja_build_lock*
 ]
 
 Import.CMake_CacheReplaceContents: [
@@ -28,6 +29,20 @@ Import.CMake_CacheReplaceContents: [
 		"FilePatterns": [],
 		"Find": ,
 		"Replace": "MToolCMake"
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": ,
+		"Replace": "MToolCTest"
+	},
+	{
+		"ApplyToPaths": false,
+		"ExcludeFilePatterns": [],
+		"FilePatterns": [],
+		"Find": ,
+		"Replace": "MToolCTest"
 	},
 	{
 		"ApplyToPaths": false,
@@ -118,6 +133,7 @@ Import.CMake_Variables: [
 	OPENSSL_FOUND=TRUE,
 	OpenSSL_FOUND=TRUE,
 	DISABLE_OPENSSL_WINDOWS=TRUE,
+	OPENSSL_PROVIDED=TRUE,
 	CARES_STATIC=ON,
 	CARES_SHARED=OFF,
 	CARES_STATIC_PIC=ON,

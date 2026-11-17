@@ -170,6 +170,10 @@ Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolut
 			{
 				Compile.Type "C"
 			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_pase.c`
+			{
+				Compile.Type "C"
+			}
 			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_win.c`
 			{
 				Compile.Type "C"
