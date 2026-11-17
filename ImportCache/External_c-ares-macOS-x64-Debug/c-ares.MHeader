@@ -1,6 +1,7 @@
 Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolute()
 %Target "Lib_c-ares_c-ares"
 {
+	Target.CLanguage "GNU89"
 	Compile
 	{
 		!!Compile.Type "C"
@@ -16,6 +17,7 @@ Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolut
 			"HAVE_CONFIG_H=1",
 			"_DARWIN_C_SOURCE"
 		]
+		CLanguage "GNU89"
 	}
 	Property.MalterlibTargetNameType "Normal"
 	Compile.AllowNonExisting true
@@ -167,6 +169,10 @@ Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolut
 				Compile.Type "C"
 			}
 			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_mac.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_pase.c`
 			{
 				Compile.Type "C"
 			}

@@ -15,9 +15,11 @@ Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolut
 			"CARES_BUILDING_LIBRARY",
 			"CARES_STATICLIB",
 			"HAVE_CONFIG_H=1",
+			"WIN32",
 			"WIN32_LEAN_AND_MEAN",
 			"_CRT_NONSTDC_NO_DEPRECATE",
-			"_CRT_SECURE_NO_DEPRECATE"
+			"_CRT_SECURE_NO_DEPRECATE",
+			"_WINDOWS"
 		]
 	}
 	Property.MalterlibTargetNameType "Normal"
@@ -170,6 +172,10 @@ Property.CMakeOutputPath_c\-ares: string = `@('.'->MakeAbsolute())`->MakeAbsolut
 				Compile.Type "C"
 			}
 			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_mac.c`
+			{
+				Compile.Type "C"
+			}
+			%File `@('../../../../External/c-ares'->MakeAbsolute())/src/lib/ares_sysconfig_pase.c`
 			{
 				Compile.Type "C"
 			}
