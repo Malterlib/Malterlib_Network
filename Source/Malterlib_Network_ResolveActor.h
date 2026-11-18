@@ -18,6 +18,12 @@ namespace NMib::NNetwork
 		template <typename t_CResult>
 		struct TCLookup
 		{
+			TCLookup() = default;
+			TCLookup(TCLookup &&_Other) = default;
+			~TCLookup();
+
+			TCLookup &operator = (TCLookup &&_Other);
+
 			NConcurrency::TCFuture<t_CResult> m_Result; // f_Resolve succeeds with at least one address; empty input gives one empty address.
 
 			NConcurrency::CActorSubscription m_Cancel; // Releasing this cancels delivery without waiting for the backend.
@@ -61,6 +67,8 @@ namespace NMib::NNetwork
 		uint64 mp_NextID = 0;
 	};
 }
+
+#include "Malterlib_Network_ResolveActor.hpp"
 
 #ifndef DMibPNoShortCuts
 using namespace NMib::NNetwork;
