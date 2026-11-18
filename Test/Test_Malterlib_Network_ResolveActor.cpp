@@ -4,6 +4,7 @@
 #include <Mib/Core/Core>
 #include <Mib/Test/Test>
 #include <Mib/Network/ResolveActor>
+#include <Mib/Log/Log>
 
 using namespace NMib;
 using namespace NMib::NNetwork;
@@ -294,6 +295,82 @@ namespace
 
 			co_return {};
 		};
+
+#if (DMibSysLogSeverities) & DMibLogSeverity_Error
+		// Unobserved exceptions are reported only through error logging
+		DMibTestSuite("AbandonPending") -> TCFuture<void>
+		{
+			struct CState
+			{
+				NThread::CEvent m_Release;
+				TCPromise<void> m_Started;
+				TCPromise<void> m_Finished;
+				NAtomic::TCAtomic<uint32> m_nUnobservedCancellations{0};
+			};
+
+			TCSharedPointer<CState> pState = fg_Construct();
+			pState->m_Release.f_ResetSignaled();
+			auto Cleanup = g_OnScopeExit / [pState]
+				{
+					pState->m_Release.f_SetSignaled();
+				}
+			;
+
+			auto &Logger = fg_GetSys()->f_GetLogger();
+			auto LogDestination = Logger.f_PushGlobalDestination
+				(
+					[pState]
+					(
+						umint _ThreadID
+						, NTime::CTime const &_Time
+						, NLog::ESeverity _Sev
+						, NLog::CLogStr const &_Message
+						, NContainer::TCVector<NStr::CStr> const &_Categories
+						, NContainer::TCVector<NStr::CStr> const &_Operations
+						, NLog::CLogLocationTag const &_Loc
+					)
+					{
+						if (_Message.f_Find("Unobserved exception in future") >= 0 && _Message.f_Find("Lookup cancelled") >= 0)
+							pState->m_nUnobservedCancellations.f_FetchAdd(1);
+					}
+					, false
+				)
+			;
+			auto RemoveLogDestination = g_OnScopeExit / [&Logger, LogDestination]
+				{
+					Logger.f_RemoveGlobalDestination(LogDestination);
+				}
+			;
+
+			CResolveActor::FHostResolver fResolve = [pState](NStr::CStr const &_Host, ENetAddressType _PreferType)
+				{
+					pState->m_Started.f_SetResult();
+					pState->m_Release.f_Wait();
+					pState->m_Finished.f_SetResult();
+
+					return CResolveActor::CAddresses{CNetAddress(CNetAddressTCPv4(CNetAddressIPv4(127, 0, 0, 1), 0))};
+				}
+			;
+
+			auto Resolver = fg_ConstructActor<CResolveActor>(fResolve);
+			{
+				auto Lookup = co_await Resolver.f_Bind<&CResolveActor::f_ResolveHost>(NStr::CStr("abandoned.test"), ENetAddressType_None);
+				co_await pState->m_Started.f_Future();
+			}
+
+			auto Probe = co_await Resolver.f_Bind<&CResolveActor::f_Resolve>(NStr::CStr("127.0.0.1:1234"), ENetAddressType_TCPv4);
+			co_await fg_Move(Probe.m_Result);
+
+			pState->m_Release.f_SetSignaled();
+			co_await pState->m_Finished.f_Future();
+			co_await fg_Move(Resolver).f_Destroy();
+			co_await fg_Timeout(0.1);
+
+			DMibExpect(pState->m_nUnobservedCancellations.f_Load(), ==, 0u);
+
+			co_return {};
+		};
+#endif
 	}
 
 	DMibTestRegister(CResolveActor_Tests, Malterlib::Network);

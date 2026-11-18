@@ -68,7 +68,10 @@ enum ENetFlag
 `CResolveActor::f_Resolve` and `f_ResolveHost` return cancellable lookups. Keep the
 lookup's `m_Cancel` subscription alive while awaiting its `m_Result`, a vector of
 `CNetAddress` values. Cancellation stops delivery immediately; a query already
-sent through c-ares may finish internally.
+sent through c-ares may finish internally. Dropping a whole lookup abandons it:
+a `m_Result` still in the lookup is marked discarded, so its cancellation is not
+reported as an unobserved exception, but a result handler already set on it
+is not unregistered. A result moved out of the lookup is the holder's to observe.
 
 `f_Resolve` and `f_ResolveHost` use an actor-owned c-ares channel with socket readiness and timers
 provided by the I/O loop. It does not enable c-ares' event thread. Channel setup

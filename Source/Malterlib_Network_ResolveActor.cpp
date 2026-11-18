@@ -102,7 +102,12 @@ namespace NMib::NNetwork
 	auto CResolveActor::f_Resolve(NStr::CStr _Address, ENetAddressType _PreferType) -> TCFuture<CLookup>
 	{
 		if (_Address.f_IsEmpty())
-			co_return CLookup{.m_Result = CAddresses{CNetAddress{}}};
+		{
+			CLookup Lookup;
+			Lookup.m_Result = CAddresses{CNetAddress{}};
+
+			co_return fg_Move(Lookup);
+		}
 
 		co_return fp_Start<CAddresses>
 			(
