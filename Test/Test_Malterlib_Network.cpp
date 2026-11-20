@@ -1033,6 +1033,24 @@ void CSysNet_Tests::f_DoTests()
 			DMibExpectFalse(CFile::fs_FileExists(Path));
 			DMibExpectFalse(CFile::fs_FileExists(StagedPath));
 		}
+#ifndef DPlatformFamily_Windows
+		{
+			DMibTestPath("Permissions");
+
+			CNetAddress ModeAddress = CSocket::fs_ResolveAddress("UNIX(0606):" + Path);
+			CSocket ModeListener;
+			ModeListener.f_Listen(ModeAddress, nullptr, ENetFlag_None);
+
+			auto Attributes = CFile::fs_GetAttributesOnLink(Path) & NFile::EFileAttrib_AllUnixPermissions;
+			DMibExpect(Attributes, ==, NFile::EFileAttrib_UserRead | NFile::EFileAttrib_UserWrite | NFile::EFileAttrib_EveryoneRead | NFile::EFileAttrib_EveryoneWrite);
+
+			CSocket Client;
+			Client.f_Connect(ModeAddress);
+			DMibExpectTrue(Client.f_IsValid());
+			Client.f_Close();
+			ModeListener.f_Close();
+		}
+#endif
 	};
 
 	DMibTestSuite("Unix Listener Replacement")
