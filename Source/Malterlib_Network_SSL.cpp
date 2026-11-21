@@ -1802,6 +1802,9 @@ namespace NMib::NNetwork
 			}
 		;
 
+		// More fragments than this would make SSL_open_app_datav refuse
+		static_assert(CSSLTransport::mc_nMaxCipherFragments <= SSL_IOVEC_MAX);
+
 		for (;;)
 		{
 			CRYPTO_IVEC Fragments[CSSLTransport::mc_nMaxCipherFragments];
@@ -2568,13 +2571,18 @@ namespace NMib::NNetwork
 		;
 	}
 
+	// The completion receive has no copying read to fall back to, as the readiness path has, so opening in place must not refuse.
+	// It doesn't: the completion receive needs zero-copy and starts after the handshake, renegotiation is off, the cipher queue
+	// has fewer fragments than the limit and the destinations are not the ciphertext.
 	bool CSSLConnection::f_OpenHeld(void *_pData, umint _nLen, CSocketOperationResult &o_Result)
 	{
 		return fg_RunProtectRegisters
 			(
 				[&]() -> decltype(auto)
 				{
-					return mp_pInternal->f_TryOpenInto(_pData, _nLen, o_Result);
+					bool const bOpened = mp_pInternal->f_TryOpenInto(_pData, _nLen, o_Result);
+					DMibFastCheck(bOpened);
+					return bOpened;
 				}
 			)
 		;
