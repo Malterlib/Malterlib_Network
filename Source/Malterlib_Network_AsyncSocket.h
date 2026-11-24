@@ -230,6 +230,7 @@ namespace NMib::NNetwork
 			)
 			-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 		; // You will receive an exception if connection fails
+		auto f_AdoptConnection(NNetwork::CInheritedSocketHandle _Socket, NNetwork::FVirtualSocketFactory _fSocketFactory) -> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>;
 		auto f_ConnectAddress
 			(
 				NNetwork::CNetAddress _ConnectToAddress // The server to connect to

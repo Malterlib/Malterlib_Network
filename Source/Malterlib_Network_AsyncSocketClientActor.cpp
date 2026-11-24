@@ -94,6 +94,70 @@ namespace NMib::NNetwork
 		co_return co_await f_ConnectAddress(fg_Move(ConnectToAddress), fg_Move(BindToAddress), fg_Move(_fSocketFactory), fg_Move(_ConnectToAddress));
 	}
 
+	// Takes over a stream socket that is already connected, such as one that another API connected or accepted, with the default settings of this
+	// actor. _fSocketFactory creates the socket that adopts the descriptor, CSocket_TCP when empty. The descriptor is closed when the adoption fails
+	auto CAsyncSocketClientActor::f_AdoptConnection(NNetwork::CInheritedSocketHandle _Socket, NNetwork::FVirtualSocketFactory _fSocketFactory)
+		-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
+	{
+		if (!_fSocketFactory)
+			_fSocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
+
+		// The connection actor shares the manager of the loop that its socket registers on, as connected sockets do
+		NConcurrency::CIoLoopBinding IoBinding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+
+		FAsyncSocketUpgradeCheck fCheckUpgrade;
+		if (mp_fCheckUpgradeFactory)
+			fCheckUpgrade = mp_fCheckUpgradeFactory();
+
+		NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor
+			(
+				fg_Construct<CAsyncSocketActor>(true, mp_MaxMessageSize, mp_FragmentationSize, mp_SendWindowBytes, mp_Timeout, fg_Move(fCheckUpgrade))
+			)
+		;
+
+		if (IoBinding.m_pLoop)
+			ConnectionActor->f_SetInitialQueue(IoBinding.m_iQueue);
+
+		NStorage::TCUniquePointer<NNetwork::ICSocket> pSocket;
+		{
+			auto CaptureScope = co_await NConcurrency::g_CaptureExceptions.f_Specific<NCryptography::CExceptionCryptography, NNetwork::CExceptionNet>();
+
+			NException::CDisableExceptionTraceScope DisableExceptionTrace;
+			NConcurrency::CIoLoopCreateScope IoLoopScope(IoBinding);
+
+			pSocket = _fSocketFactory("");
+
+			// Reports that come before the actor has the socket are latched until it does
+			pSocket->f_InheritHandle
+				(
+					_Socket.f_Detach()
+					, [WeakConnectionActor = ConnectionActor.f_Weak()](NNetwork::ENetTCPState _StateAdded)
+					{
+						auto ConnectionActor = WeakConnectionActor.f_Lock();
+						if (!ConnectionActor)
+							return;
+
+						DMibLogWarningOrDiscardResult
+							(
+								ConnectionActor.f_Bind<&CAsyncSocketActor::fp_StateAdded>(_StateAdded)
+								, "Mib/Network"
+								, "Reporting the socket state to the connection actor failed"
+							)
+						;
+					}
+				)
+			;
+		}
+
+		co_await ConnectionActor(&CAsyncSocketActor::fp_SetSocket, fg_Move(pSocket));
+
+		auto ConnectionResult = co_await ConnectionActor(&CAsyncSocketActor::fp_FinishConnection);
+		if (ConnectionResult.m_Result == CAsyncSocketActor::EFinishConnectionResult_Error)
+			co_return DMibErrorInstance(ConnectionResult.m_ConnectionInfo.m_Error);
+
+		co_return CAsyncSocketNewClientConnection(fg_Move(ConnectionActor), fg_Move(ConnectionResult.m_ConnectionInfo.m_pSocketInfo), ConnectionResult.m_ConnectionInfo.m_PeerAddress);
+	}
+
 	auto CAsyncSocketClientActor::f_ConnectAddress
 		(
 			NNetwork::CNetAddress _ConnectToAddress
