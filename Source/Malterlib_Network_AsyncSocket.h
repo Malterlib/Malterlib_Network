@@ -223,6 +223,7 @@ namespace NMib::NNetwork
 		void f_SetDefaultSendWindow(umint _nBytes);
 		void f_SetDefaultTimeout(fp64 _Timeout);
 		void f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory);
+		void f_SetDefaultIoLoopBinding(NConcurrency::CIoLoopBinding const &_Binding);
 
 		auto f_Connect
 			(
@@ -266,6 +267,7 @@ namespace NMib::NNetwork
 		umint mp_SendWindowBytes = 0;
 		fp64 mp_Timeout;
 		FAsyncSocketUpgradeCheckFactory mp_fCheckUpgradeFactory;
+		NConcurrency::CIoLoopBinding mp_IoLoopBinding; // The binding of every connection when set, otherwise each connection picks one
 	};
 
 	struct CAsyncSocketServerCallbacks

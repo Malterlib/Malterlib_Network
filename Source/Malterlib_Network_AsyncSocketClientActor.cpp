@@ -44,6 +44,14 @@ namespace NMib::NNetwork
 		mp_Timeout = _Timeout;
 	}
 
+	// Connections that share a binding share an io loop and a queue, so the actors that pass data between them don't move it between threads.
+	// _Binding comes from f_PickIoLoopBinding of the concurrency manager of this actor, for CAsyncSocketActor::mc_Priority, since the connection
+	// actors are constructed in this actor's manager and must not outlive the io loop
+	void CAsyncSocketClientActor::f_SetDefaultIoLoopBinding(NConcurrency::CIoLoopBinding const &_Binding)
+	{
+		mp_IoLoopBinding = _Binding;
+	}
+
 	void CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory(FAsyncSocketUpgradeCheckFactory const &_fCheckUpgradeFactory)
 	{
 		mp_fCheckUpgradeFactory = _fCheckUpgradeFactory;
@@ -103,7 +111,7 @@ namespace NMib::NNetwork
 			_fSocketFactory = NNetwork::CSocket_TCP::fs_GetFactory();
 
 		// The connection actor shares the manager of the loop that its socket registers on, as connected sockets do
-		NConcurrency::CIoLoopBinding IoBinding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+		NConcurrency::CIoLoopBinding IoBinding = mp_IoLoopBinding ? mp_IoLoopBinding : f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
 
 		FAsyncSocketUpgradeCheck fCheckUpgrade;
 		if (mp_fCheckUpgradeFactory)
@@ -174,7 +182,7 @@ namespace NMib::NNetwork
 			co_return DMibErrorInstance("Connect to address cannot be empty");
 
 		// Use this actor's manager so loop ownership and shutdown share its lifetime.
-		NConcurrency::CIoLoopBinding IoBinding = f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
+		NConcurrency::CIoLoopBinding IoBinding = mp_IoLoopBinding ? mp_IoLoopBinding : f_ConcurrencyManager().f_PickIoLoopBinding(CAsyncSocketActor::mc_Priority);
 
 		CPendingConnection *pPending;
 		{
