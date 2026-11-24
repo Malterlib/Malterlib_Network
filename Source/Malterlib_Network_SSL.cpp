@@ -1804,6 +1804,8 @@ namespace NMib::NNetwork
 
 		// More fragments than this would make SSL_open_app_datav refuse
 		static_assert(CSSLTransport::mc_nMaxCipherFragments <= SSL_IOVEC_MAX);
+		// Room for the largest record a header can announce, so the hold buffer never needs more output
+		static_assert(CSSLTransport::mc_nPlainHoldSize >= SSL3_RT_MAX_ENCRYPTED_LENGTH);
 
 		for (;;)
 		{
@@ -1850,8 +1852,8 @@ namespace NMib::NNetwork
 				if (nConsumed)
 					continue;
 
-				// Use holdover storage when caller capacity cannot fit a record body or reads could stop making progress.
-				if (mp_Transport.f_GetCipherPending() > SSL3_RT_HEADER_LENGTH)
+				// The next record needs more room than the caller's buffer has, which the hold buffer always has
+				if (Ret == ssl_open_v_need_output)
 				{
 					umint nRoom = 0;
 					uint8 *pHold = mp_Transport.f_BeginHold(nRoom);
@@ -1879,6 +1881,13 @@ namespace NMib::NNetwork
 					if (HeldRet == ssl_open_v_close_notify)
 					{
 						fShutdown();
+						return true;
+					}
+
+					// Can't happen, as the hold buffer holds any record, but reads would stop making progress if it did
+					if (HeldRet == ssl_open_v_need_output)
+					{
+						fReadFailed();
 						return true;
 					}
 
