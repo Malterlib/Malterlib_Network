@@ -84,6 +84,11 @@ namespace NMib::NNetwork
 	{
 		return t_Type;
 	}
+
+	inline ENetAddressType CNetAddressVSock::fs_GetType()
+	{
+		return mc_Type;
+	}
 }
 
 namespace NMib::NStream
@@ -243,7 +248,7 @@ namespace NMib::NNetwork
 		auto Type = f_GetType();
 
 		ENetAddressStringFlag Flags = ENetAddressStringFlag_IncludePort;
-		if (Type == ENetAddressType_Unix)
+		if (Type == ENetAddressType_Unix || Type == ENetAddressType_VSock)
 			Flags |= ENetAddressStringFlag_IncludeType;
 
 		o_Str += f_GetString(Flags);

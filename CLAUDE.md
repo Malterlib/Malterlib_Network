@@ -27,6 +27,12 @@ The Network module provides cross-platform networking functionality including TC
 - **CNetAddressIPv6** - IPv6 address representation
 - **CNetAddressTCPv4** - TCP over IPv4 address with port
 - **CNetAddressTCPv6** - TCP over IPv6 address with port
+- **CNetAddressVSock** - Virtio socket (AF_VSOCK) address: the context ID of a machine and a port, both `uint32`. Its string
+  form is `VSOCK:<Context ID>:<Port>` in decimal, such as `VSOCK:2:1024` for port 1024 of the host of a VM, and it
+  resolves without DNS. Stream sockets connect, listen and accept with it on macOS (`sockaddr_vm` of `<sys/vsock.h>`) and
+  Linux (`<linux/vm_sockets.h>`). Windows has no AF_VSOCK, so there the address parses, formats and compares, but its
+  sockets refuse it. `CNetAddress::f_GetPort` and `f_SetPort` only handle TCP ports; read and set the port of a virtio
+  socket address through `CNetAddressVSock`
 
 ### Key Enums
 
@@ -335,5 +341,5 @@ MalterlibBuildShowProgress=false ./mib build Tests
 - Always check return values and handle partial operations
 - The module uses Malterlib's custom memory allocators
 - SSL contexts can be shared between multiple sockets
-- Unix domain sockets use the "UNIX:" prefix in addresses
+- Unix domain sockets use the "UNIX:" prefix in addresses, and virtio sockets the "VSOCK:" prefix
 - IPv6 addresses must be enclosed in brackets when specifying ports

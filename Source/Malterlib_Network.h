@@ -151,6 +151,7 @@ namespace NMib::NNetwork
 		, ENetAddressType_TCPv4 = 1
 		, ENetAddressType_TCPv6 = 2
 		, ENetAddressType_Unix  = 3
+		, ENetAddressType_VSock = 4
 	};
 
 	enum ENetAddressStringFlag
@@ -180,6 +181,22 @@ namespace NMib::NNetwork
 
 	using CNetAddressTCPv4 = TCNetAddressTCP<CNetAddressIPv4, ENetAddressType_TCPv4>;
 	using CNetAddressTCPv6 = TCNetAddressTCP<CNetAddressIPv6, ENetAddressType_TCPv6>;
+
+	// A virtio socket (AF_VSOCK) endpoint: the context ID of a machine and a port of it. Windows has no virtio sockets, so its sockets refuse it
+	struct CNetAddressVSock
+	{
+		static ENetAddressType fs_GetType();
+
+		static constexpr ENetAddressType mc_Type = ENetAddressType_VSock;
+		static constexpr uint32 mc_ContextID_Hypervisor = 0;
+		static constexpr uint32 mc_ContextID_Local = 1; // Loopback within the machine
+		static constexpr uint32 mc_ContextID_Host = 2;
+		static constexpr uint32 mc_ContextID_Any = 0xFFFFFFFF;
+		static constexpr uint32 mc_Port_Any = 0xFFFFFFFF;
+
+		uint32 m_ContextID = 0;
+		uint32 m_Port = 0;
+	};
 
 	enum ENetTCPState
 	{
