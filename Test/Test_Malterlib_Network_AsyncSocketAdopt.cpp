@@ -21,6 +21,14 @@ using namespace NMib::NNetwork;
 using namespace NMib::NStorage;
 using namespace NMib::NStr;
 
+// A connection that a client adopted, not yet accepted, and the end of it that the server accepted. Outside the anonymous namespace, since futures
+// identify their types by name
+struct CAsyncSocketAdoptTestPair
+{
+	CAsyncSocketNewClientConnection m_Adopted;
+	CAsyncSocketNewServerConnection m_Accepted;
+};
+
 namespace
 {
 	fp64 g_Timeout = 30.0 * NMib::NTest::gc_TimeoutMultiplier;
@@ -28,17 +36,29 @@ namespace
 	// Used only on the test actor, which runs the callbacks
 	struct CPeerState
 	{
+		TCVector<TCPromise<void>> m_HeldReceives;
 		CStr m_Received;
+		uint64 m_nReceived = 0;
+		bool m_bHoldReceives = false;
 		bool m_bClosed = false;
 	};
 
-	CAsyncSocketCallbacks fg_PeerCallbacks(TCSharedPointer<CPeerState> const &_pState)
+	CAsyncSocketCallbacks fg_PeerCallbacks(TCSharedPointer<CPeerState> const &_pState, umint _nMaxUnhandledReceiveBytes)
 	{
 		CAsyncSocketCallbacks Callbacks;
+		Callbacks.m_nMaxUnhandledReceiveBytes = _nMaxUnhandledReceiveBytes;
 		Callbacks.m_fOnReceiveData = g_ActorFunctor / [_pState](CSharedByteVector _Data) -> TCFuture<void>
 			{
+				_pState->m_nReceived += _Data.f_GetLen();
 				if (_pState->m_Received.f_GetLen() < 64)
 					_pState->m_Received += CStr((ch8 const *)_Data.f_GetArray(), _Data.f_GetLen());
+
+				if (!_pState->m_bHoldReceives)
+					co_return {};
+
+				TCPromiseFuturePair<void> Held;
+				_pState->m_HeldReceives.f_Insert(fg_Move(Held.m_Promise));
+				co_await fg_Move(Held.m_Future);
 
 				co_return {};
 			}
@@ -103,6 +123,71 @@ namespace
 			)
 		;
 	}
+
+	// Listens on a TCP loopback port with _Server and connects to it with an adopted descriptor
+	TCFuture<CAsyncSocketAdoptTestPair> fg_ConnectAdopted(TCActor<CAsyncSocketServerActor> _Server, TCActor<CAsyncSocketClientActor> _Client)
+	{
+		TCPromiseFuturePair<CAsyncSocketNewServerConnection> ServerConnection;
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [Promise = ServerConnection.m_Promise](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				if (!Promise.f_IsSet())
+					Promise.f_SetResult(fg_Move(_Connection));
+
+				co_return {};
+			}
+		;
+
+		auto Listen = co_await _Server
+			(
+				&CAsyncSocketServerActor::f_StartListenAddress
+				, fg_CreateVector(CSocket::fs_ResolveAddress("127.0.0.1:0"))
+				, ENetFlag_None
+				, fg_Move(ServerCallbacks)
+				, nullptr
+			)
+		;
+		if (Listen.m_ListenPorts.f_GetLen() != 1)
+			co_return DMibErrorInstance("Expected one listen port");
+
+		CInheritedSocketHandle Handle = co_await fg_ConnectHandle(CSocket::fs_ResolveAddress("127.0.0.1:{}"_f << Listen.m_ListenPorts[0]));
+
+		CAsyncSocketAdoptTestPair Pair
+			{
+				.m_Adopted = co_await _Client(&CAsyncSocketClientActor::f_AdoptConnection, fg_Move(Handle), nullptr).f_Timeout(g_Timeout, "Timed out adopting")
+				, .m_Accepted = co_await fg_Move(ServerConnection.m_Future).f_Timeout(g_Timeout, "Timed out accepting")
+			}
+		;
+
+		co_return fg_Move(Pair);
+	}
+
+	// Resolves the receives that _pState holds, every 10 ms, until _fDone returns true, for at most g_Timeout. Returns whether it did
+	TCFuture<bool> fg_ReleaseHeldReceivesUntil(TCSharedPointer<CPeerState> _pState, NFunction::TCFunction<bool ()> _fDone)
+	{
+		for (fp64 Waited = 0.0; Waited < g_Timeout; Waited += 0.01)
+		{
+			auto HeldReceives = fg_Move(_pState->m_HeldReceives);
+			for (auto &Promise : HeldReceives)
+				Promise.f_SetResult();
+
+			if (_fDone())
+				co_return true;
+
+			co_await fg_Timeout(0.01);
+		}
+
+		co_return _fDone();
+	}
+
+	CSharedByteVector fg_ZeroBytes(umint _nBytes)
+	{
+		CIOByteVector Data;
+		Data.f_SetLen(_nBytes);
+		NMemory::fg_MemClear(Data.f_GetArray(), Data.f_GetLen());
+		return CSharedByteVector(fg_Move(Data));
+	}
 }
 
 struct CAsyncSocketAdopt_Tests : public NMib::NTest::CTest
@@ -114,6 +199,10 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 {
 	DMibTestSuite("Adopt Connection") -> TCFuture<void>
 	{
+		constexpr umint c_nMaxUnhandledReceiveBytes = 256 * 1024;
+		constexpr umint c_nChunkBytes = 1024 * 1024;
+		constexpr umint c_nChunks = 32;
+
 		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
 		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
 
@@ -150,8 +239,8 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
 		TCSharedPointer<CPeerState> pServerState = fg_Construct();
 
-		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState));
-		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Accepted.f_Accept(fg_PeerCallbacks(pServerState));
+		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState, c_nMaxUnhandledReceiveBytes));
+		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Accepted.f_Accept(fg_PeerCallbacks(pServerState, 0));
 
 		{
 			DMibTestPath("Data Both Ways");
@@ -184,6 +273,59 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		}
 
 		{
+			DMibTestPath("Receive Future Stops Reading");
+
+			pAdoptedState->m_bHoldReceives = true;
+			pAdoptedState->m_nReceived = 0;
+
+			CIOByteVector Chunk;
+			Chunk.f_SetLen(c_nChunkBytes);
+			NMemory::fg_MemClear(Chunk.f_GetArray(), Chunk.f_GetLen());
+			CSharedByteVector SharedChunk(fg_Move(Chunk));
+
+			TCFutureVector<void> Sends;
+			for (umint iChunk = 0; iChunk < c_nChunks; ++iChunk)
+				ServerSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(SharedChunk), uint32(0)) > Sends;
+
+			// Reading stops once the unresolved receives hold the limit, so what arrives stays within the limit and one delivery
+			uint64 nReceived = 0;
+			for (umint iStable = 0; iStable < 50;)
+			{
+				co_await fg_Timeout(0.01);
+				if (pAdoptedState->m_nReceived == nReceived)
+					++iStable;
+				else
+				{
+					nReceived = pAdoptedState->m_nReceived;
+					iStable = 0;
+				}
+			}
+
+			DMibExpect(nReceived, >=, uint64(c_nMaxUnhandledReceiveBytes));
+			DMibExpect(nReceived, <, uint64(2 * c_nMaxUnhandledReceiveBytes + c_nChunkBytes));
+
+			pAdoptedState->m_bHoldReceives = false;
+			auto HeldReceives = fg_Move(pAdoptedState->m_HeldReceives);
+			for (auto &Promise : HeldReceives)
+				Promise.f_SetResult();
+
+			DMibExpectTrue
+				(
+					co_await fg_WaitUntil
+					(
+						[pAdoptedState]
+						{
+							return pAdoptedState->m_nReceived == uint64(c_nChunks * c_nChunkBytes);
+						}
+					)
+				)
+			;
+			DMibExpect(pAdoptedState->m_nReceived, ==, uint64(c_nChunks * c_nChunkBytes));
+
+			co_await fg_AllDone(Sends).f_Timeout(g_Timeout, "Timed out sending");
+		}
+
+		{
 			DMibTestPath("Close Reaches The Peer");
 
 			auto CloseResult = co_await AdoptedSocket(&CAsyncSocketActor::f_CloseWithLinger, EAsyncSocketStatus_NormalClosure, CStr("Done"), 5.0).f_Wrap();
@@ -200,6 +342,189 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 				)
 			;
 		}
+
+		co_return {};
+	};
+
+	DMibTestSuite("Reading Stops Before Accept") -> TCFuture<void>
+	{
+		constexpr umint c_nChunkBytes = 1024 * 1024;
+		constexpr umint c_nChunks = 32;
+
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
+
+		CAsyncSocketAdoptTestPair Pair = co_await fg_ConnectAdopted(Server, Client);
+
+		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
+		TCSharedPointer<CPeerState> pServerState = fg_Construct();
+
+		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Pair.m_Accepted.f_Accept(fg_PeerCallbacks(pServerState, 0));
+
+		TCSharedPointer<NAtomic::TCAtomic<umint>> pSent = fg_Construct(0);
+		CSharedByteVector Chunk = fg_ZeroBytes(c_nChunkBytes);
+		for (umint iChunk = 0; iChunk < c_nChunks; ++iChunk)
+		{
+			ServerSocket(&CAsyncSocketActor::f_SendData, fg_TempCopy(Chunk), uint32(0)).f_Call().f_OnResultSet
+				(
+					[pSent](TCAsyncResult<void> &&_Result)
+					{
+						if (_Result)
+							pSent->f_FetchAdd(1);
+					}
+				)
+			;
+		}
+
+		// An adopted connection that isn't accepted reads one delivery and leaves the rest to the kernel, which takes less than all the chunks
+		umint nSent = 0;
+		for (umint iStable = 0; iStable < 50;)
+		{
+			co_await fg_Timeout(0.01);
+			if (pSent->f_Load() == nSent)
+				++iStable;
+			else
+			{
+				nSent = pSent->f_Load();
+				iStable = 0;
+			}
+		}
+
+		DMibExpect(nSent, <, c_nChunks);
+
+		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Pair.m_Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState, 0));
+
+		DMibExpectTrue
+			(
+				co_await fg_WaitUntil
+				(
+					[pAdoptedState, pSent]
+					{
+						return pAdoptedState->m_nReceived == uint64(c_nChunks * c_nChunkBytes) && pSent->f_Load() == c_nChunks;
+					}
+				)
+			)
+		;
+		DMibExpect(pAdoptedState->m_nReceived, ==, uint64(c_nChunks * c_nChunkBytes));
+
+		co_return {};
+	};
+
+	DMibTestSuite("Close After Paused Read") -> TCFuture<void>
+	{
+		constexpr umint c_nMaxUnhandledReceiveBytes = 64 * 1024;
+		constexpr umint c_nDeliveryBytes = 4096;
+
+		// Reading pauses at the limit having read less than one delivery past it, so the rest stays unread with the close. All of it has to fit in the
+		// kernel's socket buffers before the accept, which are small with the default Linux settings
+		constexpr umint c_nBytes = c_nMaxUnhandledReceiveBytes + c_nDeliveryBytes;
+
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
+
+		co_await Client(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, c_nDeliveryBytes);
+
+		CAsyncSocketAdoptTestPair Pair = co_await fg_ConnectAdopted(Server, Client);
+
+		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
+		TCSharedPointer<CPeerState> pServerState = fg_Construct();
+
+		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Pair.m_Accepted.f_Accept(fg_PeerCallbacks(pServerState, 0));
+
+		// The peer's data and its close wait in the kernel until the accept, so the first read after it reaches the limit with the close reported
+		co_await ServerSocket(&CAsyncSocketActor::f_SendData, fg_ZeroBytes(c_nBytes), uint32(0)).f_Timeout(g_Timeout, "Timed out sending");
+
+		// The close of the server's socket finishes when the adopted socket closes too
+		TCFutureVector<CAsyncSocketActor::CCloseInfo> ServerClose;
+		ServerSocket(&CAsyncSocketActor::f_CloseWithLinger, EAsyncSocketStatus_NormalClosure, CStr("Done"), g_Timeout) > ServerClose;
+
+		co_await fg_Timeout(0.2);
+
+		pAdoptedState->m_bHoldReceives = true;
+		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Pair.m_Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState, c_nMaxUnhandledReceiveBytes));
+
+		DMibExpectTrue
+			(
+				co_await fg_ReleaseHeldReceivesUntil
+				(
+					pAdoptedState
+					, [pAdoptedState]
+					{
+						return pAdoptedState->m_bClosed;
+					}
+				)
+			)
+		;
+		DMibExpect(pAdoptedState->m_nReceived, ==, uint64(c_nBytes));
+
+		auto ServerCloseResults = co_await fg_AllDoneWrapped(ServerClose).f_Timeout(g_Timeout, "Timed out closing");
+		for (auto &CloseResult : ServerCloseResults)
+			DMibExpect(CloseResult ? CStr() : CloseResult.f_GetExceptionStr(), ==, "");
+
+		co_return {};
+	};
+
+	DMibTestSuite("Local Close While Paused") -> TCFuture<void>
+	{
+		constexpr umint c_nMaxUnhandledReceiveBytes = 64 * 1024;
+		constexpr umint c_nDeliveryBytes = 4096;
+
+		// The deliveries reach the limit, and reading pauses there having read less than one delivery past it, so the rest stays unread in the kernel
+		constexpr umint c_nBytes = c_nMaxUnhandledReceiveBytes + c_nDeliveryBytes;
+
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
+
+		co_await Client(&CAsyncSocketClientActor::f_SetDefaultFragmentationSize, c_nDeliveryBytes);
+
+		CAsyncSocketAdoptTestPair Pair = co_await fg_ConnectAdopted(Server, Client);
+
+		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
+		TCSharedPointer<CPeerState> pServerState = fg_Construct();
+
+		pAdoptedState->m_bHoldReceives = true;
+		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Pair.m_Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState, c_nMaxUnhandledReceiveBytes));
+		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Pair.m_Accepted.f_Accept(fg_PeerCallbacks(pServerState, 0));
+
+		TCFuture<void> Send = ServerSocket(&CAsyncSocketActor::f_SendData, fg_ZeroBytes(c_nBytes), uint32(0)).f_Call();
+		DMibExpectTrue
+			(
+				co_await fg_WaitUntil
+				(
+					[pAdoptedState]
+					{
+						return pAdoptedState->m_nReceived >= c_nMaxUnhandledReceiveBytes;
+					}
+				)
+			)
+		;
+		co_await fg_Move(Send).f_Timeout(g_Timeout, "Timed out sending");
+
+		// The handlers still hold their data, so the close must not wait for them to finish
+		auto CloseResult = co_await AdoptedSocket(&CAsyncSocketActor::f_CloseWithLinger, EAsyncSocketStatus_NormalClosure, CStr("Done"), 5.0).f_Wrap();
+		DMibExpect(CloseResult ? CStr() : CloseResult.f_GetExceptionStr(), ==, "");
+
+		DMibExpectTrue
+			(
+				co_await fg_ReleaseHeldReceivesUntil
+				(
+					pAdoptedState
+					, [pServerState]
+					{
+						return pServerState->m_bClosed;
+					}
+				)
+			)
+		;
 
 		co_return {};
 	};
@@ -229,7 +554,7 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		DMibAssert(Adopted ? CStr() : Adopted.f_GetExceptionStr(), ==, "");
 
 		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
-		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Adopted->f_Accept(fg_PeerCallbacks(pAdoptedState));
+		TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Adopted->f_Accept(fg_PeerCallbacks(pAdoptedState, 0));
 
 		DMibAssert(write(PeerFile, "ping", 4), ==, ssize_t(4));
 		DMibExpectTrue

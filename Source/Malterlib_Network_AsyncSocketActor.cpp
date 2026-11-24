@@ -122,6 +122,9 @@ namespace NMib::NNetwork
 		void f_ShutdownDone(NStr::CStr const &_Error);
 
 		void f_HandleDataMessage(NContainer::CSharedByteVector &&_Data);
+		void f_CallOnReceiveData(NContainer::CSharedByteVector &&_Data);
+		bool f_IsReceivePaused() const;
+		bool f_IsGatheringReceive() const;
 		void f_DeliverReceiveBuffer();
 		bool f_HasBufferedReceive() const;
 		EIncomingDataResult f_CheckIncomingData();
@@ -179,6 +182,7 @@ namespace NMib::NNetwork
 
 		CAsyncSocketCallbacks m_Callbacks;
 		NContainer::TCVector<NContainer::CSharedByteVector> m_DeferredOnReciveData;
+		NContainer::TCVector<NSys::CIoStreamSegment> m_PausedSegments; // Held while the receive is paused, so they stay charged to the receive backpressure
 		CNotifyClose m_DeferredNotifyClose;
 
 		NConcurrency::TCPromise<CFinishConnectionResult> m_FinishConnectionPromise;
@@ -200,7 +204,8 @@ namespace NMib::NNetwork
 		umint m_FramentationSize = 0;
 
 		umint m_nSendOpsInFlight = 0;
-		umint m_nOutgoingSubmitted = 0; // Reserved plaintext excluded from later gathers until completion.
+		umint m_nOutgoingSubmitted = 0;     // Reserved plaintext excluded from later gathers until completion.
+		umint m_nUnhandledReceiveBytes = 0; // Delivered to m_fOnReceiveData with unresolved futures, counted when the callbacks limit them
 
 		NContainer::TCVector<CSendReservation> m_SendReservations; // Preallocated for the window; indexed free list avoids per-send scans or growth.
 		umint m_nSendReservationsInUse = 0;
@@ -212,6 +217,7 @@ namespace NMib::NNetwork
 		NNetwork::ENetTCPState m_PendingProcessState = NNetwork::ENetTCPState_None;
 		NNetwork::ENetTCPState m_DeferredCloseStates = NNetwork::ENetTCPState_None; // Held until earlier stream bytes, including peer close frames, have been delivered.
 		NNetwork::ENetTCPState m_StateBeforeSocket = NNetwork::ENetTCPState_None;   // Latch reports queued during accept before socket handover, including terminal handshake failures.
+		NNetwork::ENetTCPState m_PausedStates = NNetwork::ENetTCPState_None;        // Readiness and close reports held while the receive is paused, which unread data precedes.
 
 		bool m_bClient = false;
 		bool m_bInProcessState = false;
@@ -222,6 +228,7 @@ namespace NMib::NNetwork
 		bool m_bCompletionIo = false;
 		bool m_bReceiveStreamActive = false; // Close states wait for the stream's one terminal segment.
 		bool m_bReceiveStreamEnded = false;
+		bool m_bReceivePaused = false;       // Reading stopped at the limit of unhandled receive bytes and resumes when handlers finish
 
 		bool m_bDeferredShutdownCleanup = false;
 #if DMibConfig_Tests_Enable
@@ -864,6 +871,9 @@ namespace NMib::NNetwork
 
 		if (Internal.m_State == EState_Connected)
 		{
+			// What the readiness receive gathered while the handler was busy was read before the close
+			Internal.f_DeliverReceiveBuffer();
+
 			// Delay write shutdown until queued and in-flight sends drain.
 			if (!_bFatal && !Internal.m_nOutgoingQueuedBytes && !Internal.m_nSendOpsInFlight)
 				fp_Shutdown();
@@ -935,6 +945,11 @@ namespace NMib::NNetwork
 			Internal.m_DeferredCloseStates = NNetwork::ENetTCPState_None;
 			fp_ProcessState(DeferredStates);
 		}
+
+		// A disconnected socket delivers nothing, so a paused readiness receive reads again and drops what it reads, and the close the peer reports
+		// finishes the shutdown without waiting for the callbacks
+		if (Internal.m_pSocket && !Internal.f_GetCompletionIoReceive())
+			fp_ResumeReceive();
 	}
 
 	void CAsyncSocketActor::fp_Shutdown()
@@ -1386,6 +1401,14 @@ namespace NMib::NNetwork
 		if (f_IsDestroyed())
 			return;
 
+		// Held segments keep their order, also the terminal one, which the close of the stream waits for
+		if (!_bHeldOnly && (Internal.f_IsReceivePaused() || !Internal.m_PausedSegments.f_IsEmpty()))
+		{
+			Internal.m_bReceivePaused = true;
+			Internal.m_PausedSegments.f_Insert(fg_Move(_Segment));
+			return;
+		}
+
 		auto &Segment = _Segment;
 		bool bTerminal = !_bHeldOnly && (Segment.m_Status != NSys::EIoCompletionStatus::mc_Done || !Segment.m_nBytes);
 
@@ -1715,8 +1738,103 @@ namespace NMib::NNetwork
 			return;
 		}
 
-		if (m_Callbacks.m_fOnReceiveData)
+		f_CallOnReceiveData(fg_Move(_Data));
+	}
+
+	void CAsyncSocketActor::CInternal::f_CallOnReceiveData(NContainer::CSharedByteVector &&_Data)
+	{
+		if (!m_Callbacks.m_fOnReceiveData)
+			return;
+
+		if (!m_Callbacks.m_nMaxUnhandledReceiveBytes)
+		{
 			m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(_Data));
+			return;
+		}
+
+		m_pThis->fp_CallOnReceiveData(fg_Move(_Data)) > NConcurrency::fg_LogError("Mib/Network", "Delivering received data failed");
+	}
+
+	// Before the connection is accepted, reading stops once a delivery waits for the callbacks, so that a peer can't make the socket hold more than that.
+	// A disconnected socket delivers nothing, so reading it never stops
+	bool CAsyncSocketActor::CInternal::f_IsReceivePaused() const
+	{
+		if (m_State == EState_Disconnected)
+			return false;
+
+		if (m_bDeferringCallbacks)
+			return !m_fCheckUpgrade && !m_DeferredOnReciveData.f_IsEmpty();
+
+		return m_Callbacks.m_nMaxUnhandledReceiveBytes && m_nUnhandledReceiveBytes >= m_Callbacks.m_nMaxUnhandledReceiveBytes;
+	}
+
+	// Gathering makes the deliveries larger, and with them fewer, when data arrives in small reads faster than the handler takes it
+	bool CAsyncSocketActor::CInternal::f_IsGatheringReceive() const
+	{
+		return m_Callbacks.m_nMaxUnhandledReceiveBytes && m_nUnhandledReceiveBytes;
+	}
+
+	// The bytes count as unhandled until the future of the handler resolves, also with an error
+	NConcurrency::TCFuture<void> CAsyncSocketActor::fp_CallOnReceiveData(NContainer::CSharedByteVector _Data)
+	{
+		umint nBytes = _Data.f_GetLen();
+		mp_pInternal->m_nUnhandledReceiveBytes += nBytes;
+
+		// A handler that fails has still finished with the data
+		auto HandleResult = co_await mp_pInternal->m_Callbacks.m_fOnReceiveData(fg_Move(_Data)).f_Wrap();
+		if (!HandleResult)
+			DMibLogWithCategory(Mib/Network, Debug, "Handling received data failed: {}", HandleResult.f_GetExceptionStr());
+
+		if (!f_IsDestroyed())
+			fp_ReceiveHandled(nBytes);
+
+		co_return {};
+	}
+
+	void CAsyncSocketActor::fp_ReceiveHandled(umint _nBytes)
+	{
+		auto &Internal = *mp_pInternal;
+		Internal.m_nUnhandledReceiveBytes -= _nBytes;
+
+		// What the readiness receive gathered while the handler was busy
+		if (!Internal.m_nUnhandledReceiveBytes && Internal.m_State == EState_Connected && !Internal.f_GetCompletionIoReceive())
+			Internal.f_DeliverReceiveBuffer();
+
+		fp_ResumeReceive();
+	}
+
+	// Resumes a paused receive that may read again: first the segments it held, then reading, and last the reports it held
+	void CAsyncSocketActor::fp_ResumeReceive()
+	{
+		auto &Internal = *mp_pInternal;
+		if (!Internal.m_bReceivePaused || Internal.f_IsReceivePaused())
+			return;
+
+		Internal.m_bReceivePaused = false;
+
+		auto PausedSegments = fg_Move(Internal.m_PausedSegments);
+		for (umint iSegment = 0; iSegment < PausedSegments.f_GetLen(); ++iSegment)
+		{
+			if (Internal.m_bReceivePaused)
+			{
+				for (umint iRemaining = iSegment; iRemaining < PausedSegments.f_GetLen(); ++iRemaining)
+					Internal.m_PausedSegments.f_Insert(fg_Move(PausedSegments[iRemaining]));
+
+				return;
+			}
+
+			fp_ReceiveStreamInput(fg_Move(PausedSegments[iSegment]), false);
+		}
+
+		if (Internal.m_bReceivePaused)
+			return;
+
+		NNetwork::ENetTCPState PausedStates = fg_Exchange(Internal.m_PausedStates, NNetwork::ENetTCPState_None);
+		if (!Internal.f_GetCompletionIoReceive())
+			PausedStates = PausedStates | NNetwork::ENetTCPState_Read;
+
+		if (PausedStates)
+			fp_ProcessState(PausedStates);
 	}
 
 	bool CAsyncSocketActor::CInternal::f_HasBufferedReceive() const
@@ -1861,7 +1979,7 @@ namespace NMib::NNetwork
 		if (Internal.m_Callbacks.m_fOnReceiveData)
 		{
 			for (auto &Message : Internal.m_DeferredOnReciveData)
-				Internal.m_Callbacks.m_fOnReceiveData.f_CallDiscard(fg_Move(Message));
+				Internal.f_CallOnReceiveData(fg_Move(Message));
 			Internal.m_DeferredOnReciveData.f_Clear();
 		}
 		if (Internal.m_Callbacks.m_fOnClose && Internal.m_bOnCloseCalled)
@@ -1939,6 +2057,9 @@ namespace NMib::NNetwork
 
 		fp_CheckHandshake(Internal);
 
+		// The receive stops before the accept once a delivery waits for the callbacks
+		fp_ResumeReceive();
+
 		return fg_Move(Subscription);
 	}
 
@@ -1980,6 +2101,17 @@ namespace NMib::NNetwork
 
 		if (!Internal.m_pSocket || !Internal.m_pSocket->f_IsValid() || f_IsDestroyed())
 			return;
+
+		// Data that the paused receive left unread precedes a close, so the reports wait for the resume
+		if (Internal.m_bReceivePaused && !Internal.f_GetCompletionIoReceive())
+		{
+			NNetwork::ENetTCPState HeldStates = NNetwork::ENetTCPState_Read | NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed;
+			Internal.m_PausedStates = Internal.m_PausedStates | (_StateAdded & HeldStates);
+			_StateAdded = _StateAdded & ~HeldStates;
+
+			if (!_StateAdded)
+				return;
+		}
 
 		if
 		(
@@ -2044,6 +2176,16 @@ namespace NMib::NNetwork
 							break;
 						}
 
+						if (Internal.f_IsReceivePaused())
+						{
+							if (!Internal.m_fCheckUpgrade)
+								fp_ProcessIncoming();
+
+							// Reading stops without draining the socket, so no readiness report comes before the resume reads again
+							Internal.m_bReceivePaused = true;
+							break;
+						}
+
 						if (!Internal.m_fCheckUpgrade && Internal.m_State == EState_Connected && Internal.m_IncomingData.f_IsEmpty())
 						{
 							umint DeliverySize = fg_Max(Internal.m_FramentationSize, umint(4096));
@@ -2061,7 +2203,11 @@ namespace NMib::NNetwork
 
 							if (Result.m_nBytes == 0 && !Result.m_bSentNetwork && !Result.m_bReceivedNetwork)
 							{
-								Internal.f_DeliverReceiveBuffer();
+								// While the handler is busy, what arrives is gathered into the buffer, which the handler gets when it fills or when
+								// the handler finishes. A handler that limits the unhandled bytes therefore must not wait for later data before its
+								// future resolves
+								if (!Internal.f_IsGatheringReceive())
+									Internal.f_DeliverReceiveBuffer();
 								break;
 							}
 							DMibLog(DebugVerbose3, " ++++ {} Received data {}", !Internal.m_bClient, Result.m_nBytes);
@@ -2133,10 +2279,20 @@ namespace NMib::NNetwork
 				;
 		}
 
+		// A read that paused can have left data that the peer sent before its close, so the close waits for the resume
+		if (Internal.m_bReceivePaused && !Internal.f_GetCompletionIoReceive())
+		{
+			NNetwork::ENetTCPState CloseStates = NNetwork::ENetTCPState_Closed | NNetwork::ENetTCPState_RemoteClosed;
+			Internal.m_PausedStates = Internal.m_PausedStates | (_StateAdded & CloseStates);
+			_StateAdded = _StateAdded & ~CloseStates;
+		}
+
 		auto fFlushIncomingBeforeClose = [&]
 			{
 				if (Internal.m_State != EState_Connected)
 					return;
+
+				Internal.f_DeliverReceiveBuffer();
 
 				if (Internal.m_fCheckUpgrade)
 				{

@@ -61,6 +61,7 @@ namespace NMib::NNetwork
 	{
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (NContainer::CSharedByteVector _Message)> m_fOnReceiveData;
 		NConcurrency::TCActorFunctor<NConcurrency::TCFuture<void> (EAsyncSocketStatus _Reason, NStr::CStr _Message, EAsyncSocketCloseOrigin _Origin)> m_fOnClose;
+		umint m_nMaxUnhandledReceiveBytes = 0; // When not zero, reading stops while the futures of m_fOnReceiveData for this many bytes are unresolved, which must not wait for later data
 	};
 
 	struct CAsyncSocketActor : public NConcurrency::CActor
@@ -120,6 +121,9 @@ namespace NMib::NNetwork
 
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
+		NConcurrency::TCFuture<void> fp_CallOnReceiveData(NContainer::CSharedByteVector _Data);
+		void fp_ReceiveHandled(umint _nBytes);
+		void fp_ResumeReceive();
 		void fp_StateAdded(NNetwork::ENetTCPState _StateAdded);
 		void fp_Disconnect(EAsyncSocketStatus _Status, NStr::CStr const &_Reason, bool _bFatal, EAsyncSocketCloseOrigin _Origin);
 		void fp_SetSocket(NStorage::TCUniquePointer<NNetwork::ICSocket> &&_pSocket);
