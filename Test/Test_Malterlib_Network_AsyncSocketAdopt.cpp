@@ -346,6 +346,84 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		co_return {};
 	};
 
+	DMibTestSuite("Data Before Close") -> TCFuture<void>
+	{
+		constexpr umint c_nConnections = 20;
+
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCSharedPointer<TCVector<CAsyncSocketNewServerConnection>> pConnections = fg_Construct();
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pConnections](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				pConnections->f_Insert(fg_Move(_Connection));
+				co_return {};
+			}
+		;
+
+		// A Unix domain socket that closes reports the end of both directions at once
+		CNetAddress Address = CSocket::fs_ResolveAddress("UNIX:" + fg_GetSafeUnixSocketPath("{}/AsyncSocketAdopt.socket"_f << NFile::CFile::fs_GetProgramDirectory()));
+
+		auto Listen = co_await Server(&CAsyncSocketServerActor::f_StartListenAddress, fg_CreateVector(Address), ENetFlag_None, fg_Move(ServerCallbacks), nullptr);
+
+		umint nComplete = 0;
+		for (umint iConnection = 0; iConnection < c_nConnections; ++iConnection)
+		{
+			// The peer writes and closes at once, so its close can be reported before its data
+			auto BlockingActorCheckout = fg_BlockingActor();
+			co_await
+				(
+					g_Dispatch(BlockingActorCheckout) / [Address]()
+					{
+						CSocket Socket;
+						Socket.f_Connect(Address, nullptr, g_Timeout);
+						Socket.f_Send("last", 4);
+						Socket.f_Close();
+					}
+				)
+			;
+
+			if
+			(
+				!co_await fg_WaitUntil
+				(
+					[pConnections]
+					{
+						return !pConnections->f_IsEmpty();
+					}
+				)
+			)
+			{
+				break;
+			}
+
+			CAsyncSocketNewServerConnection Accepted = fg_Move(pConnections->f_GetFirst());
+			pConnections->f_Remove(0);
+
+			TCSharedPointer<CPeerState> pState = fg_Construct();
+			TCActorInterface<CAsyncSocketActor> Socket = co_await Accepted.f_Accept(fg_PeerCallbacks(pState, 0));
+
+			co_await fg_WaitUntil
+				(
+					[pState]
+					{
+						return pState->m_bClosed;
+					}
+				)
+			;
+			if (pState->m_Received == "last")
+				++nComplete;
+
+			co_await Socket.f_Destroy();
+		}
+
+		DMibExpect(nComplete, ==, c_nConnections);
+
+		co_return {};
+	};
+
 	DMibTestSuite("Reading Stops Before Accept") -> TCFuture<void>
 	{
 		constexpr umint c_nChunkBytes = 1024 * 1024;

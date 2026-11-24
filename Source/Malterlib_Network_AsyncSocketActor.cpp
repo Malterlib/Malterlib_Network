@@ -2113,6 +2113,10 @@ namespace NMib::NNetwork
 				return;
 		}
 
+		// A peer that closes right after it writes can have the close reported before the data, which is still there to read
+		if ((_StateAdded & NNetwork::ENetTCPState_Closed) && !Internal.f_GetCompletionIoReceive())
+			_StateAdded = _StateAdded | NNetwork::ENetTCPState_Read;
+
 		if
 		(
 			Internal.m_bReceiveStreamActive
