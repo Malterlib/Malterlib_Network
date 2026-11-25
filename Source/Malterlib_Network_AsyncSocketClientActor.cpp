@@ -103,7 +103,8 @@ namespace NMib::NNetwork
 	}
 
 	// Takes over a stream socket that is already connected, such as one that another API connected or accepted, with the default settings of this
-	// actor. _fSocketFactory creates the socket that adopts the descriptor, CSocket_TCP when empty. The descriptor is closed when the adoption fails
+	// actor. _fSocketFactory creates the socket that adopts the descriptor, CSocket_TCP when empty. It gets an empty hostname, so a TLS factory that
+	// needs one for SNI and hostname verification binds it itself. The descriptor is closed when the adoption fails
 	auto CAsyncSocketClientActor::f_AdoptConnection(NNetwork::CInheritedSocketHandle _Socket, NNetwork::FVirtualSocketFactory _fSocketFactory)
 		-> NConcurrency::TCFuture<CAsyncSocketNewClientConnection>
 	{
