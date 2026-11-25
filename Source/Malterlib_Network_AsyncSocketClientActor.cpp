@@ -115,7 +115,11 @@ namespace NMib::NNetwork
 
 		FAsyncSocketUpgradeCheck fCheckUpgrade;
 		if (mp_fCheckUpgradeFactory)
+		{
+			auto CaptureScope = co_await (NConcurrency::g_CaptureExceptions % "Creating the upgrade check of the adopted connection failed");
+
 			fCheckUpgrade = mp_fCheckUpgradeFactory();
+		}
 
 		NConcurrency::TCActor<CAsyncSocketActor> ConnectionActor = f_ConcurrencyManager().f_ConstructActor
 			(

@@ -705,6 +705,49 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		co_return {};
 	};
 #endif
+
+	DMibTestSuite("Upgrade Check Factory Throws") -> TCFuture<void>
+	{
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
+
+		CAsyncSocketServerCallbacks ServerCallbacks;
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+			{
+				co_return {};
+			}
+		;
+
+		auto Listen = co_await Server
+			(
+				&CAsyncSocketServerActor::f_StartListenAddress
+				, fg_CreateVector(CSocket::fs_ResolveAddress("127.0.0.1:0"))
+				, ENetFlag_None
+				, fg_Move(ServerCallbacks)
+				, nullptr
+			)
+		;
+		DMibAssert(Listen.m_ListenPorts.f_GetLen(), ==, 1u);
+
+		FAsyncSocketUpgradeCheckFactory fCheckUpgradeFactory = []() -> FAsyncSocketUpgradeCheck
+			{
+				DMibError("Upgrade check factory failed");
+			}
+		;
+		co_await Client(&CAsyncSocketClientActor::f_SetDefaultUpgradeCheckFactory, fCheckUpgradeFactory);
+
+		CInheritedSocketHandle Handle = co_await fg_ConnectHandle(CSocket::fs_ResolveAddress("127.0.0.1:{}"_f << Listen.m_ListenPorts[0]));
+
+		// The adoption fails with the error of the factory instead of ending the process
+		auto Adopted = co_await Client(&CAsyncSocketClientActor::f_AdoptConnection, fg_Move(Handle), nullptr).f_Timeout(g_Timeout, "Timed out adopting").f_Wrap();
+		DMibAssert(Adopted ? CStr() : Adopted.f_GetExceptionStr(), !=, "");
+		DMibExpect(Adopted.f_GetExceptionStr().f_Find("Upgrade check factory failed"), >=, 0);
+
+		co_return {};
+	};
 }
 
 DMibTestRegister(CAsyncSocketAdopt_Tests, Malterlib::Network);
