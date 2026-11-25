@@ -714,9 +714,13 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
 		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
 
+		// The server keeps the connection open, since a connection it closes can fail the synchronous connect before the adoption starts
+		TCSharedPointer<TCVector<CAsyncSocketNewServerConnection>> pConnections = fg_Construct();
+
 		CAsyncSocketServerCallbacks ServerCallbacks;
-		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
+		ServerCallbacks.m_fNewConnection = g_ActorFunctor / [pConnections](CAsyncSocketNewServerConnection _Connection) -> TCFuture<void>
 			{
+				pConnections->f_Insert(fg_Move(_Connection));
 				co_return {};
 			}
 		;
