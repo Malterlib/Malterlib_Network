@@ -21,6 +21,10 @@ The Network module provides cross-platform networking functionality including TC
 - **CAsyncSocketServerActor** - Server-side async socket actor with accept loop
 - **CResolveActor** - Asynchronous DNS resolution actor
 
+#### Host Interfaces
+- **fg_GetInterfaceAddressesIPv4** - The IPv4 addresses, masks and point-to-point peers of the host interfaces (macOS)
+- **fg_SubscribeInterfaceAddressChangesIPv4** - Calls an actor functor when interface addresses are added or removed (macOS)
+
 #### Address Types
 - **CNetAddress** - Universal network address container
 - **CNetAddressIPv4** - IPv4 address representation
@@ -119,6 +123,20 @@ after a receive finds no datagram, so a reader that stops with datagrams left co
   waiting, so an empty datagram is told apart from none, and `m_bTruncated` reports a datagram longer than the buffer,
   whose rest is discarded.
 - Other errors throw `CExceptionNet`. Windows doesn't support these yet and throws.
+
+### Interface Addresses
+
+`<Mib/Network/InterfaceAddresses>`, macOS only for now; other platforms throw or fail with an error saying so.
+
+- `fg_GetInterfaceAddressesIPv4()` lists the IPv4 addresses of the host interfaces as `CNetInterfaceAddressIPv4`:
+  interface name, address, mask (255.255.255.255 when the interface has none) and the peer of a point-to-point
+  interface. It throws `CExceptionNet` when the interfaces can't be listed.
+- `fg_SubscribeInterfaceAddressChangesIPv4(CActorFunctorCoalesced)` resolves with a `CActorSubscription` once it
+  watches, so a subscriber that lists the addresses after subscribing misses no report. It reads a routing socket on an
+  io loop and its own actor, and calls the functor once per burst of `RTM_NEWADDR` and `RTM_DELADDR` messages; a
+  truncated message or a read error counts as a change. The coalesced functor merges the calls made while one is queued.
+  A full routing socket drops messages without telling the reader, so a subscriber that must not miss a change also
+  lists the addresses periodically. Destroying the subscription closes the socket and releases the functor.
 
 ### Basic TCP Socket Connection
 

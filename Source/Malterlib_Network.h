@@ -224,6 +224,15 @@ namespace NMib::NNetwork
 		bool m_bTruncated = false; // The datagram was longer than the buffer, which holds its first m_nBytes bytes
 	};
 
+	struct CNetInterfaceAddressIPv4
+	{
+		NStr::CStr m_InterfaceName;
+		CNetAddressIPv4 m_Address;
+		CNetAddressIPv4 m_Mask;        // 255.255.255.255 when the interface reports no mask
+		CNetAddressIPv4 m_PeerAddress; // Of a point-to-point interface, when m_bPointToPoint
+		bool m_bPointToPoint = false;
+	};
+
 	// Runs when send buffers are reusable, carrying the submitter's transfer ID or mc_iTransferNone.
 	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
 
@@ -383,6 +392,10 @@ namespace NMib::NSys::NNetwork
 
 	bool fg_GetProcessIdentity(void *_pSocket, CProcessIdentity &o_LocalIdentity, CProcessIdentity &o_PeerIdentity);
 	bool fg_HasUnixSocketPeerProcessIdentity();
+
+	NContainer::TCVector<::NMib::NNetwork::CNetInterfaceAddressIPv4> fg_GetInterfaceAddressesIPv4();
+	void *fg_OpenInterfaceAddressChangesIPv4();
+	bool fg_IsInterfaceAddressChange(void const *_pMessage, umint _nBytes);
 }
 
 namespace NMib::NNetwork
