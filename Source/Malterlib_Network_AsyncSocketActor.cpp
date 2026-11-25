@@ -946,9 +946,9 @@ namespace NMib::NNetwork
 			fp_ProcessState(DeferredStates);
 		}
 
-		// A disconnected socket delivers nothing, so a paused readiness receive reads again and drops what it reads, and the close the peer reports
-		// finishes the shutdown without waiting for the callbacks
-		if (Internal.m_pSocket && !Internal.f_GetCompletionIoReceive())
+		// A disconnected socket delivers nothing, so a paused receive drops the segments it held, which frees the receive window, and what it reads
+		// next. The close the peer reports then finishes the shutdown without waiting for the callbacks
+		if (Internal.m_pSocket)
 			fp_ResumeReceive();
 	}
 
