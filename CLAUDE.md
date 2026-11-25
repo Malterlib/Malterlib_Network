@@ -104,6 +104,22 @@ or concurrency limit is needed.
 Resolver destruction cancels outstanding results, destroys the c-ares channel,
 and awaits socket deregistration acknowledgements before releasing its state.
 
+### Connected Datagram Sockets
+
+`CSocket::f_InheritDatagramHandle` takes over a datagram socket descriptor, such as one end of an `AF_UNIX`
+`SOCK_DGRAM` socket pair or a routing socket, makes it non-blocking and registers it on the io loop of the thread or
+the current `CIoLoopCreateScope`. It owns the descriptor also when it throws. Its state callback reports
+`ENetTCPState_Read` when a datagram is waiting, edge triggered like the other sockets: readiness is reported again only
+after a receive finds no datagram, so a reader that stops with datagrams left continues on its own.
+
+- `f_SendDatagram(pData, nBytes)` sends to the connected peer and returns false when the socket can't take the
+  datagram now, which the caller treats as a dropped datagram. Only `EAGAIN` requests write readiness: macOS reports a
+  full receive buffer of a unix datagram peer as `ENOBUFS` while the socket stays writable.
+- `f_ReceiveDatagram(pData, nBytes)` returns a `CDatagramReceiveResult`: `m_bReceived` is false when nothing was
+  waiting, so an empty datagram is told apart from none, and `m_bTruncated` reports a datagram longer than the buffer,
+  whose rest is discarded.
+- Other errors throw `CExceptionNet`. Windows doesn't support these yet and throws.
+
 ### Basic TCP Socket Connection
 
 ```cpp

@@ -217,6 +217,13 @@ namespace NMib::NNetwork
 
 	struct CNetAddress;
 
+	struct CDatagramReceiveResult
+	{
+		umint m_nBytes = 0;        // Of the datagram, at most the size of the buffer
+		bool m_bReceived = false;  // False when no datagram was waiting
+		bool m_bTruncated = false; // The datagram was longer than the buffer, which holds its first m_nBytes bytes
+	};
+
 	// Runs when send buffers are reusable, carrying the submitter's transfer ID or mc_iTransferNone.
 	using FSocketSendReleased = NMib::NFunction::TCFunctionMovable<void (umint _iTransfer)>;
 
@@ -340,6 +347,8 @@ namespace NMib::NSys::NNetwork
 	umint fg_SubmitSendVectored(void *_pSocket, NSys::CIoSpan const *_pSpans, umint _nSpans, NSys::FIoCompletion &&_fOnComplete, NSys::FIoBufferReleased &&_fOnBufferReleased);
 	umint fg_SendDatagram(void *_pSocket, NSys::NNetwork::CAddress _pAddress, void const *_pData, umint _DataLen); // Returns bytes sent
 	umint fg_ReceiveDatagram(void *_pSocket, NSys::NNetwork::CAddress _pAddress, void *_pData, umint _DataLen); // Returns bytes received
+	bool fg_SendDatagram(void *_pSocket, void const *_pData, umint _DataLen); // To the peer of a connected socket
+	::NMib::NNetwork::CDatagramReceiveResult fg_ReceiveDatagram(void *_pSocket, void *_pData, umint _DataLen);
 
 	// Socket Properties & State
 
@@ -353,6 +362,7 @@ namespace NMib::NSys::NNetwork
 	void fg_RequestReadiness(void *_pSocket, bool _bRead, bool _bWrite);
 
 	void *fg_InheritHandle2(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+	void *fg_InheritDatagramHandle(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 	void *fg_GiveUpForInherit(void *_pSocket);
 	void fg_GiveUpForInheritAsync(void *_pSocket, NMib::NFunction::TCFunctionMovable<void (void *_pSocketHandle)> &&_fOnHandle);
 	void fg_CloseAsync(void *_pSocket, NMib::NFunction::TCFunctionMovable<void ()> &&_fOnClosed);
@@ -505,6 +515,7 @@ namespace NMib::NNetwork
 
 		void f_InheritHandle2(void *_pSocketHandle, NMib::NThread::CSemaphoreAggregate *_pReportTo);
 		void f_InheritHandle2(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
+		void f_InheritDatagramHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
 		void f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange);
 
@@ -546,6 +557,8 @@ namespace NMib::NNetwork
 
 		umint f_SendDatagram(NMib::NNetwork::CNetAddress const &_Address, void const *_pData, umint _DataLen);
 		umint f_ReceiveDatagram(NMib::NNetwork::CNetAddress &_Address, void *_pData, umint _DataLen);
+		bool f_SendDatagram(void const *_pData, umint _DataLen);
+		CDatagramReceiveResult f_ReceiveDatagram(void *_pData, umint _DataLen);
 
 		NMib::NNetwork::CNetAddress f_GetPeerAddress() const;
 		bool f_GetProcessIdentity(NMib::NSys::NNetwork::CProcessIdentity &o_LocalIdentity, NMib::NSys::NNetwork::CProcessIdentity &o_PeerIdentity) const;

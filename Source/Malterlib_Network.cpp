@@ -598,6 +598,16 @@ namespace NMib::NNetwork
 		NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
 	}
 
+	// Takes over a datagram socket, such as one end of a socket pair, and owns the handle also when it fails. The socket reports readable datagrams
+	// and readiness to send through _fOnStateChange, as a datagram listen does, and sends and receives without an address to its connected peer
+	void CSocket::f_InheritDatagramHandle(void *_pSocketHandle, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
+	{
+		f_Close();
+
+		mp_pSocket = NMib::NSys::NNetwork::fg_InheritDatagramHandle(_pSocketHandle, fg_Move(_fOnStateChange));
+		NMib::NSys::NNetwork::fg_StartSocket(mp_pSocket);
+	}
+
 	// Retains registration and kernel connection state; only the state callback changes owner.
 	void CSocket::f_Adopt(CSocket &&_Socket, NMib::NFunction::TCFunctionMovable<void (::NMib::NNetwork::ENetTCPState _StateAdded)> &&_fOnStateChange)
 	{
@@ -773,6 +783,25 @@ namespace NMib::NNetwork
 		fp_CheckSocket();
 
 		return NMib::NSys::NNetwork::fg_ReceiveDatagram(mp_pSocket, _Address, _pData, _DataLen);
+	}
+
+	// Sends to the peer of a connected datagram socket. Returns false when the socket can't take the datagram now, which for a unix datagram socket
+	// can be because the receive buffer of its peer is full. Write readiness is reported when a refused send can succeed, except for a full peer on
+	// macOS, which is not reported
+	bool CSocket::f_SendDatagram(void const *_pData, umint _DataLen)
+	{
+		fp_CheckSocket();
+
+		return NMib::NSys::NNetwork::fg_SendDatagram(mp_pSocket, _pData, _DataLen);
+	}
+
+	// Receives one datagram without its address. When no datagram is waiting, the socket reports the next one as readable. A datagram longer than
+	// _DataLen is truncated and the rest of it is discarded
+	CDatagramReceiveResult CSocket::f_ReceiveDatagram(void *_pData, umint _DataLen)
+	{
+		fp_CheckSocket();
+
+		return NMib::NSys::NNetwork::fg_ReceiveDatagram(mp_pSocket, _pData, _DataLen);
 	}
 
 	NMib::NNetwork::CNetAddress CSocket::f_GetPeerAddress() const
