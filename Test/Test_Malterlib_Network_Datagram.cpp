@@ -5,6 +5,7 @@
 #include <Mib/Test/Test>
 
 #ifndef DPlatformFamily_Windows
+#	include <netinet/in.h>
 #	include <sys/socket.h>
 #	include <unistd.h>
 #endif
@@ -149,6 +150,76 @@ void CDatagram_Tests::f_DoTests()
 		}
 
 		Sender.f_Close();
+		Receiver.f_Close();
+	};
+
+	DMibTestSuite("Inherited Bound Socket Sender")
+	{
+		auto fBindLoopback = [](int _File, ch8 const *_pName) -> uint16
+			{
+				DMibTestPath(_pName);
+
+				sockaddr_in Address = {};
+				Address.sin_family = AF_INET;
+				Address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+				DMibAssert(::bind(_File, (sockaddr const *)&Address, sizeof(Address)), ==, 0);
+
+				socklen_t nAddress = sizeof(Address);
+				DMibAssert(::getsockname(_File, (sockaddr *)&Address, &nAddress), ==, 0);
+
+				return ntohs(Address.sin_port);
+			}
+		;
+
+		int SenderFile = ::socket(AF_INET, SOCK_DGRAM, 0);
+		DMibAssert(SenderFile, >=, 0);
+		auto CloseSender = g_OnScopeExit / [&]
+			{
+				::close(SenderFile);
+			}
+		;
+		uint16 SenderPort = fBindLoopback(SenderFile, "Sender");
+
+		int ReceiverFile = ::socket(AF_INET, SOCK_DGRAM, 0);
+		DMibAssert(ReceiverFile, >=, 0);
+		uint16 ReceiverPort = fBindLoopback(ReceiverFile, "Receiver");
+
+		sockaddr_in ReceiverAddress = {};
+		ReceiverAddress.sin_family = AF_INET;
+		ReceiverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		ReceiverAddress.sin_port = htons(ReceiverPort);
+		DMibAssert(::sendto(SenderFile, "Hello", 5, 0, (sockaddr const *)&ReceiverAddress, sizeof(ReceiverAddress)), ==, 5);
+
+		TCSharedPointer<NThread::CEvent> pReadable = fg_Construct();
+
+		CSocket Receiver;
+		Receiver.f_InheritDatagramHandle
+			(
+				(void *)umint(ReceiverFile)
+				, [pReadable](ENetTCPState _StateAdded)
+				{
+					if (_StateAdded & ENetTCPState_Read)
+						pReadable->f_SetSignaled();
+				}
+			)
+		;
+
+		uint8 Buffer[256];
+		CNetAddress Address = CNetAddressTCPv4{};
+		umint nReceived = 0;
+		bool bTimedOut = false;
+		while (nReceived == 0 && !bTimedOut)
+		{
+			bTimedOut = pReadable->f_WaitTimeout(g_Timeout);
+			pReadable->f_ResetSignaled();
+
+			nReceived = Receiver.f_ReceiveDatagram(Address, Buffer, sizeof(Buffer));
+		}
+
+		DMibExpect(nReceived, ==, 5);
+		DMibAssert(Address.f_GetType(), ==, ENetAddressType_TCPv4);
+		DMibExpect(Address.f_GetPort(), ==, SenderPort);
+
 		Receiver.f_Close();
 	};
 #endif
