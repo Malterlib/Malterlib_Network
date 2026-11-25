@@ -607,6 +607,61 @@ void CAsyncSocketAdopt_Tests::f_DoTests()
 		co_return {};
 	};
 
+	DMibTestSuite("Release While Handler Waits") -> TCFuture<void>
+	{
+		TCActor<CAsyncSocketServerActor> Server = fg_ConstructActor<CAsyncSocketServerActor>();
+		auto ServerDestroy = co_await fg_AsyncDestroy(Server);
+
+		TCActor<CAsyncSocketClientActor> Client = fg_ConstructActor<CAsyncSocketClientActor>();
+		auto ClientDestroy = co_await fg_AsyncDestroy(Client);
+
+		CAsyncSocketAdoptTestPair Pair = co_await fg_ConnectAdopted(Server, Client);
+
+		TCSharedPointer<CPeerState> pAdoptedState = fg_Construct();
+		TCSharedPointer<CPeerState> pServerState = fg_Construct();
+
+		TCActorInterface<CAsyncSocketActor> ServerSocket = co_await Pair.m_Accepted.f_Accept(fg_PeerCallbacks(pServerState, 0));
+
+		{
+			CAsyncSocketNewClientConnection Adopted = fg_Move(Pair.m_Adopted);
+
+			pAdoptedState->m_bHoldReceives = true;
+			TCActorInterface<CAsyncSocketActor> AdoptedSocket = co_await Adopted.f_Accept(fg_PeerCallbacks(pAdoptedState, 64 * 1024));
+
+			co_await ServerSocket(&CAsyncSocketActor::f_SendData, fg_Bytes("ping"), uint32(0)).f_Timeout(g_Timeout, "Timed out sending");
+			DMibExpectTrue
+				(
+					co_await fg_WaitUntil
+					(
+						[pAdoptedState]
+						{
+							return !pAdoptedState->m_HeldReceives.f_IsEmpty();
+						}
+					)
+				)
+			;
+		}
+
+		// The last reference to the adopted socket is gone, so it closes although its handler still holds the data
+		DMibExpectTrue
+			(
+				co_await fg_WaitUntil
+				(
+					[pServerState]
+					{
+						return pServerState->m_bClosed;
+					}
+				)
+			)
+		;
+
+		auto HeldReceives = fg_Move(pAdoptedState->m_HeldReceives);
+		for (auto &Promise : HeldReceives)
+			Promise.f_SetResult();
+
+		co_return {};
+	};
+
 #ifndef DPlatformFamily_Windows
 	DMibTestSuite("Blocking Descriptor") -> TCFuture<void>
 	{

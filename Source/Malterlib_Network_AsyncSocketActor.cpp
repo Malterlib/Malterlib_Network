@@ -1752,7 +1752,8 @@ namespace NMib::NNetwork
 			return;
 		}
 
-		m_pThis->fp_CallOnReceiveData(fg_Move(_Data)) > NConcurrency::fg_LogError("Mib/Network", "Delivering received data failed");
+		// The result is logged where it is set, since a result handler on this actor would keep it alive until the handler finishes
+		m_pThis->fp_CallOnReceiveData(fg_Move(_Data)) > NConcurrency::g_DirectResult / NConcurrency::fg_LogError("Mib/Network", "Delivering received data failed").f_IgnoreActorDeleted();
 	}
 
 	// Before the connection is accepted, reading stops once a delivery waits for the callbacks, so that a peer can't make the socket hold more than that.
@@ -1779,6 +1780,10 @@ namespace NMib::NNetwork
 	{
 		umint nBytes = _Data.f_GetLen();
 		mp_pInternal->m_nUnhandledReceiveBytes += nBytes;
+
+		// A handler can wait for something that only the destruction of this actor ends, so the wait must not keep the actor alive. When the actor goes
+		// away while the handler waits, this coroutine doesn't resume
+		co_await NConcurrency::ECoroutineFlag_BreakSelfReference;
 
 		// A handler that fails has still finished with the data
 		auto HandleResult = co_await mp_pInternal->m_Callbacks.m_fOnReceiveData(fg_Move(_Data)).f_Wrap();
